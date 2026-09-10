@@ -1,0 +1,19 @@
+{
+  "appId": "edu.isu.esports.rocketleaguebridge",
+  "productName": "ISU Rocket League Bridge",
+  "directories": { "output": "release/bridge" },
+  "files": [
+    "bridge/**/*",
+    "electron/bridge-main.cjs",
+    "electron/bridge-preload.cjs",
+    "electron/rocket-league-bridge.cjs",
+    "electron/rocket-league-service.cjs",
+    "package.json"
+  ],
+  "extraMetadata": { "main": "electron/bridge-main.cjs" },
+  "win": {
+    "icon": "build/icon.svg",
+    "target": [{ "target": "portable", "arch": ["x64"] }]
+  },
+  "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+}

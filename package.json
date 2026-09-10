@@ -1,0 +1,49 @@
+{
+  "name": "isu-esports-broadcast-control",
+  "version": "0.4.3",
+  "description": "Idaho State Esports scorekeeping and broadcast graphics control center",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "author": "Idaho State Esports",
+  "license": "MIT",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "build": "vite build",
+    "check": "node --check src/app.js && node --check src/game-config.js && node --check src/store.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs",
+    "test": "node --test",
+    "package": "npm run build && electron-builder --win nsis portable && electron-builder --config electron-builder.bridge.json --win portable",
+    "package:dir": "npm run build && electron-builder --dir",
+    "package:bridge": "electron-builder --config electron-builder.bridge.json --win portable"
+  },
+  "build": {
+    "appId": "edu.isu.esports.broadcastcontrol",
+    "productName": "ISU Esports Broadcast Control",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "win": {
+      "icon": "build/icon.svg",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "electron": "^44.3.0",
+    "electron-builder": "^26.0.12",
+    "vite": "^8.2.2",
+    "wait-on": "^8.0.4"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 900">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f47920"/><stop offset=".45" stop-color="#71330f"/><stop offset="1" stop-color="#171719"/></linearGradient></defs>
+  <rect width="600" height="900" fill="#111114"/>
+  <path d="M300 80 530 235l-88 508-142 92-142-92-88-508Z" fill="url(#g)" opacity=".45"/>
+  <path d="m300 170 96 123-47 107 76 198-125 145-125-145 76-198-47-107Z" fill="none" stroke="#f47920" stroke-width="18"/>
+  <text x="300" y="820" fill="#f69240" font-family="Arial" font-size="27" font-weight="700" text-anchor="middle" letter-spacing="6">CHARACTER PNG</text>
+</svg>
+

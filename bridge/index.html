@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ISU Rocket League Bridge</title>
+  <style>
+    :root{font-family:"Segoe UI Variable","Segoe UI",sans-serif;color:#f3f3f5;background:#0b0b0c}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 90% 0,rgba(45,140,255,.13),transparent 35%),#0b0b0c}.shell{max-width:700px;margin:auto;padding:30px}.brand{display:flex;align-items:center;gap:14px;margin-bottom:26px}.mark{display:grid;place-items:center;width:54px;height:47px;border:1px solid #bd5b18;background:linear-gradient(135deg,#f47920,#8f3c08);font-weight:1000;font-style:italic}.brand span,.eyebrow{display:block;color:#f47920;font-size:9px;font-weight:900;letter-spacing:.16em}.brand strong{display:block;margin-top:4px;font-size:17px}.panel{border:1px solid #303036;border-top:2px solid #2d8cff;background:#151517;box-shadow:0 18px 40px rgba(0,0,0,.25)}header{padding:20px;border-bottom:1px solid #303036;background:linear-gradient(90deg,rgba(45,140,255,.1),transparent)}h1{margin:5px 0;font-size:21px}header p{margin:0;color:#797982;font-size:11px}.fields{display:grid;grid-template-columns:1fr 170px;gap:12px;padding:20px}label span{display:block;margin:0 0 6px 2px;color:#71717a;font-size:8px;font-weight:900;letter-spacing:.1em}label.wide{grid-column:1/-1}input,select{width:100%;height:42px;padding:0 11px;border:1px solid #393940;color:#eee;background:#0e0e10;outline:none}input:focus,select:focus{border-color:#2d8cff}.actions{display:flex;gap:9px;padding:0 20px 20px}button{height:40px;padding:0 18px;border:1px solid #3b3b42;color:#aaa;background:#1b1b1e;font-size:9px;font-weight:900;letter-spacing:.08em}button.primary{border-color:#438b50;color:#f3fff5;background:linear-gradient(#338843,#246d34)}.status{display:grid;grid-template-columns:10px 1fr;gap:8px;margin:0 20px 20px;padding:14px;border:1px solid #333339;background:#0e0e10}.status i{width:8px;height:8px;margin-top:3px;border-radius:50%;background:#67676f}.status strong,.status span{display:block}.status strong{font-size:9px}.status span{margin-top:4px;color:#707078;font-size:9px}.status.good i{background:#65cd6f;box-shadow:0 0 8px #65cd6f}.status.wait i{background:#e3a33a}.note{margin:16px 20px 20px;padding:13px;border:1px dashed #393940;color:#777780;font-size:9px;line-height:1.6}.note b{color:#f47920}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="brand"><div class="mark">ISU</div><div><span>GAME PC COMPANION</span><strong>ROCKET LEAGUE BRIDGE</strong></div></div>
+    <section class="panel">
+      <header><span class="eyebrow">NETWORK TELEMETRY</span><h1>Send live game data to Broadcast Control</h1><p>Keep this helper open on the computer running Rocket League.</p></header>
+      <div class="fields">
+        <label><span>GRAPHICS PC IP ADDRESS</span><input id="graphicsHost" placeholder="192.168.1.50"></label>
+        <label><span>BRIDGE PORT</span><input id="bridgePort" type="number" value="3175"></label>
+        <label class="wide"><span>PRIVATE BRIDGE KEY</span><input id="bridgeToken" placeholder="Paste the key from Broadcast Control"></label>
+        <label><span>ROCKET LEAGUE TRANSPORT</span><select id="transport"><option value="auto">Automatic</option><option value="websocket">WebSocket</option><option value="tcp">TCP</option></select></label>
+        <label><span>LOCAL GAME HOST</span><input id="host" value="127.0.0.1"></label>
+        <label><span>TCP PORT</span><input id="tcpPort" type="number" value="49123"></label>
+        <label><span>WEBSOCKET PORT</span><input id="webPort" type="number" value="49124"></label>
+      </div>
+      <div class="actions"><button class="primary" id="start">START BRIDGE</button><button id="stop">STOP</button></div>
+      <div class="status" id="remoteStatus"><i></i><div><strong>GRAPHICS PC · STOPPED</strong><span>Enter the address and matching bridge key.</span></div></div>
+      <div class="status" id="sourceStatus"><i></i><div><strong>ROCKET LEAGUE · STOPPED</strong><span>The game feed is not connected.</span></div></div>
+      <p class="note"><b>SETUP:</b> Enable Remote Game PC mode in the Rocket League tab on the Graphics PC, generate a key, then enter that PC's IPv4 address and the same key here. Windows may ask to allow the connection on Private networks.</p>
+    </section>
+  </main>
+  <script>
+    const ids = ['graphicsHost','bridgePort','bridgeToken','transport','host','tcpPort','webPort'];
+    const read = () => Object.fromEntries(ids.map((id) => [id, ['bridgePort','tcpPort','webPort'].includes(id) ? Number(document.querySelector('#'+id).value) : document.querySelector('#'+id).value]));
+    const show = (id, label, status = {}) => {
+      const node = document.querySelector('#'+id);
+      node.className = 'status ' + (status.state === 'connected' ? 'good' : ['connecting','waiting'].includes(status.state) ? 'wait' : '');
+      node.querySelector('strong').textContent = label + ' · ' + String(status.state || 'stopped').toUpperCase();
+      node.querySelector('span').textContent = status.message || 'Stopped';
+    };
+    window.isuBridge.getConfig().then((config) => ids.forEach((id) => { if (config[id] !== undefined) document.querySelector('#'+id).value = config[id]; }));
+    window.isuBridge.onStatus((status) => { if (status.remote) show('remoteStatus','GRAPHICS PC',status.remote); if (status.source) show('sourceStatus','ROCKET LEAGUE',status.source); });
+    document.querySelector('#start').addEventListener('click', () => window.isuBridge.start(read()));
+    document.querySelector('#stop').addEventListener('click', async () => { await window.isuBridge.stop(); show('remoteStatus','GRAPHICS PC'); show('sourceStatus','ROCKET LEAGUE'); });
+  </script>
+</body>
+</html>

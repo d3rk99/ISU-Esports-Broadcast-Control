@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISU Esports — Map Pool</title>
+    <link rel="stylesheet" href="./overlay.css" />
+  </head>
+  <body class="obs-canvas map-pool-page">
+    <main class="map-pool-stage" data-overlay="map-pool">
+      <header class="overlay-titlebar">
+        <div><span id="map-game-code">VAL</span><strong id="map-game-name">VALORANT</strong></div>
+        <section><small id="map-event">COLLEGIATE ESPORTS</small><h1>MAP PICKS <i>/</i> BANS</h1><p id="map-series">ISU 0 — 0 OPP</p></section>
+        <div class="titlebar-mark">ISU<span>ESPORTS</span></div>
+      </header>
+
+      <section id="valorant-veto" class="valorant-veto-overlay">
+        <article class="veto-card ban-card">
+          <div class="ban-half ban-top"><span>BAN</span><strong data-ban="0">BREEZE</strong></div>
+          <div class="ban-half ban-bottom"><span>BAN</span><strong data-ban="1">ICEBOX</strong></div>
+          <div class="ban-diagonal"></div>
+        </article>
+        <article class="veto-card pick-card" data-pick-card="0">
+          <div class="side side--top"><b data-defender="0">OPP</b><span>DEFENDERS</span></div>
+          <small>MAP PICK</small><strong data-pick-map="0">ASCENT</strong>
+          <div class="pick-number">01</div><div class="pick-line"></div>
+          <div class="side side--bottom"><span>ATTACKERS</span><b data-attacker="0">ISU</b></div>
+        </article>
+        <article class="veto-card pick-card" data-pick-card="1">
+          <div class="side side--top"><b data-defender="1">ISU</b><span>DEFENDERS</span></div>
+          <small>MAP PICK</small><strong data-pick-map="1">BIND</strong>
+          <div class="pick-number">02</div><div class="pick-line"></div>
+          <div class="side side--bottom"><span>ATTACKERS</span><b data-attacker="1">OPP</b></div>
+        </article>
+        <article class="veto-card ban-card">
+          <div class="ban-half ban-top"><span>BAN</span><strong data-ban="2">PEARL</strong></div>
+          <div class="ban-half ban-bottom"><span>BAN</span><strong data-ban="3">SUNSET</strong></div>
+          <div class="ban-diagonal"></div>
+        </article>
+        <article class="veto-card pick-card" data-pick-card="2">
+          <div class="side side--top"><b data-defender="2">OPP</b><span>DEFENDERS</span></div>
+          <small>DECIDER</small><strong data-pick-map="2">HAVEN</strong>
+          <div class="pick-number">03</div><div class="pick-line"></div>
+          <div class="side side--bottom"><span>ATTACKERS</span><b data-attacker="2">ISU</b></div>
+        </article>
+      </section>
+      <section id="generic-map-pool" class="generic-map-pool" hidden></section>
+    </main>
+    <script src="./overlay.js" defer></script>
+  </body>
+</html>
+
