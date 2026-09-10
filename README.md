@@ -75,6 +75,16 @@ Common action bodies:
 
 Use `GET /capabilities` to discover actions for the selected game, `GET /state` for the authenticated full broadcast state, and `GET /events` for server-sent live variable updates. The query-string form `?token=...` is supported for clients that cannot set headers, but the header is preferred because URLs may appear in logs.
 
+### Native Companion module
+
+Companion 5 users can import the packaged `idahostate-esports-broadcast-control-0.1.0.tgz` from **Modules → Import module package**. After importing it:
+
+1. Add an **ISU Esports Broadcast Control** connection.
+2. Enter the Controller PC address, API port, and private API key shown in Broadcast Control.
+3. Add the included presets or choose the module's named actions directly.
+
+The native module maintains a live event connection, so its variables and feedbacks update automatically without Generic HTTP polling. Source is in `companion-module/`; rebuild it with `npm run package:companion`.
+
 ## Rocket League live data
 
 Before launching Rocket League, edit `<Rocket League Install>\TAGame\Config\TAStatsAPI.ini` (or `DefaultStatsAPI.ini` when the first file does not exist):
@@ -139,6 +149,7 @@ Artifacts are generated in `release/`:
 
 ```text
 electron/          Electron main, secure preload, telemetry, bridge, and Companion API processes
+companion-module/  Native Bitfocus Companion 5 connection module
 public/overlays/   Transparent OBS HTML, CSS, JavaScript, and placeholders
 src/app.js         Control interface and interactions
 src/game-config.js Per-game rules and default data

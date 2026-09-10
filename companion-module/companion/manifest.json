@@ -1,0 +1,28 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
+	"id": "idahostate-esports-broadcast-control",
+	"name": "ISU Esports Broadcast Control",
+	"shortname": "ISU Esports",
+	"description": "Control Idaho State Esports scores, maps, matches, and broadcast state",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/d3rk99/ISU-Esports-Broadcast-Control.git",
+	"bugs": "https://github.com/d3rk99/ISU-Esports-Broadcast-Control/issues",
+	"maintainers": [
+		{
+			"name": "Idaho State Esports",
+			"email": "d3rk99@users.noreply.github.com"
+		}
+	],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"legacyIds": [],
+	"manufacturer": "Idaho State University",
+	"products": ["Esports Broadcast Control"],
+	"keywords": ["esports", "scoreboard", "broadcast", "ISU", "Rocket League", "VALORANT", "Overwatch"]
+}

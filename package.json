@@ -10,10 +10,11 @@
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
     "check": "node --check src/app.js && node --check src/game-config.js && node --check src/companion-actions.js && node --check src/store.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/companion-api-service.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs",
-    "test": "node --test",
+    "test": "node --test test/companion-actions.test.js test/companion-api-service.test.cjs test/rocket-league-service.test.cjs test/store.test.js",
     "package": "npm run build && electron-builder --win nsis portable && electron-builder --config electron-builder.bridge.json --win portable",
     "package:dir": "npm run build && electron-builder --dir",
-    "package:bridge": "electron-builder --config electron-builder.bridge.json --win portable"
+    "package:bridge": "electron-builder --config electron-builder.bridge.json --win portable",
+    "package:companion": "cd companion-module && corepack yarn package"
   },
   "build": {
     "appId": "edu.isu.esports.broadcastcontrol",

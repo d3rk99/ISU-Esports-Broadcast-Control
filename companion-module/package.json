@@ -1,0 +1,39 @@
+{
+	"name": "companion-module-idahostate-esports-broadcast-control",
+	"version": "0.1.0",
+	"main": "dist/main.js",
+	"type": "module",
+	"scripts": {
+		"format": "prettier -w .",
+		"package": "run build && companion-module-build",
+		"build": "rimraf dist && run build:main",
+		"build:main": "tsc -p tsconfig.build.json",
+		"dev": "tsc -p tsconfig.build.json --watch",
+		"lint:raw": "eslint",
+		"lint": "run lint:raw .",
+		"test": "run build && node --test"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/d3rk99/ISU-Esports-Broadcast-Control.git"
+	},
+	"engines": {
+		"node": "^22.20",
+		"yarn": "^4"
+	},
+	"dependencies": {
+		"@companion-module/base": "2.0.4"
+	},
+	"devDependencies": {
+		"@companion-module/tools": "^3.1.0",
+		"@types/node": "^22.19.17",
+		"eslint": "^9.39.4",
+		"prettier": "^3.8.3",
+		"rimraf": "^6.1.3",
+		"typescript": "~6.0.3",
+		"typescript-eslint": "^8.59.0"
+	},
+	"prettier": "@companion-module/tools/.prettierrc.json",
+	"packageManager": "yarn@4.17.0"
+}
