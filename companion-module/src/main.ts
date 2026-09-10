@@ -1,7 +1,14 @@
 import { InstanceBase, InstanceStatus, type SomeCompanionConfigField } from '@companion-module/base'
 import { BroadcastControlClient, type BroadcastVariables, type ControlAction } from './api-client.js'
 import { UpdateActions, type ActionsSchema } from './actions.js'
-import { GetConfigFields, isValidConfig, type ModuleConfig, type ModuleSecrets } from './config.js'
+import {
+	GetConfigFields,
+	getConfigError,
+	isValidConfig,
+	normalizeConnectionConfig,
+	type ModuleConfig,
+	type ModuleSecrets,
+} from './config.js'
 import { UpdateFeedbacks, type FeedbacksSchema } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import { UpgradeScripts } from './upgrades.js'
@@ -28,8 +35,9 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	async init(config: ModuleConfig, _isFirstInit: boolean, secrets: ModuleSecrets): Promise<void> {
-		this.config = config
-		this.secrets = secrets
+		const normalized = normalizeConnectionConfig(config, secrets)
+		this.config = normalized.config
+		this.secrets = normalized.secrets
 		this.updateActions()
 		this.updateFeedbacks()
 		this.updatePresets()
@@ -45,8 +53,9 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 	}
 
 	async configUpdated(config: ModuleConfig, secrets: ModuleSecrets): Promise<void> {
-		this.config = config
-		this.secrets = secrets
+		const normalized = normalizeConnectionConfig(config, secrets, this.secrets)
+		this.config = normalized.config
+		this.secrets = normalized.secrets
 		this.startConnection()
 	}
 
@@ -76,8 +85,10 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.client?.stop()
 		this.client = undefined
 		this.handleConnectionState(false)
-		if (!isValidConfig(this.config, this.secrets)) {
-			this.updateStatus(InstanceStatus.BadConfig, 'Enter the controller IP, port, and private API key')
+		const configError = getConfigError(this.config, this.secrets)
+		if (configError) {
+			this.updateStatus(InstanceStatus.BadConfig, configError)
+			this.log('warn', `Connection configuration is incomplete: ${configError}`)
 			return
 		}
 

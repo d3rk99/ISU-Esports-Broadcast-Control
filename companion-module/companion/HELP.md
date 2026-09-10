@@ -15,6 +15,12 @@ This module connects Bitfocus Companion to the ISU Esports Broadcast Control app
 - **API port:** `3176` unless changed in Broadcast Control.
 - **Private API key:** copy this exactly from Broadcast Control.
 
+Enter only the IP address in the first field, such as `134.50.16.22`. Do not enter `http://`, the port, or `/api/companion` in that field. After pasting the private API key, click **Save changes**.
+
+## Yellow “Bad configuration” badge
+
+Version `0.1.1` corrects a configuration-storage issue in `0.1.0`. If a connection created with `0.1.0` remains yellow after installing this update, open its settings, enter the controller IP and private API key again, and save it. The badge details and Companion log now identify the exact missing or invalid field.
+
 The module maintains a live event connection for variables and feedbacks. Commands are sent through the controller's action endpoint.
 
 ## Included controls

@@ -9,10 +9,13 @@ export type ModuleSecrets = {
 	token: string
 }
 
+type LegacyModuleConfig = Partial<ModuleConfig> & { token?: unknown }
+type LegacyModuleSecrets = Partial<ModuleSecrets> & { host?: unknown }
+
 export function GetConfigFields(): SomeCompanionConfigField[] {
 	return [
 		{
-			type: 'secret-text',
+			type: 'textinput',
 			id: 'host',
 			label: 'Controller IP / hostname',
 			width: 6,
@@ -29,7 +32,7 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 			default: 3176,
 		},
 		{
-			type: 'textinput',
+			type: 'secret-text',
 			id: 'token',
 			label: 'Private API key',
 			width: 9,
@@ -40,8 +43,44 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 	]
 }
 
+export function normalizeConnectionConfig(
+	config: ModuleConfig,
+	secrets: ModuleSecrets,
+	previousSecrets?: ModuleSecrets,
+): { config: ModuleConfig; secrets: ModuleSecrets } {
+	const legacyConfig = config as LegacyModuleConfig
+	const legacySecrets = secrets as LegacyModuleSecrets
+	const host =
+		typeof legacyConfig.host === 'string'
+			? legacyConfig.host.trim()
+			: typeof legacySecrets?.host === 'string'
+				? legacySecrets.host.trim()
+				: '127.0.0.1'
+	const port = legacyConfig.port === undefined ? 3176 : Number(legacyConfig.port)
+	const token =
+		typeof legacySecrets?.token === 'string'
+			? legacySecrets.token.trim()
+			: typeof legacyConfig.token === 'string'
+				? legacyConfig.token.trim()
+				: previousSecrets?.token?.trim() || ''
+
+	return { config: { host, port }, secrets: { token } }
+}
+
+export function getConfigError(config: ModuleConfig, secrets: ModuleSecrets): string | undefined {
+	if (!config.host?.trim()) return 'Controller IP / hostname is empty'
+	if (config.host.includes('://') || config.host.includes('/')) {
+		return 'Enter only the controller IP or hostname, without http:// or /api/companion'
+	}
+	if (!Number.isInteger(Number(config.port)) || Number(config.port) < 1024 || Number(config.port) > 65535) {
+		return 'API port must be a whole number from 1024 to 65535'
+	}
+	if (!secrets.token?.trim()) return 'Private API key is empty; paste it and save the connection'
+	if (secrets.token.trim().length < 16)
+		return 'Private API key is too short; copy the complete key from Broadcast Control'
+	return undefined
+}
+
 export function isValidConfig(config: ModuleConfig, secrets: ModuleSecrets): boolean {
-	return Boolean(
-		config.host?.trim() && Number(config.port) >= 1024 && Number(config.port) <= 65535 && secrets.token?.trim(),
-	)
+	return getConfigError(config, secrets) === undefined
 }
