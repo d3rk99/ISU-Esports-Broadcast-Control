@@ -105,9 +105,7 @@ export function createGameState(gameKey) {
     activeMap: 0,
     mapRows: config.modes.map((mode, index) => ({
       mode,
-      map: gameKey === 'rocketleague' ? '' : config.maps[index % config.maps.length],
-      arenaId: '',
-      arenaImage: '',
+      map: config.maps[index % config.maps.length],
       status: index === 0 ? 'ready' : 'upcoming',
       winner: null,
       score: ['', '']
@@ -130,37 +128,6 @@ export function createGameState(gameKey) {
     },
     showAwayRoster: false,
     characterArt: {},
-    valorant: gameKey === 'valorant' ? {
-      enabled: false,
-      team0Home: true,
-      syncScore: true,
-      syncMap: true,
-      syncRound: true,
-      syncPhase: true,
-      syncPlayers: true,
-      debug: false,
-      live: {
-        connected: false,
-        gepAvailable: false,
-        gameDetected: false,
-        status: 'disabled',
-        message: 'Live data is off',
-        lastUpdateAt: null,
-        dataAgeMs: null,
-        eventCount: 0,
-        registeredFeatures: [],
-        detectedGameId: null,
-        match: { active: false, map: null, mode: null, matchId: null, pseudoMatchId: null, round: null, phase: null, outcome: null },
-        teams: { home: { score: 0, side: null }, away: { score: 0, side: null } },
-        players: [],
-        spike: { carrier: null, state: null, site: null },
-        observedPlayer: null,
-        lastEvent: null,
-        lastInfoUpdate: null,
-        lastNormalizedEvent: null,
-        errors: []
-      }
-    } : null,
     rocketLeague: gameKey === 'rocketleague' ? {
       enabled: false,
       source: 'local',

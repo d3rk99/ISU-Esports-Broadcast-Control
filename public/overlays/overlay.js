@@ -28,27 +28,12 @@
     }
   };
 
-  const ROCKET_LEAGUE_ARENAS = {
-    stadium: { name: 'DFH STADIUM', image: '/assets/rl-arenas/dfh-stadium.jpg' },
-    stadium_p: { name: 'DFH STADIUM', image: '/assets/rl-arenas/dfh-stadium.jpg' },
-    eurostadium_p: { name: 'MANNFIELD', image: '/assets/rl-arenas/mannfield.jpg' },
-    champsstadium_p: { name: 'CHAMPIONS FIELD', image: '/assets/rl-arenas/champions-field.jpg' },
-    utopiastadium_p: { name: 'UTOPIA COLISEUM', image: '/assets/rl-arenas/utopia-coliseum.jpg' },
-    park_p: { name: 'BECKWITH PARK', image: '/assets/rl-arenas/beckwith-park.jpg' },
-    chn_stadium_p: { name: 'FORBIDDEN TEMPLE', image: '/assets/rl-arenas/forbidden-temple.jpg' },
-    cs_day_p: { name: 'DEADEYE CANYON', image: '/assets/rl-arenas/deadeye-canyon.jpg' },
-    neotokyo_p: { name: 'NEO TOKYO', image: '/assets/rl-arenas/neo-tokyo.jpg' },
-    labs_underpass_p: { name: 'NEO TOKYO', image: '/assets/rl-arenas/neo-tokyo.jpg' },
-    underwater_p: { name: 'AQUADOME', image: '/assets/rl-arenas/aquadome.jpg' }
-  };
-
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
   const setText = (selector, value, root = document) => {
     const element = $(selector, root);
     if (element) element.textContent = String(value ?? '');
   };
-  const signature = (value) => JSON.stringify(value);
 
   function getActive(state) {
     const selectedGame = GAME_META[state?.selectedGame] ? state.selectedGame : 'overwatch';
@@ -64,25 +49,16 @@
   function formatClock(seconds, overtime = false) {
     const value = Math.max(0, Math.floor(Number(seconds) || 0));
     const formatted = `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
-    return overtime ? `OVERTIME Â· ${formatted}` : formatted;
+    return overtime ? `OVERTIME · ${formatted}` : formatted;
   }
 
   function arenaName(value) {
     const known = {
       Stadium_P: 'DFH STADIUM', EuroStadium_P: 'MANNFIELD', ChampsStadium_P: 'CHAMPIONS FIELD',
-      UtopiaStadium_P: 'UTOPIA COLISEUM', Park_P: 'BECKWITH PARK', CHN_Stadium_P: 'FORBIDDEN TEMPLE',
-      cs_day_p: 'DEADEYE CANYON'
+      UtopiaStadium_P: 'UTOPIA COLISEUM', Park_P: 'BECKWITH PARK', CHN_Stadium_P: 'FORBIDDEN TEMPLE'
     };
     if (!value) return '';
-    const id = String(value).trim().toLowerCase();
-    return ROCKET_LEAGUE_ARENAS[id]?.name || known[value] || String(value).replace(/_P$/i, '').replaceAll('_', ' ').toUpperCase();
-  }
-
-  function rocketLeagueArenaImage(row = {}) {
-    if (row.arenaImage) return row.arenaImage;
-    const rowName = String(row.map || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const match = Object.values(ROCKET_LEAGUE_ARENAS).find((arena) => arena.name.toLowerCase().replace(/[^a-z0-9]/g, '') === rowName);
-    return match?.image || '';
+    return known[value] || String(value).replace(/_P$/i, '').replaceAll('_', ' ').toUpperCase();
   }
 
   function renderRocketLeaguePlayers(game, selectedGame) {
@@ -92,59 +68,27 @@
     const players = live?.players || [];
     board.hidden = selectedGame !== 'rocketleague' || !players.length;
     if (board.hidden) return;
-    const updateInterval = Math.max(1, Math.min(50, Number(game.rocketLeague?.updateIntervalMs) || 33));
-    board.style.setProperty('--boost-transition-ms', `${updateInterval}ms`);
     const blueTeam = Number(game.rocketLeague?.blueTeam) || 0;
     const destinationFor = (teamNum) => Number(teamNum) === 0 ? blueTeam : 1 - blueTeam;
     [0, 1].forEach((teamIndex) => {
       const container = teamIndex === 0 ? $('#rl-home-players') : $('#rl-away-players');
-      const fragment = document.createDocumentFragment();
+      container.replaceChildren();
       players.filter((player) => destinationFor(player.teamNum) === teamIndex).slice(0, 4).forEach((player) => {
         const boost = player.boost === null || player.boost === undefined ? null : Math.max(0, Math.min(100, Number(player.boost)));
-        const playerKey = String(player.id || `${player.teamNum}|${player.shortcut}|${player.name}`);
         const card = document.createElement('div');
-        card.dataset.playerKey = playerKey;
+        card.className = `rl-boost-player${player.spectated ? ' spectated' : ''}${player.demolished ? ' demolished' : ''}`;
         const name = document.createElement('strong');
-        name.className = 'rl-boost-name';
+        name.textContent = player.name || 'PLAYER';
         const meter = document.createElement('span');
         const fill = document.createElement('i');
-        fill.className = 'rl-boost-fill';
+        fill.style.width = `${boost ?? 0}%`;
         meter.append(fill);
         const amount = document.createElement('b');
-        amount.className = 'rl-boost-value';
+        amount.textContent = boost === null ? '—' : String(Math.round(boost));
         card.append(name, meter, amount);
-        card.className = `rl-boost-player${player.spectated ? ' spectated' : ''}${player.demolished ? ' demolished' : ''}`;
-        card.querySelector('.rl-boost-name').textContent = player.name || 'PLAYER';
-        fill.style.width = `${boost ?? 0}%`;
-        card.querySelector('.rl-boost-value').textContent = boost === null ? 'â€”' : String(Math.round(boost));
-        fragment.append(card);
+        container.append(card);
       });
-      container.replaceChildren(fragment);
     });
-  }
-
-  function renderSpectatedRocketLeagueBoost(game, selectedGame) {
-    const meter = $('#rl-spectated-boost');
-    if (!meter) return;
-    const live = game.rocketLeague?.live;
-    const players = live?.players || [];
-    const spectatedName = live?.spectatedPlayer || '';
-    const player = players.find((candidate) => candidate.spectated)
-      || players.find((candidate) => candidate.name === spectatedName);
-    meter.hidden = selectedGame !== 'rocketleague' || !player;
-    if (meter.hidden) return;
-    const boost = player.boost === null || player.boost === undefined ? 0 : Math.max(0, Math.min(100, Number(player.boost)));
-    const value = Math.round(boost);
-    const teams = game.teams || FALLBACK.games.overwatch.teams;
-    const blueTeam = Number(game.rocketLeague?.blueTeam) || 0;
-    const teamIndex = Number(player.teamNum) === 0 ? blueTeam : 1 - blueTeam;
-    const teamColor = teams[teamIndex]?.color || '#ff9f18';
-    meter.style.setProperty('--spectated-boost', value);
-    meter.style.setProperty('--spectated-boost-deg', `${value * 2.75}deg`);
-    meter.style.setProperty('--spectated-team-color', teamColor);
-    meter.classList.toggle('low-boost', value < 20);
-    setText('#rl-spectated-boost-value', value);
-    setText('#rl-spectated-boost-name', player.name || spectatedName || 'SPECTATING');
   }
 
   function renderScoreboard(state) {
@@ -166,8 +110,8 @@
     setText('#home-score', teams[0]?.score ?? 0);
     setText('#away-score', teams[1]?.score ?? 0);
     const rlLive = game.rocketLeague?.live;
-    setText('#home-detail', selectedGame === 'rocketleague' ? `GOALS Â· ${teams[0]?.detailScore ?? 0}` : teams[0]?.detailScore ? `LIVE Â· ${teams[0].detailScore}` : '');
-    setText('#away-detail', selectedGame === 'rocketleague' ? `GOALS Â· ${teams[1]?.detailScore ?? 0}` : teams[1]?.detailScore ? `LIVE Â· ${teams[1].detailScore}` : '');
+    setText('#home-detail', selectedGame === 'rocketleague' ? `GOALS · ${teams[0]?.detailScore ?? 0}` : teams[0]?.detailScore ? `LIVE · ${teams[0].detailScore}` : '');
+    setText('#away-detail', selectedGame === 'rocketleague' ? `GOALS · ${teams[1]?.detailScore ?? 0}` : teams[1]?.detailScore ? `LIVE · ${teams[1].detailScore}` : '');
     setText('#map-number', `${selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${(game.activeMap || 0) + 1}`);
     setText('#map-name', selectedGame === 'rocketleague' && rlLive?.arena ? arenaName(rlLive.arena) : activeMap.map);
     setText('#map-mode', selectedGame === 'rocketleague' && rlLive ? formatClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode);
@@ -177,7 +121,6 @@
     root.style.setProperty('--away-secondary', teams[1]?.secondaryColorEnabled ? teams[1].secondaryColor : teams[1]?.color || '#5e6673');
     root.classList.toggle('is-live', Boolean(game.match?.live));
     renderRocketLeaguePlayers(game, selectedGame);
-    renderSpectatedRocketLeagueBoost(game, selectedGame);
   }
 
   function renderValorantVeto(game) {
@@ -195,29 +138,27 @@
       card.style.setProperty('--attacker-secondary', teams[attacker]?.secondaryColorEnabled ? teams[attacker].secondaryColor : teams[attacker]?.color || '#f47920');
       card.style.setProperty('--defender-primary', teams[defender]?.color || '#4da1ff');
       card.style.setProperty('--defender-secondary', teams[defender]?.secondaryColorEnabled ? teams[defender].secondaryColor : teams[defender]?.color || '#4da1ff');
-      const line = pick.score?.filter((value) => value !== '').join(' â€” ');
+      const line = pick.score?.filter((value) => value !== '').join(' — ');
       card.classList.toggle('has-result', Boolean(line));
       card.dataset.score = line || '';
     });
   }
 
-  function renderGenericMaps(game, selectedGame) {
+  function renderGenericMaps(game) {
     const container = $('#generic-map-pool');
     container.replaceChildren();
     const teams = game.teams || FALLBACK.games.overwatch.teams;
     (game.mapRows || []).slice(0, 7).forEach((row, index) => {
       const card = document.createElement('article');
-      card.className = `generic-map-card${selectedGame === 'rocketleague' ? ' rl-map-card' : ''}${index === game.activeMap ? ' active' : ''}${row.winner !== null ? ' complete' : ''}`;
-      const arenaImage = selectedGame === 'rocketleague' ? rocketLeagueArenaImage(row) : '';
-      if (arenaImage) card.style.setProperty('--arena-image', `url("${arenaImage}")`);
+      card.className = `generic-map-card${index === game.activeMap ? ' active' : ''}${row.winner !== null ? ' complete' : ''}`;
       const number = document.createElement('span');
-      number.textContent = `${selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${String(index + 1).padStart(2, '0')}`;
+      number.textContent = `MAP ${String(index + 1).padStart(2, '0')}`;
       const map = document.createElement('strong');
-      map.textContent = selectedGame === 'rocketleague' ? row.map || 'ARENA PENDING' : row.map || 'TBD';
+      map.textContent = row.map || 'TBD';
       const mode = document.createElement('small');
-      mode.textContent = selectedGame === 'rocketleague' && index === game.activeMap ? 'LIVE FROM API' : row.mode || '';
+      mode.textContent = row.mode || '';
       const score = document.createElement('p');
-      score.textContent = row.score?.some(Boolean) ? `${teams[0]?.shortName || 'HOME'} ${row.score[0] || '0'} - ${row.score[1] || '0'} ${teams[1]?.shortName || 'AWAY'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : selectedGame === 'rocketleague' ? 'WAITING FOR GAME DATA' : 'UPCOMING';
+      score.textContent = row.score?.some(Boolean) ? `${row.score[0] || '0'} — ${row.score[1] || '0'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : 'UPCOMING';
       card.append(number, map, mode, score);
       container.append(card);
     });
@@ -226,15 +167,12 @@
   function renderMapPool(state) {
     if (!$('[data-overlay="map-pool"]')) return;
     const { selectedGame, game, meta } = getActive(state);
-    const nextRenderKey = mapPoolSignature(selectedGame, game);
-    if (nextRenderKey === mapPoolRenderKey) return;
-    mapPoolRenderKey = nextRenderKey;
     applyTheme(selectedGame, meta);
     const teams = game.teams || FALLBACK.games.overwatch.teams;
     setText('#map-game-code', meta.code);
     setText('#map-game-name', meta.name);
     setText('#map-event', game.match?.event);
-    setText('#map-series', `${teams[0]?.shortName || 'HOME'} ${teams[0]?.score || 0} â€” ${teams[1]?.score || 0} ${teams[1]?.shortName || 'AWAY'}`);
+    setText('#map-series', `${teams[0]?.shortName || 'HOME'} ${teams[0]?.score || 0} — ${teams[1]?.score || 0} ${teams[1]?.shortName || 'AWAY'}`);
     const root = $('[data-overlay="map-pool"]');
     root.style.setProperty('--home-color', teams[0]?.color || '#f47920');
     root.style.setProperty('--home-secondary', teams[0]?.secondaryColorEnabled ? teams[0].secondaryColor : teams[0]?.color || '#f47920');
@@ -246,79 +184,10 @@
     generic.hidden = selectedGame === 'valorant';
     setText('.overlay-titlebar h1', selectedGame === 'valorant' ? 'MAP PICKS / BANS' : 'MAP POOL / SERIES');
     if (selectedGame === 'valorant') renderValorantVeto(game);
-    else renderGenericMaps(game, selectedGame);
+    else renderGenericMaps(game);
   }
 
   let rosterTimers = [];
-  let rosterRenderKey = '';
-  let mapPoolRenderKey = '';
-
-  function teamSignature(team = {}) {
-    return [
-      team.name,
-      team.shortName,
-      team.color,
-      team.secondaryColor,
-      Boolean(team.secondaryColorEnabled),
-      team.score,
-      team.detailScore
-    ];
-  }
-
-  function teamVisualSignature(team = {}) {
-    return [
-      team.name,
-      team.shortName,
-      team.color,
-      team.secondaryColor,
-      Boolean(team.secondaryColorEnabled)
-    ];
-  }
-
-  function mapPoolSignature(selectedGame, game = {}) {
-    return signature({
-      selectedGame,
-      activeMap: game.activeMap,
-      match: [game.match?.event, game.match?.round, game.match?.format],
-      teams: (game.teams || []).map(teamSignature),
-      veto: selectedGame === 'valorant' ? game.veto : null,
-      rows: (game.mapRows || []).map((row = {}) => [
-        row.mode,
-        row.map,
-        row.arenaId,
-        row.arenaImage,
-        row.status,
-        row.winner,
-        row.score?.[0],
-        row.score?.[1]
-      ])
-    });
-  }
-
-  function rosterPlayerSignature(player = {}) {
-    return [
-      player.handle,
-      player.name,
-      player.role,
-      player.character,
-      player.playerImage,
-      player.characterImage,
-      player.playerImageName,
-      player.characterImageName
-    ];
-  }
-
-  function rosterSignature(state, selectedGame, game = {}, program) {
-    return signature({
-      selectedGame,
-      program,
-      activeRoster: state.activeRoster,
-      showAwayRoster: Boolean(game.showAwayRoster),
-      teams: (game.teams || []).map(teamVisualSignature),
-      home: game.rosters?.[program]?.map(rosterPlayerSignature) || [],
-      away: game.awayRosters?.[program]?.map(rosterPlayerSignature) || []
-    });
-  }
 
   function safeImageUrl(value, fallback) {
     if (typeof value === 'string' && value.startsWith('http://127.0.0.1:3174/user-assets/')) return value;
@@ -334,7 +203,7 @@
     rosterTimers.push(setTimeout(callback, delay));
   }
 
-  function renderRosterTeam(game, meta, program, side, selectedGame) {
+  function renderRosterTeam(game, meta, program, side) {
     const container = $('#roster-cards');
     const teamIndex = side === 'away' ? 1 : 0;
     const team = game.teams?.[teamIndex] || FALLBACK.games.overwatch.teams[teamIndex];
@@ -369,7 +238,7 @@
       characterImage.className = 'character-photo';
       characterImage.alt = '';
       const sharedArtwork = game.characterArt?.[player.character]?.url;
-      characterImage.src = safeImageUrl(selectedGame === 'rocketleague' ? player.characterImage : sharedArtwork || player.characterImage, './assets/character-placeholder.svg');
+      characterImage.src = safeImageUrl(sharedArtwork || player.characterImage, './assets/character-placeholder.svg');
       const number = document.createElement('span');
       number.className = 'roster-number';
       number.textContent = String(index + 1).padStart(2, '0');
@@ -403,17 +272,14 @@
     if (!container) return;
     const { selectedGame, game, meta } = getActive(state);
     applyTheme(selectedGame, meta);
+    clearRosterTimers();
     const query = new URLSearchParams(location.search);
     const requestedProgram = query.get('program') || query.get('team');
     const program = requestedProgram === 'jv' ? 'jv' : (requestedProgram === 'varsity' ? 'varsity' : state.activeRoster || 'varsity');
-    const nextRenderKey = rosterSignature(state, selectedGame, game, program);
-    if (nextRenderKey === rosterRenderKey) return;
-    rosterRenderKey = nextRenderKey;
-    clearRosterTimers();
     const stage = $('.roster-stage');
     stage.classList.remove('team-slide-out', 'team-slide-in');
-    setText('#roster-cycle-label', game.showAwayRoster ? 'HOME â†’ AWAY Â· 15 SEC' : 'PLAYER â†’ CHARACTER Â· 7 SEC');
-    renderRosterTeam(game, meta, program, 'home', selectedGame);
+    setText('#roster-cycle-label', game.showAwayRoster ? 'HOME → AWAY · 15 SEC' : 'PLAYER → CHARACTER · 7 SEC');
+    renderRosterTeam(game, meta, program, 'home');
     rosterAfter(() => showRosterCharacters('home'), 7000);
 
     if (game.showAwayRoster) {
@@ -423,7 +289,7 @@
         setText('#roster-phase-label', 'CHANGING SIDES');
       }, 14500);
       rosterAfter(() => {
-        renderRosterTeam(game, meta, program, 'away', selectedGame);
+        renderRosterTeam(game, meta, program, 'away');
         stage.classList.remove('team-slide-out');
         stage.classList.add('team-slide-in');
       }, 15350);

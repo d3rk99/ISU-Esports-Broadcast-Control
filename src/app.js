@@ -11,33 +11,13 @@ if (savedRocketLeagueConnection && typeof savedRocketLeagueConnection === 'objec
     ...savedRocketLeagueConnection
   };
 }
-const savedValorantConnection = window.isuDesktop?.savedValorantConnection;
-if (savedValorantConnection && typeof savedValorantConnection === 'object') {
-  state.games.valorant.valorant = {
-    ...state.games.valorant.valorant,
-    ...savedValorantConnection
-  };
-}
 let history = [];
 let saveTimer;
 let livePublishTimer;
+let liveRenderTimer;
 let lastUserScrollAt = 0;
 let networkAddresses = [];
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
-
-const ROCKET_LEAGUE_ARENAS = {
-  stadium: { name: 'DFH Stadium', image: './assets/rl-arenas/dfh-stadium.jpg' },
-  stadium_p: { name: 'DFH Stadium', image: './assets/rl-arenas/dfh-stadium.jpg' },
-  eurostadium_p: { name: 'Mannfield', image: './assets/rl-arenas/mannfield.jpg' },
-  champsstadium_p: { name: 'Champions Field', image: './assets/rl-arenas/champions-field.jpg' },
-  utopiastadium_p: { name: 'Utopia Coliseum', image: './assets/rl-arenas/utopia-coliseum.jpg' },
-  park_p: { name: 'Beckwith Park', image: './assets/rl-arenas/beckwith-park.jpg' },
-  chn_stadium_p: { name: 'Forbidden Temple', image: './assets/rl-arenas/forbidden-temple.jpg' },
-  cs_day_p: { name: 'Deadeye Canyon', image: './assets/rl-arenas/deadeye-canyon.jpg' },
-  neotokyo_p: { name: 'Neo Tokyo', image: './assets/rl-arenas/neo-tokyo.jpg' },
-  labs_underpass_p: { name: 'Neo Tokyo', image: './assets/rl-arenas/neo-tokyo.jpg' },
-  underwater_p: { name: 'AquaDome', image: './assets/rl-arenas/aquadome.jpg' }
-};
 
 const ICONS = {
   control: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg>',
@@ -101,7 +81,6 @@ function render() {
     : null;
   const config = GAME_CONFIGS[state.selectedGame];
   root.style.setProperty('--game-accent', config.accent);
-  root.style.setProperty('--boost-transition-ms', `${Math.max(1, Math.min(50, Number(state.games.rocketleague.rocketLeague.updateIntervalMs) || 33))}ms`);
   root.innerHTML = `
     <div class="app-shell">
       ${renderSidebar(config)}
@@ -207,7 +186,7 @@ function renderControl(config) {
             <div class="preview-center"><small>${escapeHtml(config.scoreLabel)}</small><b>${game.teams[0].score}<i>—</i>${game.teams[1].score}</b><span>${game.match.live ? 'LIVE' : 'PREVIEW'}</span></div>
             ${renderPreviewTeam(game.teams[1], 'right')}
           </div>
-          <div class="preview-map"><span>${state.selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${game.activeMap + 1}</span><strong>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive?.arena ? rocketLeagueArenaMeta(rlLive.arena).name : activeMap.map)}</strong><i></i><em>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive ? formatGameClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode)}</em></div>
+          <div class="preview-map"><span>${state.selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${game.activeMap + 1}</span><strong>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive?.arena ? rlLive.arena.replace(/_P$/i, '').replaceAll('_', ' ') : activeMap.map)}</strong><i></i><em>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive ? formatGameClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode)}</em></div>
         </div>
         <div class="preview-label"><span></span>CONTROL PREVIEW · OVERLAY LAYOUT TO FOLLOW</div>
       </div>
@@ -223,7 +202,6 @@ function renderControl(config) {
         ${renderTeamControl(game.teams[1], 1, config)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
-      ${state.selectedGame === 'valorant' ? renderValorantPanel(game) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
           <div class="panel-title"><span class="section-number">02</span><div><h2>Match details</h2><p>Information shared across graphics</p></div></div>
@@ -251,101 +229,6 @@ function formatGameClock(seconds, overtime = false) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = String(safeSeconds % 60).padStart(2, '0');
   return overtime ? `OT +${minutes}:${remainder}` : `${minutes}:${remainder}`;
-}
-
-function formatAge(ms) {
-  if (ms === null || ms === undefined) return 'never';
-  if (ms < 1000) return `${Math.max(0, Math.round(ms))} ms ago`;
-  return `${Math.round(ms / 1000)} sec ago`;
-}
-
-function renderValorantPanel(game) {
-  const val = game.valorant;
-  const live = val.live;
-  const players = live.players || [];
-  const report = {
-    status: live.status,
-    message: live.message,
-    detectedGameId: live.detectedGameId,
-    registeredFeatures: live.registeredFeatures,
-    lastInfoUpdate: live.lastInfoUpdate,
-    lastGameEvent: live.lastEvent,
-    normalized: {
-      match: live.match,
-      teams: live.teams,
-      observedPlayer: live.observedPlayer,
-      spike: live.spike,
-      players: players.slice(0, 10)
-    },
-    errors: live.errors || []
-  };
-  return `
-    <article class="panel valorant-live-panel">
-      <header class="rl-panel-heading">
-        <div><span>VALORANT GAME EVENTS PROVIDER</span><h2>Live game connection</h2><p>Overwolf GEP telemetry - broadcast-safe automation</p></div>
-        <div class="rl-status ${escapeHtml(live.status)}"><i></i><span>${escapeHtml(live.status.toUpperCase())}</span><small>${escapeHtml(live.message)}</small></div>
-      </header>
-      <div class="rl-connection-grid val-connection-grid">
-        <label class="rl-enable-toggle"><input type="checkbox" data-val-prop="enabled" ${val.enabled ? 'checked' : ''}><i></i><span><b>LIVE DATA</b><small>${val.enabled ? 'Enabled' : 'Disabled'}</small></span></label>
-        <label class="field"><span>GEP TEAM 0</span><select data-val-prop="team0Home"><option value="true" ${val.team0Home ? 'selected' : ''}>Home - ${escapeHtml(game.teams[0].shortName)}</option><option value="false" ${!val.team0Home ? 'selected' : ''}>Away - ${escapeHtml(game.teams[1].shortName)}</option></select><small>Changing sides does not swap Home/Away identity.</small></label>
-        <label class="field"><span>LAST UPDATE</span><input readonly value="${escapeHtml(formatAge(live.dataAgeMs))}"><small>${escapeHtml(live.lastUpdateAt || 'No telemetry yet')}</small></label>
-        <label class="field"><span>OBSERVED PLAYER</span><input readonly value="${escapeHtml(live.observedPlayer || '—')}"></label>
-      </div>
-      <div class="rl-toolbar">
-        <button class="secondary-button" data-action="${live.status === 'simulating' ? 'stop-val-simulator' : 'start-val-simulator'}">${live.status === 'simulating' ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
-        <button class="secondary-button" data-action="copy-val-debug" data-debug='${escapeHtml(JSON.stringify(report))}'>COPY DEBUG REPORT</button>
-        <span>${live.gepAvailable ? 'GEP AVAILABLE' : 'STANDARD ELECTRON'} · ${live.gameDetected ? 'VALORANT DETECTED' : 'WAITING FOR VALORANT'} · ${live.eventCount || 0} EVENTS</span>
-      </div>
-      <div class="rl-settings-grid">
-        <section><h3>AUTOMATION</h3><div class="rl-checks">
-          ${valCheckbox('syncScore', 'Round score', val.syncScore)}
-          ${valCheckbox('syncMap', 'Current map', val.syncMap)}
-          ${valCheckbox('syncRound', 'Round number', val.syncRound)}
-          ${valCheckbox('syncPhase', 'Round phase', val.syncPhase)}
-          ${valCheckbox('syncPlayers', 'Players & stats', val.syncPlayers)}
-          ${valCheckbox('debug', 'Debug logging', val.debug)}
-        </div></section>
-        <section><h3>LIVE STATE</h3><div class="val-live-state">
-          <div><span>MAP</span><strong>${escapeHtml(live.match?.map || '—')}</strong></div>
-          <div><span>ROUND</span><strong>${escapeHtml(live.match?.round ?? '—')}</strong></div>
-          <div><span>PHASE</span><strong>${escapeHtml(live.match?.phase || '—')}</strong></div>
-          <div><span>SCORE</span><strong>${escapeHtml(`${live.teams?.home?.score ?? 0} - ${live.teams?.away?.score ?? 0}`)}</strong></div>
-          <div><span>SPIKE</span><strong>${escapeHtml(live.spike?.state || '—')}</strong></div>
-          <div><span>MATCH ID</span><strong title="${escapeHtml(live.match?.matchId || live.match?.pseudoMatchId || '')}">${escapeHtml((live.match?.matchId || live.match?.pseudoMatchId || '—').slice(0, 14))}</strong></div>
-        </div></section>
-      </div>
-      <details class="val-debug-panel">
-        <summary>Raw telemetry debug</summary>
-        <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>
-      </details>
-      <div class="rl-player-grid val-player-grid">${players.length ? players.slice(0, 10).map(renderValorantLivePlayer).join('') : '<p class="rl-empty">VALORANT players appear here after GEP sends roster or scoreboard data.</p>'}</div>
-    </article>`;
-}
-
-function valCheckbox(prop, label, checked) {
-  return `<label><input type="checkbox" data-val-prop="${prop}" ${checked ? 'checked' : ''}><i></i><span>${label}</span></label>`;
-}
-
-function renderValorantLivePlayer(player) {
-  const kd = `${player.kills ?? 0}/${player.deaths ?? 0}/${player.assists ?? 0}`;
-  return `<div class="rl-player val-player ${player.alive === false ? 'demolished' : ''}"><header><span>${escapeHtml(player.teammate ? 'ALLY' : 'PLAYER')}</span><strong>${escapeHtml(player.name || 'Unknown')}</strong></header><div class="boost-row"><b>${escapeHtml(player.agent || 'Agent')}</b><span>${escapeHtml(kd)} KDA</span></div><small>${escapeHtml(player.weapon || '')}${player.money !== null && player.money !== undefined ? ` · $${escapeHtml(player.money)}` : ''}${player.spike ? ' · SPIKE' : ''}</small></div>`;
-}
-
-function normalizeRocketLeagueArenaId(value = '') {
-  return String(value || '').trim().toLowerCase();
-}
-
-function rocketLeagueArenaMeta(value = '') {
-  const id = normalizeRocketLeagueArenaId(value);
-  const fallbackName = String(value || '').replace(/_P$/i, '').replaceAll('_', ' ') || 'Waiting for arena';
-  return { id, name: ROCKET_LEAGUE_ARENAS[id]?.name || fallbackName, image: ROCKET_LEAGUE_ARENAS[id]?.image || '' };
-}
-
-function rocketLeagueArenaImage(row = {}) {
-  if (row.arenaImage) return row.arenaImage;
-  const rowName = normalizeRocketLeagueArenaId(row.map).replace(/[^a-z0-9]/g, '');
-  const match = Object.values(ROCKET_LEAGUE_ARENAS).find((arena) => normalizeRocketLeagueArenaId(arena.name).replace(/[^a-z0-9]/g, '') === rowName);
-  return match?.image || '';
 }
 
 function rocketLeaguePacketRate(intervalMs) {
@@ -435,7 +318,6 @@ function field(label, path, value) {
 
 function renderMaps(config) {
   const game = current();
-  if (state.selectedGame === 'rocketleague') return renderRocketLeagueMaps(config, game);
   return `<section class="view-stack">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Series map order</h2><p>${escapeHtml(config.format)} · select, score, and advance maps</p></div></div>
       <button class="secondary-button" data-action="clear-maps">Clear results</button>
@@ -451,38 +333,6 @@ function renderMaps(config) {
     </div>
     <div class="map-note"><span>LIVE OUTPUT</span> Changes on this page are sent to the Map Pool browser source immediately.</div>
   </section>`;
-}
-
-function renderRocketLeagueMaps(config, game) {
-  const liveArena = rocketLeagueArenaMeta(game.rocketLeague?.live?.arena);
-  const activeRow = game.mapRows[game.activeMap] || game.mapRows[0];
-  return `<section class="view-stack">
-    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Rocket League series history</h2><p>${escapeHtml(config.format)} - arenas and scores populate from the live Stats API</p></div></div>
-      <button class="secondary-button" data-action="clear-maps">Clear results</button>
-    </div>
-    <div class="map-summary">
-      <div><span>SERIES</span><strong>${escapeHtml(game.teams[0].shortName)} ${game.teams[0].score} <i>-</i> ${game.teams[1].score} ${escapeHtml(game.teams[1].shortName)}</strong></div>
-      <div><span>ACTIVE</span><strong>GAME ${game.activeMap + 1}</strong></div>
-      <div><span>CURRENT ARENA</span><strong>${escapeHtml(activeRow?.map || liveArena.name)}</strong></div>
-    </div>
-    <div class="map-list rl-map-list">
-      ${game.mapRows.map((row, index) => renderRocketLeagueMapRow(row, index, game)).join('')}
-    </div>
-    <div class="map-note"><span>API DRIVEN</span> Rocket League arenas and game scores update from live telemetry. Manual winner buttons are available for correction.</div>
-  </section>`;
-}
-
-function renderRocketLeagueMapRow(row, index, game) {
-  const isActive = index === game.activeMap;
-  const scoreText = row.score?.some(Boolean) ? `${row.score[0] || '0'} - ${row.score[1] || '0'}` : isActive ? `${game.teams[0].detailScore || 0} - ${game.teams[1].detailScore || 0}` : 'Waiting';
-  const image = rocketLeagueArenaImage(row);
-  return `<article class="map-row rl-api-map-row ${isActive ? 'active' : ''} ${row.winner !== null ? 'complete' : ''}" style="${image ? `--arena-image:url('${escapeHtml(image)}')` : ''}">
-    <button class="map-index" data-action="activate-map" data-index="${index}"><span>${isActive ? 'LIVE' : row.winner !== null ? 'FINAL' : 'GAME'}</span><strong>${String(index + 1).padStart(2, '0')}</strong></button>
-    <div class="rl-map-art"></div>
-    <div class="rl-map-copy"><span>${escapeHtml(row.mode || `Game ${index + 1}`)}</span><strong>${escapeHtml(row.map || 'Pending arena')}</strong><small>${escapeHtml(row.arenaId || '')}</small></div>
-    <div class="map-score rl-api-score"><span>${escapeHtml(game.teams[0].shortName)}</span><b>${escapeHtml(scoreText)}</b><span>${escapeHtml(game.teams[1].shortName)}</span></div>
-    <div class="winner-buttons"><button class="${row.winner === 0 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="0">${escapeHtml(game.teams[0].shortName)}</button><button class="${row.winner === 1 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="1">${escapeHtml(game.teams[1].shortName)}</button></div>
-  </article>`;
 }
 
 function renderValorantVetoEditor(config, game) {
@@ -549,7 +399,6 @@ function renderRosters(config) {
 }
 
 function renderPlayerEditor(player, index, config, game) {
-  const isRocketLeague = state.selectedGame === 'rocketleague';
   const selectedArt = game.characterArt[player.character] || {};
   const imageTile = (type, label, value, filename, character = '') => `<div class="roster-asset-tile">
     <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(value)}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
@@ -566,10 +415,8 @@ function renderPlayerEditor(player, index, config, game) {
     </div>
     <div class="player-media-row">
       ${imageTile('playerImage', 'Player portrait', player.playerImage, player.playerImageName)}
-      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isRocketLeague ? 'Car PNG is unique to this player.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
-      ${isRocketLeague
-        ? imageTile('characterImage', 'Player car PNG', player.characterImage, player.characterImageName)
-        : imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
+      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>Artwork is shared across every ${escapeHtml(config.name)} roster.</small></label>
+      ${imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
     </div>
   </div>`;
 }
@@ -598,7 +445,7 @@ function renderSettings() {
     <div class="settings-grid">
       <article class="panel setting-card"><div class="setting-icon">↻</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game">RESET GAME</button></article>
       <article class="panel setting-card"><div class="setting-icon">✓</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
-      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control · Rocket League live telemetry</p></div><span class="version-badge">v0.4.3</span></article>
+      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control · Rocket League live telemetry</p></div><span class="version-badge">v0.5.0</span></article>
     </div>
     <div class="brand-statement"><div class="brand-mark large"><span>IS</span><i></i></div><div><span>BUILT FOR</span><strong>IDAHO STATE ESPORTS</strong><p>Roarange. Bengal Black. Broadcast ready.</p></div></div>
   </section>`;
@@ -620,15 +467,6 @@ function syncRocketLeagueConnection() {
   });
 }
 
-function syncValorantConnection() {
-  const val = state.games.valorant.valorant;
-  window.isuDesktop?.configureValorant({
-    ...val,
-    savedEnabled: val.enabled,
-    enabled: state.selectedGame === 'valorant' && val.enabled
-  });
-}
-
 function scheduleLiveUpdate() {
   if (!livePublishTimer) {
     livePublishTimer = window.setTimeout(() => {
@@ -636,14 +474,16 @@ function scheduleLiveUpdate() {
       window.isuDesktop?.publishState(state);
     }, Math.max(1, Math.min(50, Number(state.games.rocketleague.rocketLeague.updateIntervalMs) || 33)));
   }
-}
-
-function scheduleValorantLiveUpdate() {
-  if (!livePublishTimer) {
-    livePublishTimer = window.setTimeout(() => {
-      livePublishTimer = null;
-      window.isuDesktop?.publishState(state);
-    }, 100);
+  if (state.selectedGame === 'rocketleague' && state.activeView === 'control') {
+    if (!liveRenderTimer) {
+      liveRenderTimer = window.setTimeout(() => {
+        liveRenderTimer = null;
+        const activeElement = document.activeElement;
+        const editing = root.contains(activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement?.tagName);
+        const activelyScrolling = performance.now() - lastUserScrollAt < 450;
+        if (!editing && !activelyScrolling) render();
+      }, 160);
+    }
   }
 }
 
@@ -659,47 +499,23 @@ function applyRocketLeagueScores(game) {
   });
 }
 
-function updateRocketLeagueActiveMap(game) {
-  const rl = game.rocketLeague;
-  const row = game.mapRows[game.activeMap];
-  if (!row) return;
-  const arena = rocketLeagueArenaMeta(rl.live.arena);
-  row.mode = `Game ${game.activeMap + 1}`;
-  if (arena.id) row.arenaId = arena.id;
-  if (arena.name && arena.name !== 'Waiting for arena') row.map = arena.name;
-  if (arena.image) row.arenaImage = arena.image;
-  row.status = 'ready';
-  row.score = [String(game.teams[0].detailScore || 0), String(game.teams[1].detailScore || 0)];
-}
-
-function rocketLeaguePlayerId(player) {
-  const primaryId = String(player.PrimaryId || '').trim();
-  if (primaryId && primaryId !== 'Unknown|0|0') return primaryId;
-  return `${player.TeamNum}|${player.Shortcut}|${player.Name}`;
-}
-
 function normalizeLivePlayers(data, rl) {
   const target = data.Game?.Target?.Name || '';
-  const playersById = new Map();
-  (data.Players || []).forEach((player) => {
-    const id = rocketLeaguePlayerId(player);
-    playersById.set(id, {
-      id,
-      name: player.Name || 'Unknown Player',
-      teamNum: Number(player.TeamNum) || 0,
-      shortcut: player.Shortcut,
-      score: Number(player.Score) || 0,
-      goals: Number(player.Goals) || 0,
-      assists: Number(player.Assists) || 0,
-      saves: Number(player.Saves) || 0,
-      shots: Number(player.Shots) || 0,
-      demos: Number(player.Demos) || 0,
-      boost: player.Boost === undefined ? null : Number(player.Boost),
-      demolished: Boolean(player.bDemolished),
-      spectated: player.Name === target
-    });
-  });
-  return [...playersById.values()].sort((a, b) => mapRocketLeagueTeam(a.teamNum, rl) - mapRocketLeagueTeam(b.teamNum, rl));
+  return (data.Players || []).map((player) => ({
+    id: player.PrimaryId || `${player.TeamNum}|${player.Shortcut}|${player.Name}`,
+    name: player.Name || 'Unknown Player',
+    teamNum: Number(player.TeamNum) || 0,
+    shortcut: player.Shortcut,
+    score: Number(player.Score) || 0,
+    goals: Number(player.Goals) || 0,
+    assists: Number(player.Assists) || 0,
+    saves: Number(player.Saves) || 0,
+    shots: Number(player.Shots) || 0,
+    demos: Number(player.Demos) || 0,
+    boost: player.Boost === undefined ? null : Number(player.Boost),
+    demolished: Boolean(player.bDemolished),
+    spectated: player.Name === target
+  })).sort((a, b) => mapRocketLeagueTeam(a.teamNum, rl) - mapRocketLeagueTeam(b.teamNum, rl));
 }
 
 function handleRocketLeagueEvent(envelope) {
@@ -720,7 +536,6 @@ function handleRocketLeagueEvent(envelope) {
       return scores;
     }, rl.live.teamScores || [0, 0]);
     applyRocketLeagueScores(game);
-    updateRocketLeagueActiveMap(game);
     if (rl.syncPlayers) rl.live.players = normalizeLivePlayers(data, rl);
     scheduleLiveUpdate();
     return;
@@ -782,33 +597,6 @@ window.isuDesktop?.onRocketLeagueStatus((status) => {
 });
 
 window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
-
-function applyValorantLiveState(live) {
-  const game = state.games.valorant;
-  const val = game.valorant;
-  val.live = { ...val.live, ...live, status: live.status || val.live.status };
-  if (val.syncScore) {
-    game.teams[0].detailScore = Number(live.teams?.home?.score ?? game.teams[0].detailScore) || 0;
-    game.teams[1].detailScore = Number(live.teams?.away?.score ?? game.teams[1].detailScore) || 0;
-  }
-  const activeRow = game.mapRows[game.activeMap] || game.mapRows[0];
-  if (activeRow) {
-    if (val.syncMap && live.match?.map) activeRow.map = live.match.map;
-    if (val.syncRound && live.match?.round !== null && live.match?.round !== undefined) activeRow.mode = `Round ${live.match.round}`;
-    if (val.syncScore) activeRow.score = [String(game.teams[0].detailScore), String(game.teams[1].detailScore)];
-    activeRow.status = live.match?.active === false ? activeRow.status : 'ready';
-  }
-}
-
-window.isuDesktop?.onValorantStatus((status) => {
-  applyValorantLiveState(status);
-  scheduleValorantLiveUpdate();
-});
-
-window.isuDesktop?.onValorantEvent((event) => {
-  if (event?.live) applyValorantLiveState(event.live);
-  scheduleValorantLiveUpdate();
-});
 
 root.addEventListener('scroll', (event) => {
   if (event.target.classList?.contains('content-scroll')) lastUserScrollAt = performance.now();
@@ -913,40 +701,6 @@ root.addEventListener('click', async (event) => {
     toast('Test feed stopped');
     return;
   }
-  if (button.dataset.action === 'start-val-simulator') {
-    await window.isuDesktop?.startValorantSimulator();
-    toast('VALORANT test feed started');
-    return;
-  }
-  if (button.dataset.action === 'stop-val-simulator') {
-    await window.isuDesktop?.stopValorantSimulator();
-    toast('VALORANT test feed stopped');
-    return;
-  }
-  if (button.dataset.action === 'copy-val-debug') {
-    const live = state.games.valorant.valorant.live;
-    const report = {
-      generatedAt: new Date().toISOString(),
-      selectedGame: state.selectedGame,
-      status: live.status,
-      message: live.message,
-      detectedGameId: live.detectedGameId,
-      registeredFeatures: live.registeredFeatures,
-      lastInfoUpdate: live.lastInfoUpdate,
-      lastGameEvent: live.lastEvent,
-      normalized: {
-        match: live.match,
-        teams: live.teams,
-        players: live.players,
-        spike: live.spike,
-        observedPlayer: live.observedPlayer
-      },
-      errors: live.errors || []
-    };
-    window.isuDesktop?.copyText(JSON.stringify(report, null, 2));
-    toast('VALORANT debug report copied');
-    return;
-  }
   const actions = {
     'toggle-live': () => commit(() => { game.match.live = !game.match.live; }, game.match.live ? 'Overlay taken off air' : 'Overlay is live'),
     'score-plus': () => commit(() => { game.teams[index].score = Math.min(config.maxScore, game.teams[index].score + 1); }),
@@ -977,21 +731,7 @@ root.addEventListener('click', async (event) => {
       game.mapRows[index].status = game.mapRows[index].winner === null ? 'ready' : 'complete';
       game.teams.forEach((team, teamIndex) => { team.score = game.mapRows.filter((row) => row.winner === teamIndex).length; });
     }, 'Map result saved'),
-    'clear-maps': () => commit(() => {
-      game.mapRows.forEach((row, i) => {
-        row.winner = null;
-        row.score = ['', ''];
-        row.status = i === 0 ? 'ready' : 'upcoming';
-        if (state.selectedGame === 'rocketleague') {
-          row.map = '';
-          row.arenaId = '';
-          row.arenaImage = '';
-          row.mode = `Game ${i + 1}`;
-        }
-      });
-      game.teams.forEach((team) => { team.score = 0; team.detailScore = 0; });
-      game.activeMap = 0;
-    }, 'Map results cleared'),
+    'clear-maps': () => commit(() => { game.mapRows.forEach((row, i) => { row.winner = null; row.score = ['', '']; row.status = i === 0 ? 'ready' : 'upcoming'; }); game.teams.forEach((team) => { team.score = 0; }); game.activeMap = 0; }, 'Map results cleared'),
     'reset-veto': () => commit(() => {
       game.veto.bans = game.veto.bans.map(() => '');
       game.veto.picks = game.veto.picks.map((pick) => ({ ...pick, map: '', score: ['', ''], winner: null }));
@@ -1018,7 +758,6 @@ root.addEventListener('change', (event) => {
     state.selectedGame = target.value;
     persistState();
     syncRocketLeagueConnection();
-    syncValorantConnection();
     render();
     return;
   }
@@ -1035,17 +774,6 @@ root.addEventListener('change', (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
-    render();
-    return;
-  }
-  if (target.dataset.valProp) {
-    const prop = target.dataset.valProp;
-    commit(() => {
-      const val = state.games.valorant.valorant;
-      val[prop] = target.type === 'checkbox' ? target.checked : target.value === 'true' ? true : target.value === 'false' ? false : target.value;
-      if (prop === 'team0Home' && val.live?.teams) applyValorantLiveState(val.live);
-    }, 'VALORANT settings saved');
-    syncValorantConnection();
     render();
     return;
   }
@@ -1096,7 +824,6 @@ function initialize() {
   persistState();
   render();
   syncRocketLeagueConnection();
-  syncValorantConnection();
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
     if (state.selectedGame === 'rocketleague' && state.activeView === 'control') render();

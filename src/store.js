@@ -17,10 +17,6 @@ export function loadState(storage = window.localStorage) {
         ...team,
         ...(parsed.games[game].teams?.[index] || {})
       }));
-      parsed.games[game].mapRows = fallback.games[game].mapRows.map((row, index) => ({
-        ...row,
-        ...(parsed.games[game].mapRows?.[index] || {})
-      }));
       for (const collection of ['rosters', 'awayRosters']) {
         parsed.games[game][collection] ||= fallback.games[game][collection];
         for (const rosterType of ['varsity', 'jv']) {
@@ -32,13 +28,6 @@ export function loadState(storage = window.localStorage) {
         }
       }
       parsed.games[game].characterArt = parsed.games[game].characterArt || {};
-      if (game === 'valorant') {
-        parsed.games[game].valorant = {
-          ...fallback.games[game].valorant,
-          ...(parsed.games[game].valorant || {}),
-          live: { ...fallback.games[game].valorant.live }
-        };
-      }
       if (game === 'rocketleague') {
         parsed.games[game].rocketLeague = {
           ...fallback.games[game].rocketLeague,

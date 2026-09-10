@@ -195,16 +195,6 @@ input:focus, select:focus { border-color: var(--orange); }
 .winner-buttons button { flex: 1; height: 34px; border: 1px solid #38383e; border-radius: 2px; color: #6d6d75; background: #1d1d20; font-size: 7px; font-weight: 900; }
 .winner-buttons button:hover { color: white; border-color: #595960; }
 .winner-buttons button.selected { border-color: #d7691c; color: #0b0b0c; background: var(--orange); }
-.rl-map-list { gap: 9px; }
-.rl-api-map-row { grid-template-columns: 65px 126px minmax(190px, 1fr) 235px 134px; min-height: 96px; overflow: hidden; }
-.rl-api-map-row::before { content: ""; grid-column: 2; grid-row: 1; align-self: stretch; width: 100%; min-height: 78px; background: linear-gradient(135deg, rgba(45,140,255,.16), rgba(8,8,10,.92)), var(--arena-image, linear-gradient(135deg, #202026, #0e0e11)); background-size: cover; background-position: center; }
-.rl-map-art { display: none; }
-.rl-map-copy { min-width: 0; padding: 0 12px; }
-.rl-map-copy span, .rl-map-copy small { display: block; color: #66666e; font-size: 7px; font-weight: 900; letter-spacing: .12em; }
-.rl-map-copy strong { display: block; margin: 5px 0; overflow: hidden; color: #ededf0; font-size: 15px; font-style: italic; text-overflow: ellipsis; white-space: nowrap; }
-.rl-map-copy small { color: #4f4f56; text-transform: uppercase; }
-.rl-api-score { grid-template-columns: 45px minmax(66px, auto) 45px; }
-.rl-api-score b { color: #f2f2f4; font-family: Consolas, monospace; font-size: 17px; text-align: center; }
 .map-note { margin-top: 14px; padding: 12px 15px; border: 1px dashed #343439; color: #686870; background: rgba(255,255,255,.012); font-size: 9px; }
 .map-note span { margin-right: 10px; color: var(--orange); font-size: 7px; font-weight: 900; letter-spacing: .11em; }
 .veto-editor { margin-bottom: 14px; padding: 16px; border-left: 2px solid #ff4655; }
@@ -382,26 +372,11 @@ input:focus, select:focus { border-color: var(--orange); }
 .rl-player header strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .rl-player header small { color: #70cd6a; font-size: 6px; font-weight: 900; }
 .boost-track { height: 4px; margin: 0 10px; overflow: hidden; background: #28282d; }
-.boost-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--player-team), #f4d44c); transition: width var(--boost-transition-ms, 33ms) linear; }
+.boost-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--player-team), #f4d44c); transition: width .12s linear; }
 .rl-player footer { display: grid; grid-template-columns: 22px 40px 1fr; align-items: baseline; padding: 7px 10px 9px; }
 .rl-player footer b { font-size: 13px; }
 .rl-player footer span { color: #5e5e66; font-size: 6px; font-weight: 900; }
 .rl-player footer em { color: #777780; font-size: 7px; font-style: normal; text-align: right; }
-
-.valorant-live-panel { overflow: hidden; border-top: 2px solid #ff4655; }
-.val-connection-grid { grid-template-columns: 180px minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr); }
-.val-live-state { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.val-live-state div { min-height: 68px; padding: 14px; border: 1px solid #2b2b34; background: #111116; }
-.val-live-state span { display: block; color: #7d8494; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; }
-.val-live-state strong { display: block; margin-top: 8px; overflow: hidden; color: #f2f4f8; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
-.val-debug-panel { margin: 14px 17px 0; border: 1px solid #2b2b34; background: #0c0c10; }
-.val-debug-panel summary { cursor: pointer; padding: 12px 14px; color: #aab1c2; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
-.val-debug-panel pre { max-height: 240px; margin: 0; overflow: auto; padding: 14px; border-top: 1px solid #2b2b34; color: #cfd5df; font-size: 11px; line-height: 1.45; white-space: pre-wrap; }
-.val-player-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.val-player { --player-team: #ff4655; }
-.val-player header { grid-template-columns: 48px minmax(0, 1fr); }
-.val-player .boost-row { display: flex; justify-content: space-between; gap: 10px; padding: 0 10px 7px; color: #dfe4ec; font-size: 8px; font-weight: 800; }
-.val-player small { display: block; min-height: 22px; padding: 0 10px 9px; color: #82899a; font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
 
 @keyframes pulse { 50% { opacity: .45; } }
 
