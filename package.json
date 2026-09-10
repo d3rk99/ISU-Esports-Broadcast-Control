@@ -18,13 +18,29 @@
   "build": {
     "appId": "edu.isu.esports.broadcastcontrol",
     "productName": "ISU Esports Broadcast Control",
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "electron/**/*", "package.json"],
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
     "win": {
       "icon": "build/icon.svg",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "nsis": {
@@ -34,15 +50,19 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+    }
   },
   "dependencies": {
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.7",
     "concurrently": "^9.2.1",
     "electron": "^44.3.0",
     "electron-builder": "^26.0.12",
+    "playwright": "^1.63.0",
     "vite": "^8.2.2",
     "wait-on": "^8.0.4"
   }

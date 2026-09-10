@@ -105,7 +105,9 @@ export function createGameState(gameKey) {
     activeMap: 0,
     mapRows: config.modes.map((mode, index) => ({
       mode,
-      map: config.maps[index % config.maps.length],
+      map: gameKey === 'rocketleague' ? '' : config.maps[index % config.maps.length],
+      arenaId: '',
+      arenaImage: '',
       status: index === 0 ? 'ready' : 'upcoming',
       winner: null,
       score: ['', '']

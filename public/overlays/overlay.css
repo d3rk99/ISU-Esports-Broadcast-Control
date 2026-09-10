@@ -136,6 +136,25 @@ body[data-game="rocketleague"] .scoreboard { --game-accent: #2d8cff; }
 .rl-boost-title { display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid #333339; border-left: 1px solid #333339; }
 .rl-boost-title span { margin-bottom: 4px; color: #65cd6f; font-size: 8px; font-weight: 1000; letter-spacing: .15em; }
 .rl-boost-title strong { color: #8c8c94; font-size: 9px; letter-spacing: .11em; }
+.rl-spectated-boost { position: absolute; right: 46px; bottom: 42px; width: 224px; height: 224px; --spectated-team-color: #ff9f18; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--spectated-team-color) 44%, transparent)) drop-shadow(0 16px 24px rgba(0,0,0,.45)); animation: boost-hud-in 400ms ease both; }
+.rl-spectated-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--spectated-team-color) 44%, rgba(20,20,24,.72)) 0 34%, rgba(15,15,18,.82) 35% 57%, transparent 58%),
+    conic-gradient(from 214deg, var(--spectated-team-color) 0 var(--spectated-boost-deg), rgba(255,255,255,.92) var(--spectated-boost-deg) calc(var(--spectated-boost-deg) + 6deg), rgba(255,255,255,.14) calc(var(--spectated-boost-deg) + 6deg) 282deg, transparent 282deg 360deg);
+}
+.rl-spectated-ring::after { content: ""; position: absolute; inset: 43px; border: 3px solid rgba(255,255,255,.72); border-right-color: rgba(255,255,255,.2); border-bottom-color: rgba(255,255,255,.32); border-radius: 50%; box-shadow: inset 0 0 25px rgba(244,121,32,.28); }
+.rl-spectated-core { position: relative; z-index: 2; display: grid; place-items: center; width: 132px; height: 132px; border-radius: 50%; color: #fff; background: radial-gradient(circle, color-mix(in srgb, var(--spectated-team-color) 38%, rgba(18,18,22,.78)), rgba(12,12,15,.78) 67%, rgba(0,0,0,.22)); text-align: center; }
+.rl-spectated-core strong { font-family: "Segoe UI Variable", "Segoe UI", Arial, sans-serif; font-size: 70px; font-weight: 300; line-height: 1; text-shadow: 0 0 10px rgba(255,255,255,.58), 0 0 18px color-mix(in srgb, var(--spectated-team-color) 78%, transparent); transform: translateY(-1px); }
+.rl-spectated-core span { display: none; }
+.rl-spectated-boost small { position: absolute; left: 50%; bottom: -17px; max-width: 190px; overflow: hidden; color: rgba(255,255,255,.7); font-size: 10px; font-weight: 900; letter-spacing: .14em; text-align: center; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; transform: translateX(-50%); }
+.rl-spectated-boost.low-boost { filter: drop-shadow(0 0 12px rgba(239,98,88,.48)) drop-shadow(0 16px 24px rgba(0,0,0,.45)); }
+.rl-spectated-boost.low-boost .rl-spectated-ring { background: radial-gradient(circle at 50% 50%, rgba(170,35,25,.5) 0 34%, rgba(15,15,18,.82) 35% 57%, transparent 58%), conic-gradient(from 214deg, #ef6258 0 var(--spectated-boost-deg), rgba(255,255,255,.92) var(--spectated-boost-deg) calc(var(--spectated-boost-deg) + 6deg), rgba(255,255,255,.14) calc(var(--spectated-boost-deg) + 6deg) 282deg, transparent 282deg 360deg); }
 body[data-game="callofduty"] .score-core { clip-path: polygon(8% 0, 92% 0, 100% 22%, 100% 78%, 92% 100%, 8% 100%, 0 78%, 0 22%); }
 body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%, 92% 100%, 8% 100%, 0 20%); }
 
@@ -214,6 +233,13 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 .generic-map-card > strong { max-width: 88%; margin: 25px 0 12px; overflow-wrap: anywhere; font-size: clamp(25px,2vw,39px); font-style: italic; text-align: center; }
 .generic-map-card > small { color: #85858e; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-align: center; }
 .generic-map-card > p { position: absolute; bottom: 33px; margin: 0; color: #aaaab2; font-size: 12px; font-weight: 1000; letter-spacing: .12em; }
+.rl-map-card { justify-content: flex-end; padding: 30px 18px 34px; overflow: hidden; border-top-color: var(--game-accent); background: linear-gradient(180deg, rgba(7,7,10,.08), rgba(7,7,10,.9) 62%, rgba(7,7,10,.98)), var(--arena-image, linear-gradient(145deg, rgba(35,35,42,.97), rgba(10,10,13,.97))); background-size: cover; background-position: center; text-shadow: 0 2px 8px rgba(0,0,0,.9); }
+.rl-map-card::before { content: ""; position: absolute; inset: 0; z-index: 0; background: linear-gradient(135deg, color-mix(in srgb, var(--home-color) 20%, transparent), transparent 38%, color-mix(in srgb, var(--away-color) 20%, transparent)); opacity: .82; }
+.rl-map-card > * { position: relative; z-index: 1; }
+.rl-map-card > span { align-self: flex-start; padding: 7px 9px; background: rgba(8,8,10,.78); }
+.rl-map-card > strong { max-width: 96%; margin: 105px 0 12px; font-size: clamp(23px,1.8vw,34px); }
+.rl-map-card > small { color: #cfd3da; }
+.rl-map-card > p { left: 18px; right: 18px; bottom: 26px; padding: 9px 8px; color: #fff; background: rgba(8,8,10,.78); text-align: center; }
 
 /* Roster */
 .roster-stage { position: absolute; inset: 4.5% 4%; display: flex; flex-direction: column; --team-primary: var(--game-accent); --team-secondary: var(--game-accent); }
@@ -230,8 +256,8 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 .roster-phase > span { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--team-primary); box-shadow: 0 0 10px var(--team-primary); }
 .roster-phase b { font-size: 11px; letter-spacing: .13em; }
 .roster-phase small { display: block; margin-top: 7px; color: #62626a; font-size: 8px; letter-spacing: .12em; }
-.roster-cards { display: grid; grid-template-columns: repeat(var(--roster-count), minmax(0,1fr)); gap: 16px; align-items: stretch; flex: 1; min-height: 0; padding: 26px 0 17px; }
-.roster-card { position: relative; justify-self: center; width: 100%; max-width: 350px; min-width: 0; overflow: hidden; border: 1px solid #42424a; border-top: 4px solid var(--team-primary); border-bottom: 3px solid var(--team-secondary); background: linear-gradient(160deg, color-mix(in srgb, var(--team-primary) 9%, rgba(36,36,42,.98)), rgba(9,9,12,.98)); box-shadow: 0 20px 35px rgba(0,0,0,.42); opacity: 0; transform: translateY(24px); animation: roster-in 650ms cubic-bezier(.2,.8,.2,1) forwards; animation-delay: calc(var(--card-index) * 110ms + 300ms); }
+.roster-cards { display: grid; grid-template-columns: repeat(var(--roster-count), minmax(0,1fr)); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1; min-height: 0; padding: 26px 0 17px; }
+.roster-card { position: relative; justify-self: center; width: 100%; max-width: 350px; height: 100%; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #42424a; border-top: 4px solid var(--team-primary); border-bottom: 3px solid var(--team-secondary); background: linear-gradient(160deg, color-mix(in srgb, var(--team-primary) 9%, rgba(36,36,42,.98)), rgba(9,9,12,.98)); box-shadow: 0 20px 35px rgba(0,0,0,.42); opacity: 1; transform: translateY(0); }
 .roster-media { position: absolute; inset: 0 0 105px; overflow: hidden; background: linear-gradient(170deg, #2c2c31, #121215); }
 .roster-media::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, #111114); }
 .roster-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; transition: opacity 700ms ease, transform 900ms cubic-bezier(.2,.8,.2,1), filter 700ms ease; }
@@ -259,6 +285,7 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 @keyframes roster-in { to { opacity: 1; transform: translateY(0); } }
 @keyframes roster-camera-out { to { opacity: 0; transform: translateX(-112%) skewX(-4deg); filter: blur(5px); } }
 @keyframes roster-camera-in { from { opacity: 0; transform: translateX(112%) skewX(4deg); filter: blur(5px); } to { opacity: 1; transform: translateX(0); filter: blur(0); } }
+@keyframes boost-hud-in { from { opacity: 0; transform: translateY(18px) scale(.94); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes live-pulse { 50% { opacity: .62; } }
 
 @media (max-aspect-ratio: 4/3) {

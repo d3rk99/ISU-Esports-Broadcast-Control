@@ -17,6 +17,10 @@ export function loadState(storage = window.localStorage) {
         ...team,
         ...(parsed.games[game].teams?.[index] || {})
       }));
+      parsed.games[game].mapRows = fallback.games[game].mapRows.map((row, index) => ({
+        ...row,
+        ...(parsed.games[game].mapRows?.[index] || {})
+      }));
       for (const collection of ['rosters', 'awayRosters']) {
         parsed.games[game][collection] ||= fallback.games[game][collection];
         for (const rosterType of ['varsity', 'jv']) {
