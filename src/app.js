@@ -11,6 +11,13 @@ if (savedRocketLeagueConnection && typeof savedRocketLeagueConnection === 'objec
     ...savedRocketLeagueConnection
   };
 }
+const savedValorantConnection = window.isuDesktop?.savedValorantConnection;
+if (savedValorantConnection && typeof savedValorantConnection === 'object') {
+  state.games.valorant.valorant = {
+    ...state.games.valorant.valorant,
+    ...savedValorantConnection
+  };
+}
 let history = [];
 let saveTimer;
 let livePublishTimer;
@@ -216,6 +223,7 @@ function renderControl(config) {
         ${renderTeamControl(game.teams[1], 1, config)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
+      ${state.selectedGame === 'valorant' ? renderValorantPanel(game) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
           <div class="panel-title"><span class="section-number">02</span><div><h2>Match details</h2><p>Information shared across graphics</p></div></div>
@@ -243,6 +251,84 @@ function formatGameClock(seconds, overtime = false) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = String(safeSeconds % 60).padStart(2, '0');
   return overtime ? `OT +${minutes}:${remainder}` : `${minutes}:${remainder}`;
+}
+
+function formatAge(ms) {
+  if (ms === null || ms === undefined) return 'never';
+  if (ms < 1000) return `${Math.max(0, Math.round(ms))} ms ago`;
+  return `${Math.round(ms / 1000)} sec ago`;
+}
+
+function renderValorantPanel(game) {
+  const val = game.valorant;
+  const live = val.live;
+  const players = live.players || [];
+  const report = {
+    status: live.status,
+    message: live.message,
+    detectedGameId: live.detectedGameId,
+    registeredFeatures: live.registeredFeatures,
+    lastInfoUpdate: live.lastInfoUpdate,
+    lastGameEvent: live.lastEvent,
+    normalized: {
+      match: live.match,
+      teams: live.teams,
+      observedPlayer: live.observedPlayer,
+      spike: live.spike,
+      players: players.slice(0, 10)
+    },
+    errors: live.errors || []
+  };
+  return `
+    <article class="panel valorant-live-panel">
+      <header class="rl-panel-heading">
+        <div><span>VALORANT GAME EVENTS PROVIDER</span><h2>Live game connection</h2><p>Overwolf GEP telemetry - broadcast-safe automation</p></div>
+        <div class="rl-status ${escapeHtml(live.status)}"><i></i><span>${escapeHtml(live.status.toUpperCase())}</span><small>${escapeHtml(live.message)}</small></div>
+      </header>
+      <div class="rl-connection-grid val-connection-grid">
+        <label class="rl-enable-toggle"><input type="checkbox" data-val-prop="enabled" ${val.enabled ? 'checked' : ''}><i></i><span><b>LIVE DATA</b><small>${val.enabled ? 'Enabled' : 'Disabled'}</small></span></label>
+        <label class="field"><span>GEP TEAM 0</span><select data-val-prop="team0Home"><option value="true" ${val.team0Home ? 'selected' : ''}>Home - ${escapeHtml(game.teams[0].shortName)}</option><option value="false" ${!val.team0Home ? 'selected' : ''}>Away - ${escapeHtml(game.teams[1].shortName)}</option></select><small>Changing sides does not swap Home/Away identity.</small></label>
+        <label class="field"><span>LAST UPDATE</span><input readonly value="${escapeHtml(formatAge(live.dataAgeMs))}"><small>${escapeHtml(live.lastUpdateAt || 'No telemetry yet')}</small></label>
+        <label class="field"><span>OBSERVED PLAYER</span><input readonly value="${escapeHtml(live.observedPlayer || '—')}"></label>
+      </div>
+      <div class="rl-toolbar">
+        <button class="secondary-button" data-action="${live.status === 'simulating' ? 'stop-val-simulator' : 'start-val-simulator'}">${live.status === 'simulating' ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
+        <button class="secondary-button" data-action="copy-val-debug" data-debug='${escapeHtml(JSON.stringify(report))}'>COPY DEBUG REPORT</button>
+        <span>${live.gepAvailable ? 'GEP AVAILABLE' : 'STANDARD ELECTRON'} · ${live.gameDetected ? 'VALORANT DETECTED' : 'WAITING FOR VALORANT'} · ${live.eventCount || 0} EVENTS</span>
+      </div>
+      <div class="rl-settings-grid">
+        <section><h3>AUTOMATION</h3><div class="rl-checks">
+          ${valCheckbox('syncScore', 'Round score', val.syncScore)}
+          ${valCheckbox('syncMap', 'Current map', val.syncMap)}
+          ${valCheckbox('syncRound', 'Round number', val.syncRound)}
+          ${valCheckbox('syncPhase', 'Round phase', val.syncPhase)}
+          ${valCheckbox('syncPlayers', 'Players & stats', val.syncPlayers)}
+          ${valCheckbox('debug', 'Debug logging', val.debug)}
+        </div></section>
+        <section><h3>LIVE STATE</h3><div class="val-live-state">
+          <div><span>MAP</span><strong>${escapeHtml(live.match?.map || '—')}</strong></div>
+          <div><span>ROUND</span><strong>${escapeHtml(live.match?.round ?? '—')}</strong></div>
+          <div><span>PHASE</span><strong>${escapeHtml(live.match?.phase || '—')}</strong></div>
+          <div><span>SCORE</span><strong>${escapeHtml(`${live.teams?.home?.score ?? 0} - ${live.teams?.away?.score ?? 0}`)}</strong></div>
+          <div><span>SPIKE</span><strong>${escapeHtml(live.spike?.state || '—')}</strong></div>
+          <div><span>MATCH ID</span><strong title="${escapeHtml(live.match?.matchId || live.match?.pseudoMatchId || '')}">${escapeHtml((live.match?.matchId || live.match?.pseudoMatchId || '—').slice(0, 14))}</strong></div>
+        </div></section>
+      </div>
+      <details class="val-debug-panel">
+        <summary>Raw telemetry debug</summary>
+        <pre>${escapeHtml(JSON.stringify(report, null, 2))}</pre>
+      </details>
+      <div class="rl-player-grid val-player-grid">${players.length ? players.slice(0, 10).map(renderValorantLivePlayer).join('') : '<p class="rl-empty">VALORANT players appear here after GEP sends roster or scoreboard data.</p>'}</div>
+    </article>`;
+}
+
+function valCheckbox(prop, label, checked) {
+  return `<label><input type="checkbox" data-val-prop="${prop}" ${checked ? 'checked' : ''}><i></i><span>${label}</span></label>`;
+}
+
+function renderValorantLivePlayer(player) {
+  const kd = `${player.kills ?? 0}/${player.deaths ?? 0}/${player.assists ?? 0}`;
+  return `<div class="rl-player val-player ${player.alive === false ? 'demolished' : ''}"><header><span>${escapeHtml(player.teammate ? 'ALLY' : 'PLAYER')}</span><strong>${escapeHtml(player.name || 'Unknown')}</strong></header><div class="boost-row"><b>${escapeHtml(player.agent || 'Agent')}</b><span>${escapeHtml(kd)} KDA</span></div><small>${escapeHtml(player.weapon || '')}${player.money !== null && player.money !== undefined ? ` · $${escapeHtml(player.money)}` : ''}${player.spike ? ' · SPIKE' : ''}</small></div>`;
 }
 
 function normalizeRocketLeagueArenaId(value = '') {
@@ -534,12 +620,30 @@ function syncRocketLeagueConnection() {
   });
 }
 
+function syncValorantConnection() {
+  const val = state.games.valorant.valorant;
+  window.isuDesktop?.configureValorant({
+    ...val,
+    savedEnabled: val.enabled,
+    enabled: state.selectedGame === 'valorant' && val.enabled
+  });
+}
+
 function scheduleLiveUpdate() {
   if (!livePublishTimer) {
     livePublishTimer = window.setTimeout(() => {
       livePublishTimer = null;
       window.isuDesktop?.publishState(state);
     }, Math.max(1, Math.min(50, Number(state.games.rocketleague.rocketLeague.updateIntervalMs) || 33)));
+  }
+}
+
+function scheduleValorantLiveUpdate() {
+  if (!livePublishTimer) {
+    livePublishTimer = window.setTimeout(() => {
+      livePublishTimer = null;
+      window.isuDesktop?.publishState(state);
+    }, 100);
   }
 }
 
@@ -679,6 +783,33 @@ window.isuDesktop?.onRocketLeagueStatus((status) => {
 
 window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 
+function applyValorantLiveState(live) {
+  const game = state.games.valorant;
+  const val = game.valorant;
+  val.live = { ...val.live, ...live, status: live.status || val.live.status };
+  if (val.syncScore) {
+    game.teams[0].detailScore = Number(live.teams?.home?.score ?? game.teams[0].detailScore) || 0;
+    game.teams[1].detailScore = Number(live.teams?.away?.score ?? game.teams[1].detailScore) || 0;
+  }
+  const activeRow = game.mapRows[game.activeMap] || game.mapRows[0];
+  if (activeRow) {
+    if (val.syncMap && live.match?.map) activeRow.map = live.match.map;
+    if (val.syncRound && live.match?.round !== null && live.match?.round !== undefined) activeRow.mode = `Round ${live.match.round}`;
+    if (val.syncScore) activeRow.score = [String(game.teams[0].detailScore), String(game.teams[1].detailScore)];
+    activeRow.status = live.match?.active === false ? activeRow.status : 'ready';
+  }
+}
+
+window.isuDesktop?.onValorantStatus((status) => {
+  applyValorantLiveState(status);
+  scheduleValorantLiveUpdate();
+});
+
+window.isuDesktop?.onValorantEvent((event) => {
+  if (event?.live) applyValorantLiveState(event.live);
+  scheduleValorantLiveUpdate();
+});
+
 root.addEventListener('scroll', (event) => {
   if (event.target.classList?.contains('content-scroll')) lastUserScrollAt = performance.now();
 }, true);
@@ -782,6 +913,40 @@ root.addEventListener('click', async (event) => {
     toast('Test feed stopped');
     return;
   }
+  if (button.dataset.action === 'start-val-simulator') {
+    await window.isuDesktop?.startValorantSimulator();
+    toast('VALORANT test feed started');
+    return;
+  }
+  if (button.dataset.action === 'stop-val-simulator') {
+    await window.isuDesktop?.stopValorantSimulator();
+    toast('VALORANT test feed stopped');
+    return;
+  }
+  if (button.dataset.action === 'copy-val-debug') {
+    const live = state.games.valorant.valorant.live;
+    const report = {
+      generatedAt: new Date().toISOString(),
+      selectedGame: state.selectedGame,
+      status: live.status,
+      message: live.message,
+      detectedGameId: live.detectedGameId,
+      registeredFeatures: live.registeredFeatures,
+      lastInfoUpdate: live.lastInfoUpdate,
+      lastGameEvent: live.lastEvent,
+      normalized: {
+        match: live.match,
+        teams: live.teams,
+        players: live.players,
+        spike: live.spike,
+        observedPlayer: live.observedPlayer
+      },
+      errors: live.errors || []
+    };
+    window.isuDesktop?.copyText(JSON.stringify(report, null, 2));
+    toast('VALORANT debug report copied');
+    return;
+  }
   const actions = {
     'toggle-live': () => commit(() => { game.match.live = !game.match.live; }, game.match.live ? 'Overlay taken off air' : 'Overlay is live'),
     'score-plus': () => commit(() => { game.teams[index].score = Math.min(config.maxScore, game.teams[index].score + 1); }),
@@ -853,6 +1018,7 @@ root.addEventListener('change', (event) => {
     state.selectedGame = target.value;
     persistState();
     syncRocketLeagueConnection();
+    syncValorantConnection();
     render();
     return;
   }
@@ -869,6 +1035,17 @@ root.addEventListener('change', (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
+    render();
+    return;
+  }
+  if (target.dataset.valProp) {
+    const prop = target.dataset.valProp;
+    commit(() => {
+      const val = state.games.valorant.valorant;
+      val[prop] = target.type === 'checkbox' ? target.checked : target.value === 'true' ? true : target.value === 'false' ? false : target.value;
+      if (prop === 'team0Home' && val.live?.teams) applyValorantLiveState(val.live);
+    }, 'VALORANT settings saved');
+    syncValorantConnection();
     render();
     return;
   }
@@ -919,6 +1096,7 @@ function initialize() {
   persistState();
   render();
   syncRocketLeagueConnection();
+  syncValorantConnection();
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
     if (state.selectedGame === 'rocketleague' && state.activeView === 'control') render();

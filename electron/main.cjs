@@ -5,6 +5,7 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const { RocketLeagueService } = require('./rocket-league-service.cjs');
+const { ValorantService } = require('./valorant-service.cjs');
 
 const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
@@ -14,8 +15,12 @@ let broadcastState = {};
 const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
+let valorantService;
 const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
+];
+const VALORANT_CONNECTION_FIELDS = [
+  'enabled', 'team0Home', 'syncScore', 'syncMap', 'syncRound', 'syncPhase', 'syncPlayers', 'debug'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -78,9 +83,20 @@ function rocketLeagueSettingsPath() {
   return path.join(app.getPath('userData'), 'rocket-league-connection.json');
 }
 
+function valorantSettingsPath() {
+  return path.join(app.getPath('userData'), 'valorant-connection.json');
+}
+
 function sanitizeRocketLeagueConnection(saved) {
   if (!saved || typeof saved !== 'object') return null;
   return Object.fromEntries(ROCKET_LEAGUE_CONNECTION_FIELDS
+    .filter((field) => Object.hasOwn(saved, field))
+    .map((field) => [field, saved[field]]));
+}
+
+function sanitizeValorantConnection(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  return Object.fromEntries(VALORANT_CONNECTION_FIELDS
     .filter((field) => Object.hasOwn(saved, field))
     .map((field) => [field, saved[field]]));
 }
@@ -102,6 +118,13 @@ function readRocketLeagueConnection() {
   return null;
 }
 
+function readValorantConnection() {
+  try {
+    return sanitizeValorantConnection(JSON.parse(fs.readFileSync(valorantSettingsPath(), 'utf8')));
+  } catch {}
+  return null;
+}
+
 function saveRocketLeagueConnection(settings = {}) {
   const saved = Object.fromEntries(ROCKET_LEAGUE_CONNECTION_FIELDS
     .filter((field) => Object.hasOwn(settings, field))
@@ -109,6 +132,15 @@ function saveRocketLeagueConnection(settings = {}) {
       ? Boolean(settings.savedEnabled)
       : settings[field]]));
   fs.writeFileSync(rocketLeagueSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
+}
+
+function saveValorantConnection(settings = {}) {
+  const saved = Object.fromEntries(VALORANT_CONNECTION_FIELDS
+    .filter((field) => Object.hasOwn(settings, field))
+    .map((field) => [field, field === 'enabled' && Object.hasOwn(settings, 'savedEnabled')
+      ? Boolean(settings.savedEnabled)
+      : settings[field]]));
+  fs.writeFileSync(valorantSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
 }
 
 function startOverlayServer() {
@@ -130,6 +162,7 @@ function startOverlayServer() {
     }
     if (requestUrl.pathname === '/api/health') {
       const savedConnection = readRocketLeagueConnection();
+      const savedValorant = readValorantConnection();
       writeJson(response, 200, {
         ok: true,
         port: OVERLAY_PORT,
@@ -139,6 +172,13 @@ function startOverlayServer() {
           source: savedConnection.source,
           bridgePort: savedConnection.bridgePort,
           tokenPresent: Boolean(savedConnection.bridgeToken)
+        } : null,
+        valorant: valorantService ? {
+          enabled: Boolean(savedValorant?.enabled),
+          status: valorantService.live?.status,
+          gepAvailable: Boolean(valorantService.live?.gepAvailable),
+          gameDetected: Boolean(valorantService.live?.gameDetected),
+          lastUpdateAt: valorantService.live?.lastUpdateAt
         } : null,
         diagnostics: runtimeDiagnostics
       });
@@ -205,6 +245,24 @@ function registerIpc() {
   ipcMain.handle('rocket-league:stop-simulator', () => {
     rocketLeagueService.stopSimulator();
     return rocketLeagueService.status;
+  });
+  ipcMain.handle('valorant:configure', (_event, settings = {}) => {
+    saveValorantConnection(settings);
+    valorantService.configure(settings);
+    return valorantService.live;
+  });
+  ipcMain.handle('valorant:get-saved-connection', () => readValorantConnection());
+  ipcMain.on('valorant:get-saved-connection-sync', (event) => {
+    event.returnValue = readValorantConnection();
+  });
+  ipcMain.handle('valorant:get-status', () => valorantService.live);
+  ipcMain.handle('valorant:start-simulator', () => {
+    valorantService.startSimulator();
+    return valorantService.live;
+  });
+  ipcMain.handle('valorant:stop-simulator', () => {
+    valorantService.stopSimulator();
+    return valorantService.live;
   });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
@@ -284,6 +342,10 @@ function createWindow() {
         enabled: Boolean(window.isuDesktop.savedRocketLeagueConnection.enabled),
         source: window.isuDesktop.savedRocketLeagueConnection.source,
         tokenPresent: Boolean(window.isuDesktop.savedRocketLeagueConnection.bridgeToken)
+      } : null,
+      savedValorantConnection: window.isuDesktop?.savedValorantConnection ? {
+        enabled: Boolean(window.isuDesktop.savedValorantConnection.enabled),
+        debug: Boolean(window.isuDesktop.savedValorantConnection.debug)
       } : null
     })`).then((result) => recordDiagnostic('renderer-ready', result)).catch((error) => recordDiagnostic('renderer-probe-error', error.message));
   });
@@ -308,6 +370,15 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('rocket-league:status', status);
     }
   });
+  valorantService = new ValorantService({
+    app,
+    onEvent: (event) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant:event', event);
+    },
+    onStatus: (status) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant:status', status);
+    }
+  });
   registerIpc();
   try {
     await startOverlayServer();
@@ -329,5 +400,6 @@ app.on('second-instance', () => {
 
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
+  valorantService?.stop();
   if (process.platform !== 'darwin') app.quit();
 });

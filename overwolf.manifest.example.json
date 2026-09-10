@@ -1,0 +1,21 @@
+{
+  "comment": "Example Overwolf manifest fragment for VALORANT GEP builds. Confirm the current VALORANT game ID from %localappdata%\\Overwolf\\gamelist*.xml on the Observer PC before production submission.",
+  "game_events": [
+    {
+      "game_id": 21640,
+      "required_features": [
+        "gep_internal",
+        "me",
+        "game_info",
+        "match_info",
+        "kill",
+        "death"
+      ]
+    }
+  ],
+  "game_targeting": [
+    {
+      "game_ids": [21640]
+    }
+  ]
+}

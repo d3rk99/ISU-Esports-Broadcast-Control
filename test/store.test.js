@@ -52,6 +52,7 @@ test('version 1 data migrates dual rosters, media, colors, and veto fields', () 
   assert.equal(migrated.games.valorant.rosters.varsity[0].characterImage, '');
   assert.equal(migrated.games.valorant.veto.bans.length, 4);
   assert.equal(migrated.games.valorant.awayRosters.varsity.length, 5);
+  assert.equal(migrated.games.valorant.valorant.syncScore, true);
   assert.equal(migrated.games.valorant.teams[0].secondaryColor, '#101012');
   assert.equal(migrated.activeRosterSide, 'home');
   assert.equal(migrated.games.rocketleague.rocketLeague.webPort, 49124);
@@ -88,4 +89,21 @@ test('saved Rocket League session telemetry is cleared on app launch', () => {
   assert.equal(live.packets, 0);
   assert.equal(live.lastPacketAt, null);
   assert.deepEqual(live.players, []);
+});
+
+test('saved VALORANT session telemetry is cleared on app launch', () => {
+  const saved = createInitialState();
+  saved.games.valorant.valorant.enabled = true;
+  saved.games.valorant.valorant.live = {
+    ...saved.games.valorant.valorant.live,
+    status: 'receiving',
+    lastUpdateAt: '2026-01-01T00:00:00.000Z',
+    players: [{ name: 'Stale Agent' }]
+  };
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const valorant = loadState(storage).games.valorant.valorant;
+  assert.equal(valorant.enabled, true);
+  assert.equal(valorant.live.status, 'disabled');
+  assert.equal(valorant.live.lastUpdateAt, null);
+  assert.deepEqual(valorant.live.players, []);
 });

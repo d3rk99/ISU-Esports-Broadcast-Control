@@ -32,6 +32,13 @@ export function loadState(storage = window.localStorage) {
         }
       }
       parsed.games[game].characterArt = parsed.games[game].characterArt || {};
+      if (game === 'valorant') {
+        parsed.games[game].valorant = {
+          ...fallback.games[game].valorant,
+          ...(parsed.games[game].valorant || {}),
+          live: { ...fallback.games[game].valorant.live }
+        };
+      }
       if (game === 'rocketleague') {
         parsed.games[game].rocketLeague = {
           ...fallback.games[game].rocketLeague,
