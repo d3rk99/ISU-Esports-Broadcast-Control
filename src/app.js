@@ -1,5 +1,6 @@
 import './styles.css';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer } from './game-config.js';
+import { advanceGameMatch, applyCompanionAction, swapGameTeams } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 
 const root = document.querySelector('#app');
@@ -17,6 +18,13 @@ let livePublishTimer;
 let liveRenderTimer;
 let lastUserScrollAt = 0;
 let networkAddresses = [];
+let companionSettings = {
+  enabled: false,
+  port: 3176,
+  token: '',
+  ...(window.isuDesktop?.savedCompanionSettings || {})
+};
+let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
 
 const ICONS = {
@@ -440,15 +448,37 @@ function renderOutputs() {
 }
 
 function renderSettings() {
+  const companionHost = networkAddresses[0] || '127.0.0.1';
+  const companionBaseUrl = `http://${companionHost}:${companionSettings.port}/api/companion`;
+  const apiState = companionStatus.listening ? 'ONLINE' : companionSettings.enabled ? 'ERROR' : 'OFF';
   return `<section class="view-stack settings-view">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Workspace data</h2><p>Local-first settings for a dependable broadcast desk</p></div></div></div>
     <div class="settings-grid">
       <article class="panel setting-card"><div class="setting-icon">↻</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game">RESET GAME</button></article>
       <article class="panel setting-card"><div class="setting-icon">✓</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
-      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control · Rocket League live telemetry</p></div><span class="version-badge">v0.5.0</span></article>
+      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control · Rocket League live telemetry · Companion control API</p></div><span class="version-badge">v0.6.0</span></article>
     </div>
+    <div class="section-heading companion-heading"><div><span class="section-number">02</span><div><h2>Bitfocus Companion API</h2><p>Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules</p></div></div></div>
+    <article class="panel companion-api-panel">
+      <header><div><span>REMOTE CONTROL SERVICE</span><h3>Companion connection</h3><p>The API is disabled until you turn it on. Keep the private key out of screenshots and public profiles.</p></div><span class="api-status ${companionStatus.listening ? 'online' : companionStatus.error ? 'error' : ''}"><i></i>${apiState}</span></header>
+      <div class="companion-fields">
+        <label class="away-roster-toggle companion-toggle"><div><strong>Enable LAN API</strong><small>${companionSettings.enabled ? 'Accepting authenticated control requests' : 'No remote control connections allowed'}</small></div><input type="checkbox" data-companion-prop="enabled" ${companionSettings.enabled ? 'checked' : ''}><i></i></label>
+        <label class="field"><span>API PORT</span><input type="number" min="1024" max="65535" data-companion-prop="port" value="${companionSettings.port}"><small>Default: 3176</small></label>
+        <label class="field companion-key-field"><span>PRIVATE API KEY</span><input type="password" data-companion-prop="token" value="${escapeHtml(companionSettings.token)}" minlength="16" autocomplete="off"><button data-action="generate-companion-key">GENERATE</button></label>
+      </div>
+      <div class="companion-url-row"><div><span>COMPANION BASE URL</span><code>${escapeHtml(companionBaseUrl)}</code></div><button data-action="copy-companion-url" data-url="${escapeHtml(companionBaseUrl)}">COPY URL</button><button data-action="copy-companion-key" data-url="${escapeHtml(companionSettings.token)}">COPY KEY</button></div>
+      ${companionStatus.error ? `<p class="companion-error">${escapeHtml(companionStatus.error)}</p>` : ''}
+      <footer><strong>Generic HTTP setup</strong><span>Base URL above · Add header <code>X-ISU-API-Key: your-key</code> to each request · POST <code>/action</code> with a JSON body</span><span>Variables: GET <code>/variables</code> · Actions list: GET <code>/capabilities</code> · Live variables: GET <code>/events</code></span></footer>
+    </article>
     <div class="brand-statement"><div class="brand-mark large"><span>IS</span><i></i></div><div><span>BUILT FOR</span><strong>IDAHO STATE ESPORTS</strong><p>Roarange. Bengal Black. Broadcast ready.</p></div></div>
   </section>`;
+}
+
+async function syncCompanionApi() {
+  if (!window.isuDesktop?.configureCompanion) return;
+  const result = await window.isuDesktop.configureCompanion(companionSettings);
+  companionSettings = result?.settings || companionSettings;
+  companionStatus = result?.status || companionStatus;
 }
 
 function updatePath(path, value) {
@@ -598,6 +628,20 @@ window.isuDesktop?.onRocketLeagueStatus((status) => {
 
 window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 
+async function executeCompanionAction(request = {}) {
+  const nextState = deepClone(state);
+  const result = applyCompanionAction(nextState, request);
+  history.push(deepClone(state));
+  if (history.length > 30) history.shift();
+  state = nextState;
+  persistState();
+  if (result.selectedGameChanged) syncRocketLeagueConnection();
+  render();
+  return result;
+}
+
+window.isuDesktop?.onCompanionAction(executeCompanionAction);
+
 root.addEventListener('scroll', (event) => {
   if (event.target.classList?.contains('content-scroll')) lastUserScrollAt = performance.now();
 }, true);
@@ -672,6 +716,19 @@ root.addEventListener('click', async (event) => {
     toast('OBS URL copied');
     return;
   }
+  if (button.dataset.action === 'copy-companion-url' || button.dataset.action === 'copy-companion-key') {
+    if (window.isuDesktop?.copyText) window.isuDesktop.copyText(button.dataset.url);
+    else await navigator.clipboard?.writeText(button.dataset.url);
+    toast(button.dataset.action === 'copy-companion-key' ? 'Private API key copied' : 'Companion URL copied');
+    return;
+  }
+  if (button.dataset.action === 'generate-companion-key') {
+    companionSettings.token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
+    await syncCompanionApi();
+    toast('New Companion API key generated');
+    render();
+    return;
+  }
   if (button.dataset.action === 'preview-overlay') {
     let query = {};
     try { query = JSON.parse(button.dataset.query || '{}'); } catch {}
@@ -707,22 +764,11 @@ root.addEventListener('click', async (event) => {
     'score-minus': () => commit(() => { game.teams[index].score = Math.max(0, game.teams[index].score - 1); }),
     'detail-plus': () => commit(() => { game.teams[index].detailScore += 1; }),
     'detail-minus': () => commit(() => { game.teams[index].detailScore = Math.max(0, game.teams[index].detailScore - 1); }),
-    'swap-teams': () => commit(() => {
-      game.teams.reverse();
-      [game.rosters, game.awayRosters] = [game.awayRosters, game.rosters];
-      game.mapRows.forEach((row) => { row.score.reverse(); if (row.winner !== null) row.winner = row.winner === 0 ? 1 : 0; });
-      game.veto?.picks?.forEach((pick) => { pick.attackers = Number(pick.attackers) === 0 ? 1 : 0; });
-    }, 'Team sides swapped'),
+    'swap-teams': () => commit(() => swapGameTeams(game), 'Team sides swapped'),
     'reset-scores': () => commit(() => { game.teams.forEach((team) => { team.score = 0; team.detailScore = 0; }); }, 'Scores reset'),
     'next-match': () => {
       const nextIndex = (game.activeMap + 1) % game.mapRows.length;
-      commit(() => {
-        game.activeMap = nextIndex;
-        game.teams.forEach((team) => { team.detailScore = 0; });
-        game.mapRows.forEach((row, rowIndex) => {
-          row.status = row.winner !== null ? 'complete' : (rowIndex === nextIndex ? 'ready' : 'upcoming');
-        });
-      }, `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
+      commit(() => advanceGameMatch(game), `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
     },
     'activate-map': () => commit(() => { game.activeMap = index; game.mapRows.forEach((row, i) => { if (row.winner === null) row.status = i === index ? 'ready' : 'upcoming'; }); }, `Map ${index + 1} active`),
     'map-winner': () => commit(() => {
@@ -759,6 +805,16 @@ root.addEventListener('change', (event) => {
     persistState();
     syncRocketLeagueConnection();
     render();
+    return;
+  }
+  if (target.dataset.companionProp) {
+    const prop = target.dataset.companionProp;
+    companionSettings[prop] = target.type === 'checkbox' ? target.checked : prop === 'port' ? Number(target.value) : target.value.trim();
+    if (prop === 'port') companionSettings.port = Math.max(1024, Math.min(65535, Math.round(companionSettings.port || 3176)));
+    syncCompanionApi().then(() => {
+      toast(companionStatus.listening ? 'Companion API settings saved' : companionSettings.enabled ? 'Companion API could not start' : 'Companion API disabled');
+      render();
+    });
     return;
   }
   if (target.dataset.rlProp) {
@@ -824,9 +880,13 @@ function initialize() {
   persistState();
   render();
   syncRocketLeagueConnection();
+  window.isuDesktop?.getCompanionStatus().then((status) => {
+    companionStatus = status || companionStatus;
+    if (state.activeView === 'settings') render();
+  });
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
-    if (state.selectedGame === 'rocketleague' && state.activeView === 'control') render();
+    if ((state.selectedGame === 'rocketleague' && state.activeView === 'control') || state.activeView === 'settings') render();
   });
 }
 

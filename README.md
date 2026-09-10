@@ -8,7 +8,7 @@ A local-first desktop control center for Idaho State Esports broadcasts. This fo
 - Smash Bros. Ultimate
 - Call of Duty
 
-## Current milestone — v0.5.0
+## Current milestone — v0.6.0
 
 - Secure Electron desktop shell
 - Official ISU Roarange/Bengal Black-inspired control interface
@@ -42,6 +42,38 @@ A local-first desktop control center for Idaho State Esports broadcasts. This fo
 - Stable Controller scrolling and form editing while live telemetry continues updating
 - Operator-selectable Rocket League boost update interval from 1–50 ms, with source-rate-aware game configuration
 - Rocket League connection details backed up outside browser storage for rebuild and forced-restart recovery
+- Opt-in, token-authenticated Bitfocus Companion LAN API on port 3176
+- Companion-ready score, next-match, live, map, game-selection, and team-side actions
+- Flat live variables plus game-aware capabilities and server-sent event endpoints
+
+## Bitfocus Companion remote control
+
+Open **Settings → Bitfocus Companion API**, turn on **Enable LAN API**, then copy the displayed base URL and private API key. The service listens on the Graphics PC only while Broadcast Control is open and the API toggle is enabled.
+
+In Companion, add a **Generic HTTP** connection:
+
+- Base URL: the URL shown in Broadcast Control, such as `http://192.168.1.50:3176/api/companion`
+- Header on each action: `{"X-ISU-API-Key":"paste-your-private-key"}`
+- Score button: `POST /action`, content type `application/json`, body `{"action":"score.increment","team":"home"}`
+- Next Match button: `POST /action`, body `{"action":"match.next"}`
+- Read variables: `GET /variables`; disable JSON stringification in Companion to access nested response values
+
+Common action bodies:
+
+```json
+{"action":"score.decrement","team":"away"}
+{"action":"score.set","team":"home","value":2}
+{"action":"detail_score.increment","team":"home"}
+{"action":"match.live.toggle"}
+{"action":"teams.swap"}
+{"action":"game.select","game":"rocketleague"}
+{"action":"map.activate","number":2}
+{"action":"map.winner.set","number":1,"team":"home"}
+{"action":"maps.reset"}
+{"action":"veto.reset","game":"valorant"}
+```
+
+Use `GET /capabilities` to discover actions for the selected game, `GET /state` for the authenticated full broadcast state, and `GET /events` for server-sent live variable updates. The query-string form `?token=...` is supported for clients that cannot set headers, but the header is preferred because URLs may appear in logs.
 
 ## Rocket League live data
 
@@ -106,7 +138,7 @@ Artifacts are generated in `release/`:
 ## Project structure
 
 ```text
-electron/          Electron main and secure preload processes
+electron/          Electron main, secure preload, telemetry, bridge, and Companion API processes
 public/overlays/   Transparent OBS HTML, CSS, JavaScript, and placeholders
 src/app.js         Control interface and interactions
 src/game-config.js Per-game rules and default data
@@ -116,4 +148,4 @@ test/              Foundation data-model tests
 
 ## Data storage
 
-Control data persists locally in Electron's browser storage. The Electron main process hosts read-only overlay assets and state on `127.0.0.1:3174`, while state changes are sent to OBS pages with server-sent events.
+Control data persists locally in Electron's browser storage. The Electron main process hosts read-only overlay assets and state on `127.0.0.1:3174`, while state changes are sent to OBS pages with server-sent events. Companion settings are stored separately in Electron's application-data directory; its authenticated API binds to the LAN only when explicitly enabled.

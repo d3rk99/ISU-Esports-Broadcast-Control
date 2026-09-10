@@ -1,6 +1,6 @@
 {
   "name": "isu-esports-broadcast-control",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Idaho State Esports scorekeeping and broadcast graphics control center",
   "type": "module",
   "main": "electron/main.cjs",
@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build": "vite build",
-    "check": "node --check src/app.js && node --check src/game-config.js && node --check src/store.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs",
+    "check": "node --check src/app.js && node --check src/game-config.js && node --check src/companion-actions.js && node --check src/store.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/companion-api-service.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs",
     "test": "node --test",
     "package": "npm run build && electron-builder --win nsis portable && electron-builder --config electron-builder.bridge.json --win portable",
     "package:dir": "npm run build && electron-builder --dir",

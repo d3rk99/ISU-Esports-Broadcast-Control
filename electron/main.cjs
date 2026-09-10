@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
+const { CompanionApiService, normalizeCompanionSettings } = require('./companion-api-service.cjs');
 const { RocketLeagueService } = require('./rocket-league-service.cjs');
 
 const isDev = !app.isPackaged;
@@ -14,6 +15,9 @@ let broadcastState = {};
 const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
+let companionApiService;
+let companionRequestId = 0;
+const pendingCompanionActions = new Map();
 const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
 ];
@@ -72,6 +76,40 @@ function publishBroadcastState(nextState) {
   broadcastState = nextState;
   const message = `data: ${JSON.stringify(broadcastState)}\n\n`;
   for (const client of overlayClients) client.write(message);
+  companionApiService?.publish(broadcastState);
+}
+
+function companionSettingsPath() {
+  return path.join(app.getPath('userData'), 'companion-api.json');
+}
+
+function saveCompanionSettings(settings = {}) {
+  const saved = normalizeCompanionSettings(settings);
+  fs.writeFileSync(companionSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
+  return saved;
+}
+
+function readCompanionSettings() {
+  try {
+    const saved = normalizeCompanionSettings(JSON.parse(fs.readFileSync(companionSettingsPath(), 'utf8')));
+    return saveCompanionSettings(saved);
+  } catch {
+    return saveCompanionSettings({ enabled: false });
+  }
+}
+
+function dispatchCompanionAction(action) {
+  const target = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
+  if (!target) return Promise.reject(Object.assign(new Error('Controller window is not ready'), { statusCode: 503 }));
+  const id = String(++companionRequestId);
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingCompanionActions.delete(id);
+      reject(Object.assign(new Error('Controller did not acknowledge the action'), { statusCode: 504 }));
+    }, 3000);
+    pendingCompanionActions.set(id, { resolve, reject, timeout });
+    target.webContents.send('companion:action', { id, action });
+  });
 }
 
 function rocketLeagueSettingsPath() {
@@ -183,6 +221,23 @@ function registerIpc() {
     ready: Boolean(overlayServer?.listening)
   }));
   ipcMain.handle('network:get-addresses', () => Object.values(os.networkInterfaces()).flat().filter((entry) => entry?.family === 'IPv4' && !entry.internal).map((entry) => entry.address));
+  ipcMain.on('companion:get-settings-sync', (event) => {
+    event.returnValue = readCompanionSettings();
+  });
+  ipcMain.handle('companion:configure', async (_event, settings = {}) => {
+    const saved = saveCompanionSettings(settings);
+    const status = await companionApiService.configure(saved);
+    return { settings: saved, status };
+  });
+  ipcMain.handle('companion:get-status', () => companionApiService.getStatus());
+  ipcMain.on('companion:action-result', (_event, result = {}) => {
+    const pending = pendingCompanionActions.get(String(result.id));
+    if (!pending) return;
+    clearTimeout(pending.timeout);
+    pendingCompanionActions.delete(String(result.id));
+    if (result.ok) pending.resolve({ message: result.message || 'Action applied' });
+    else pending.reject(Object.assign(new Error(result.error || 'Action failed'), { statusCode: Number(result.statusCode) || 400 }));
+  });
   ipcMain.handle('rocket-league:configure', (_event, settings = {}) => {
     saveRocketLeagueConnection(settings);
     rocketLeagueService.configure(settings);
@@ -300,6 +355,11 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  companionApiService = new CompanionApiService({
+    getState: () => broadcastState,
+    dispatchAction: dispatchCompanionAction,
+    onDiagnostic: recordDiagnostic
+  });
   rocketLeagueService = new RocketLeagueService({
     onEvent: (event) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('rocket-league:event', event);
@@ -309,6 +369,7 @@ app.whenReady().then(async () => {
     }
   });
   registerIpc();
+  await companionApiService.configure(readCompanionSettings());
   try {
     await startOverlayServer();
   } catch (error) {
@@ -329,5 +390,6 @@ app.on('second-instance', () => {
 
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
+  companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();
 });
