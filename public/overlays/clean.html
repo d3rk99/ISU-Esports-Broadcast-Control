@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISU Esports - Clean Output</title>
+  <style>
+    :root, html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+    }
+
+    body[data-output="key"],
+    body[data-output="test-key"] {
+      background: #000;
+    }
+
+    body[data-output="pair"] {
+      width: 3840px;
+      height: 1080px;
+      background: linear-gradient(90deg, transparent 0 1920px, #000 1920px 3840px);
+    }
+  </style>
+</head>
+<body>
+  <script>
+    (() => {
+      const query = new URLSearchParams(location.search);
+      const output = (query.get('output') || 'fill').toLowerCase();
+      document.body.dataset.output = ['fill', 'key', 'pair', 'test-fill', 'test-key'].includes(output) ? output : 'fill';
+    })();
+  </script>
+</body>
+</html>

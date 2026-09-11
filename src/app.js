@@ -5,6 +5,7 @@ import { deepClone, loadState, saveState } from './store.js';
 
 const root = document.querySelector('#app');
 let state = loadState();
+if (!['scoreboard', 'roster', 'map-pool', 'clean'].includes(state.activeOutputOverlay)) state.activeOutputOverlay = 'scoreboard';
 const savedRocketLeagueConnection = window.isuDesktop?.savedRocketLeagueConnection;
 if (savedRocketLeagueConnection && typeof savedRocketLeagueConnection === 'object') {
   state.games.rocketleague.rocketLeague = {
@@ -18,6 +19,12 @@ let livePublishTimer;
 let liveRenderTimer;
 let lastUserScrollAt = 0;
 let networkAddresses = [];
+let outputDisplays = [];
+let outputDisplaySettings = {
+  fillDisplayId: '',
+  keyDisplayId: '',
+  ...(window.isuDesktop?.savedOutputDisplaySettings || {})
+};
 let companionSettings = {
   enabled: false,
   port: 3176,
@@ -480,7 +487,14 @@ function renderOutputs() {
   const fillOutputs = [
     { name: 'scoreboard', tag: 'SCORE', title: 'Main Scoreboard Fill', description: 'Full-color scoreboard graphic for the switcher fill input.', query: { output: 'fill' } },
     { name: 'map-pool', tag: 'MAPS', title: 'Map Pool Fill', description: 'Full-color map pool graphic for the switcher fill input.', query: { output: 'fill' } },
-    { name: 'roster', tag: 'TEAM', title: 'Roster Fill', description: current().showAwayRoster ? 'Full-color Home and Away roster cycle for the switcher fill input.' : 'Full-color roster screen for the switcher fill input.', query: { output: 'fill', program: state.activeRoster } }
+    { name: 'roster', tag: 'TEAM', title: 'Roster Fill', description: current().showAwayRoster ? 'Full-color Home and Away roster cycle for the switcher fill input.' : 'Full-color roster screen for the switcher fill input.', query: { output: 'fill', program: state.activeRoster } },
+    { name: 'clean', tag: 'CLEAN', title: 'Clean Fill', description: 'Transparent no-graphic output for clearing the fill input.', query: { output: 'fill' } }
+  ];
+  const programOptions = [
+    { name: 'scoreboard', label: 'Scoreboard' },
+    { name: 'roster', label: 'Roster' },
+    { name: 'map-pool', label: 'Map Pool' },
+    { name: 'clean', label: 'Clean' }
   ];
   const outputs = [
     ...fillOutputs,
@@ -488,7 +502,7 @@ function renderOutputs() {
       ...output,
       title: output.title.replace(' Fill', ' Key'),
       tag: `${output.tag} KEY`,
-      description: output.description.replace('Full-color', 'Grayscale').replace('fill input', 'key input'),
+      description: output.description.replace('Full-color', 'Alpha-mask').replace('fill input', 'key input'),
       query: { ...(output.query || {}), output: 'key' },
       keyOutput: true
     }))
@@ -498,11 +512,37 @@ function renderOutputs() {
     for (const [key, value] of Object.entries(output.query || {})) url.searchParams.set(key, value);
     return url.toString();
   };
+  const activeProgram = programOptions.find((option) => option.name === state.activeOutputOverlay) || programOptions[0];
+  const programUrlFor = (output) => {
+    const url = new URL(`${overlayBaseUrl}/overlays/program.html`);
+    url.searchParams.set('output', output);
+    return url.toString();
+  };
+  const programPairUrl = programUrlFor('pair');
+  const programFillUrl = programUrlFor('fill');
+  const programKeyUrl = programUrlFor('key');
   return `<section class="view-stack">
-    <div class="coming-banner live-output-banner"><div class="coming-icon">&lt;/&gt;</div><div><span>LOCAL OVERLAY SERVER</span><h2>OBS graphics are ready</h2><p>Use each fill output for the normal OBS source and its matching grayscale key output for the Blackmagic key input.</p></div><strong><i></i>ONLINE &middot; PORT 3174</strong></div>
-    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Browser-source outputs</h2><p>Fill and key HTML graphics &middot; current game: ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)}</p></div></div></div>
-    <div class="output-grid">${outputs.map((output) => `<article class="output-card ${output.keyOutput ? 'key-output-card' : ''}"><div class="output-thumb"><span>${output.tag}</span><div class="ghost-score"><i></i><b>ISU</b><strong>${output.name === 'roster' ? 'PLAYER &rarr; HERO' : '0 &mdash; 0'}</strong><b>OPP</b><i></i></div></div><div class="output-info"><div><h3>${output.title}</h3><p>${output.description}</p></div><span>1920 &times; 1080</span></div><div class="output-url">${escapeHtml(urlFor(output))}</div><footer><span class="planned-dot online"></span>${output.keyOutput ? 'KEY OUTPUT' : 'FILL OUTPUT'} <button data-action="preview-overlay" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>PREVIEW</button><button data-action="copy-overlay-url" data-url="${escapeHtml(urlFor(output))}">COPY URL</button></footer></article>`).join('')}</div>
+    <div class="coming-banner live-output-banner"><div class="coming-icon">&lt;/&gt;</div><div><span>LOCAL OVERLAY SERVER</span><h2>OBS graphics are ready</h2><p>Open Program Output once, then take Scoreboard, Roster, or Map Pool from the controller or Companion without resetting the projectors.</p></div><strong><i></i>ONLINE &middot; PORT 3174</strong></div>
+    <article class="output-card pair-output-card program-output-card">
+      <div class="output-thumb"><span>PROGRAM</span><div class="ghost-score"><i></i><b>FILL</b><strong>${activeProgram.name === 'clean' ? 'CLEAR' : escapeHtml(activeProgram.label)}</strong><b>KEY</b><i></i></div></div>
+      <div class="output-info"><div><h3>Program Fill+Key Output</h3><p>One persistent dual-screen output. Fill and Key stay open on the selected displays while the active HTML changes.</p></div><span>2x 1920 &times; 1080</span></div>
+      <div class="program-output-actions">
+        ${programOptions.map((option) => `<button class="${option.name === activeProgram.name ? 'active' : ''}" data-action="take-program-output" data-overlay="${option.name}">${escapeHtml(option.label)}</button>`).join('')}
+      </div>
+      <div class="output-url">${escapeHtml(programPairUrl)}</div>
+      <footer><span class="planned-dot online"></span>PROGRAM OUTPUT <button data-action="open-program-output" data-overlay="${activeProgram.name}">OPEN PROGRAM</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programFillUrl)}">COPY FILL URL</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programKeyUrl)}">COPY KEY URL</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programPairUrl)}">COPY OBS PAIR URL</button></footer>
+    </article>
+    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Browser-source outputs</h2><p>Individual Fill and Key HTML graphics &middot; current game: ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)}</p></div></div></div>
+    <div class="output-grid">${outputs.map((output) => `<article class="output-card ${output.keyOutput ? 'key-output-card' : ''} ${output.pairOutput ? 'pair-output-card' : ''}"><div class="output-thumb"><span>${output.tag}</span><div class="ghost-score"><i></i><b>ISU</b><strong>${output.name === 'roster' ? 'PLAYER &rarr; HERO' : '0 &mdash; 0'}</strong><b>OPP</b><i></i></div></div><div class="output-info"><div><h3>${output.title}</h3><p>${output.description}</p></div><span>${output.pairOutput ? '2x 1920' : '1920'} &times; 1080</span></div><div class="output-url">${escapeHtml(urlFor(output))}</div><footer><span class="planned-dot online"></span>${output.pairOutput ? 'DUAL OUTPUT' : output.keyOutput ? 'KEY OUTPUT' : 'FILL OUTPUT'} <button data-action="preview-overlay" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>PREVIEW</button><button data-action="open-overlay-output" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>${output.pairOutput ? 'OPEN DUAL' : 'OPEN WINDOW'}</button><button data-action="copy-overlay-url" data-url="${escapeHtml(urlFor(output))}">COPY URL</button></footer></article>`).join('')}</div>
   </section>`;
+}
+
+function renderDisplayOptions(selectedId, fallbackLabel) {
+  const options = [`<option value="">${fallbackLabel}</option>`];
+  outputDisplays.forEach((display) => {
+    options.push(`<option value="${escapeHtml(display.id)}" ${String(selectedId || '') === String(display.id) ? 'selected' : ''}>${escapeHtml(display.label)}</option>`);
+  });
+  return options.join('');
 }
 
 function renderSettings() {
@@ -516,7 +556,16 @@ function renderSettings() {
       <article class="panel setting-card"><div class="setting-icon">&#10003;</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
       <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control &middot; Rocket League live telemetry &middot; Companion control API</p></div><span class="version-badge">v0.6.0</span></article>
     </div>
-    <div class="section-heading companion-heading"><div><span class="section-number">02</span><div><h2>Bitfocus Companion API</h2><p>Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules</p></div></div></div>
+    <div class="section-heading companion-heading"><div><span class="section-number">02</span><div><h2>Direct output displays</h2><p>Choose which Windows displays receive fullscreen Fill and Key output windows</p></div></div></div>
+    <article class="panel companion-api-panel">
+      <header><div><span>HDMI / SDI OUTPUT ROUTING</span><h3>Projection screens</h3><p>Paired outputs open two synced 1920 &times; 1080 fullscreen windows. Set Windows display scaling to 100% for video outputs when possible.</p></div><span class="api-status online"><i></i>${outputDisplays.length || 0} DISPLAYS</span></header>
+      <div class="companion-fields">
+        <label class="field"><span>FILL SCREEN</span><select data-output-display-prop="fillDisplayId">${renderDisplayOptions(outputDisplaySettings.fillDisplayId, 'Primary display')}</select><small>Used by Fill and the left side of Paired dual output.</small></label>
+        <label class="field"><span>KEY SCREEN</span><select data-output-display-prop="keyDisplayId">${renderDisplayOptions(outputDisplaySettings.keyDisplayId, 'Second display')}</select><small>Used by Key and the right side of Paired dual output.</small></label>
+      </div>
+      <footer><strong>Output scale</strong><span>Each app output window is created as a 1920 &times; 1080 source and then fullscreened on the selected display.</span><span>Use Preview for setup checks; Open Dual takes over both selected screens.</span></footer>
+    </article>
+    <div class="section-heading companion-heading"><div><span class="section-number">03</span><div><h2>Bitfocus Companion API</h2><p>Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules</p></div></div></div>
     <article class="panel companion-api-panel">
       <header><div><span>REMOTE CONTROL SERVICE</span><h3>Companion connection</h3><p>The API is disabled until you turn it on. Keep the private key out of screenshots and public profiles.</p></div><span class="api-status ${companionStatus.listening ? 'online' : companionStatus.error ? 'error' : ''}"><i></i>${apiState}</span></header>
       <div class="companion-fields">
@@ -694,6 +743,7 @@ async function executeCompanionAction(request = {}) {
   state = nextState;
   persistState();
   if (result.selectedGameChanged) syncRocketLeagueConnection();
+  if (result.outputChanged) await window.isuDesktop?.setProgramOutput({ name: state.activeOutputOverlay });
   render();
   return result;
 }
@@ -791,6 +841,26 @@ root.addEventListener('click', async (event) => {
     let query = {};
     try { query = JSON.parse(button.dataset.query || '{}'); } catch {}
     window.isuDesktop?.openOverlayPreview({ name: button.dataset.overlay, query });
+    return;
+  }
+  if (button.dataset.action === 'open-program-output') {
+    const opened = await window.isuDesktop?.openProgramOutput({ name: state.activeOutputOverlay || button.dataset.overlay || 'scoreboard' });
+    toast(opened ? 'Program output opened' : 'Program output unavailable');
+    return;
+  }
+  if (button.dataset.action === 'take-program-output') {
+    state.activeOutputOverlay = button.dataset.overlay || 'scoreboard';
+    persistState();
+    const updated = await window.isuDesktop?.setProgramOutput({ name: state.activeOutputOverlay });
+    toast(updated ? `Program output: ${button.textContent}` : `Selected ${button.textContent}`);
+    render();
+    return;
+  }
+  if (button.dataset.action === 'open-overlay-output') {
+    let query = {};
+    try { query = JSON.parse(button.dataset.query || '{}'); } catch {}
+    const opened = await window.isuDesktop?.openOverlayOutput({ name: button.dataset.overlay, query });
+    toast(opened ? 'Output window opened' : 'Output window unavailable');
     return;
   }
   if (button.dataset.action === 'copy-rl-config') {
@@ -895,6 +965,17 @@ root.addEventListener('change', (event) => {
     });
     return;
   }
+  if (target.dataset.outputDisplayProp) {
+    const prop = target.dataset.outputDisplayProp;
+    outputDisplaySettings[prop] = target.value;
+    window.isuDesktop?.configureOutputDisplays(outputDisplaySettings).then((result) => {
+      outputDisplays = result?.displays || outputDisplays;
+      outputDisplaySettings = result?.settings || outputDisplaySettings;
+      toast('Output display settings saved');
+      render();
+    });
+    return;
+  }
   if (target.dataset.rlProp) {
     const prop = target.dataset.rlProp;
     commit(() => {
@@ -978,6 +1059,11 @@ function initialize() {
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
     if ((state.selectedGame === 'rocketleague' && state.activeView === 'control') || state.activeView === 'settings') render();
+  });
+  window.isuDesktop?.getOutputDisplays().then((result) => {
+    outputDisplays = result?.displays || [];
+    outputDisplaySettings = result?.settings || outputDisplaySettings;
+    if (state.activeView === 'settings') render();
   });
 }
 

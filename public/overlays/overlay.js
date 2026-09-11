@@ -1,11 +1,12 @@
 (() => {
   const OVERLAY_QUERY = new URLSearchParams(location.search);
-  const OUTPUT_MODES = new Set(['fill', 'key', 'test-fill', 'test-key']);
+  const OUTPUT_MODES = new Set(['fill', 'key', 'pair', 'test-fill', 'test-key']);
   const requestedOutput = (OVERLAY_QUERY.get('output') || '').toLowerCase();
   const legacyKeyOutput = ['1', 'true', 'yes'].includes((OVERLAY_QUERY.get('key') || '').toLowerCase());
   const OUTPUT_MODE = legacyKeyOutput ? 'key' : (requestedOutput || 'fill');
   const OUTPUT_VALID = OUTPUT_MODES.has(OUTPUT_MODE);
   const IS_KEY_OUTPUT = OUTPUT_MODE === 'key' || OUTPUT_MODE === 'test-key';
+  const IS_PAIR_OUTPUT = OUTPUT_MODE === 'pair';
   const IS_TEST_OUTPUT = OUTPUT_MODE === 'test-fill' || OUTPUT_MODE === 'test-key';
   document.documentElement.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
   document.body.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
@@ -41,10 +42,12 @@
     }
   };
 
-  const $ = (selector, root = document) => root.querySelector(selector);
-  const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-  let lastMapPoolSignature = '';
-  const setText = (selector, value, root = document) => {
+  let activeRenderRoot = null;
+  let pairRoots = null;
+  const $ = (selector, root = activeRenderRoot || document) => root.querySelector(selector);
+  const $$ = (selector, root = activeRenderRoot || document) => [...root.querySelectorAll(selector)];
+  const lastMapPoolSignatureByRoot = new WeakMap();
+  const setText = (selector, value, root = activeRenderRoot || document) => {
     const element = $(selector, root);
     if (element) element.textContent = String(value ?? '');
   };
@@ -174,8 +177,9 @@
       teams: (game.teams || []).map((team) => ({ shortName: team.shortName, score: team.score })),
       rows: rows.map((row) => ({ map: row.map, mode: row.mode, score: row.score, winner: row.winner, status: row.status }))
     });
-    if (signature === lastMapPoolSignature) return;
-    lastMapPoolSignature = signature;
+    const renderRoot = activeRenderRoot || document;
+    if (signature === lastMapPoolSignatureByRoot.get(renderRoot)) return;
+    lastMapPoolSignatureByRoot.set(renderRoot, signature);
     container.replaceChildren();
     container.style.setProperty('--map-count', Math.max(1, Math.min(7, rows.length)));
     const teams = game.teams || FALLBACK.games.overwatch.teams;
@@ -224,7 +228,7 @@
     renderGenericMaps(game, selectedGame);
   }
 
-  let rosterTimers = [];
+  const rosterTimersByRoot = new WeakMap();
 
   function safeImageUrl(value, fallback) {
     if (typeof value === 'string' && value.startsWith('http://127.0.0.1:3174/user-assets/')) return value;
@@ -233,12 +237,23 @@
   }
 
   function clearRosterTimers() {
-    rosterTimers.forEach((timer) => clearTimeout(timer));
-    rosterTimers = [];
+    const root = activeRenderRoot || document;
+    const timers = rosterTimersByRoot.get(root) || [];
+    timers.forEach((timer) => clearTimeout(timer));
+    rosterTimersByRoot.set(root, []);
   }
 
   function rosterAfter(callback, delay) {
-    rosterTimers.push(setTimeout(callback, delay));
+    const root = activeRenderRoot || document;
+    const timers = rosterTimersByRoot.get(root) || [];
+    const renderRoot = activeRenderRoot;
+    timers.push(setTimeout(() => {
+      const previousRoot = activeRenderRoot;
+      activeRenderRoot = renderRoot;
+      callback();
+      activeRenderRoot = previousRoot;
+    }, delay));
+    rosterTimersByRoot.set(root, timers);
   }
 
   function renderRosterTeam(game, meta, program, side) {
@@ -335,6 +350,49 @@
     }
   }
 
+  function ensurePairRoots() {
+    if (pairRoots) return pairRoots;
+    const sourceRoot = $('[data-overlay]', document);
+    if (!sourceRoot) return null;
+    const fillRoot = sourceRoot;
+    const keyRoot = sourceRoot.cloneNode(true);
+    const wrapper = document.createElement('main');
+    const fillScene = document.createElement('section');
+    const keyScene = document.createElement('section');
+    wrapper.className = 'paired-output-root';
+    fillScene.className = 'paired-scene paired-fill-scene';
+    keyScene.className = 'paired-scene paired-key-scene';
+    fillScene.append(fillRoot);
+    keyScene.append(keyRoot);
+    wrapper.append(fillScene, keyScene);
+    document.body.replaceChildren(wrapper);
+    pairRoots = { fill: fillRoot, key: keyRoot };
+    return pairRoots;
+  }
+
+  function renderCurrentOverlay(state) {
+    renderScoreboard(state);
+    renderMapPool(state);
+    renderRoster(state);
+  }
+
+  function renderPaired(state) {
+    const roots = ensurePairRoots();
+    if (!roots) return;
+    const previousRoot = activeRenderRoot;
+    activeRenderRoot = roots.fill;
+    renderCurrentOverlay(state);
+    roots.fill.dataset.outputMode = 'fill';
+    roots.fill.dataset.pairedSide = 'fill';
+    updateDiagnostics(state, roots.fill, 'PAIR FILL');
+    activeRenderRoot = roots.key;
+    renderCurrentOverlay(state);
+    roots.key.dataset.outputMode = 'key';
+    roots.key.dataset.pairedSide = 'key';
+    updateDiagnostics(state, roots.key, 'PAIR KEY');
+    activeRenderRoot = previousRoot;
+  }
+
   function render(state) {
     if (!OUTPUT_VALID) {
       renderDiagnosticsPage(`Invalid output mode: ${OUTPUT_MODE || 'empty'}`);
@@ -344,9 +402,11 @@
       renderTestOutput(state);
       return;
     }
-    renderScoreboard(state);
-    renderMapPool(state);
-    renderRoster(state);
+    if (IS_PAIR_OUTPUT) {
+      renderPaired(state);
+      return;
+    }
+    renderCurrentOverlay(state);
     updateDiagnostics(state);
   }
 
@@ -358,10 +418,10 @@
     return state?.animationStartMs || stateRevision(state);
   }
 
-  function updateDiagnostics(state) {
-    const root = $('[data-overlay]');
+  function updateDiagnostics(state, targetRoot = null, label = OUTPUT_MODE.toUpperCase()) {
+    const root = targetRoot || $('[data-overlay]');
     if (!root) return;
-    root.dataset.outputMode = OUTPUT_MODE;
+    root.dataset.outputMode = label.toLowerCase();
     root.dataset.stateRevision = String(stateRevision(state));
     root.dataset.animationEpoch = String(animationEpoch(state));
     if (OVERLAY_QUERY.get('diagnostics') !== '1') return;
@@ -371,14 +431,15 @@
       diagnostics.className = 'overlay-diagnostics';
       root.append(diagnostics);
     }
-    diagnostics.textContent = `${OUTPUT_MODE.toUpperCase()} · REV ${stateRevision(state)} · 1920x1080 · EPOCH ${animationEpoch(state)}`;
+    const size = IS_PAIR_OUTPUT ? '3840x1080' : '1920x1080';
+    diagnostics.textContent = `${label} - REV ${stateRevision(state)} - ${size} - EPOCH ${animationEpoch(state)}`;
   }
 
   function renderDiagnosticsPage(message) {
     document.body.replaceChildren();
     const diagnostics = document.createElement('main');
     diagnostics.className = 'overlay-diagnostics-page';
-    diagnostics.innerHTML = `<strong>OVERLAY OUTPUT ERROR</strong><span>${message}</span><small>Use output=fill, output=key, output=test-fill, or output=test-key.</small>`;
+    diagnostics.innerHTML = `<strong>OVERLAY OUTPUT ERROR</strong><span>${message}</span><small>Use output=fill, output=key, output=pair, output=test-fill, or output=test-key.</small>`;
     document.body.append(diagnostics);
   }
 
@@ -404,7 +465,7 @@
       document.body.append(root);
     }
     root.style.setProperty('--animation-epoch', String(epoch));
-    root.querySelector('.overlay-diagnostics').textContent = `${OUTPUT_MODE.toUpperCase()} · REV ${revision} · 1920x1080 · EPOCH ${epoch}`;
+    root.querySelector('.overlay-diagnostics').textContent = `${OUTPUT_MODE.toUpperCase()} - REV ${revision} - 1920x1080 - EPOCH ${epoch}`;
   }
 
   async function start() {

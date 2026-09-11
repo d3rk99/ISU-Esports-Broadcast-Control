@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } = require('electron');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -36,6 +36,186 @@ const MIME_TYPES = {
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp'
 };
+const OVERLAY_OUTPUTS = new Set(['scoreboard', 'map-pool', 'roster', 'program', 'clean']);
+const PROGRAM_OUTPUTS = new Set(['scoreboard', 'map-pool', 'roster', 'clean']);
+const overlayOutputWindows = new Set();
+let programOutputWindows = { fill: null, key: null };
+let programOutputName = 'scoreboard';
+
+function overlayOutputSize(query = {}) {
+  return query.output === 'pair' ? { width: 3840, height: 1080 } : { width: 1920, height: 1080 };
+}
+
+function normalizeOutputDisplaySettings(settings = {}) {
+  return {
+    fillDisplayId: settings.fillDisplayId === undefined || settings.fillDisplayId === null ? '' : String(settings.fillDisplayId),
+    keyDisplayId: settings.keyDisplayId === undefined || settings.keyDisplayId === null ? '' : String(settings.keyDisplayId)
+  };
+}
+
+function overlayOutputUrl(details = {}) {
+  if (!OVERLAY_OUTPUTS.has(details.name)) return null;
+  const url = new URL(`http://${OVERLAY_HOST}:${OVERLAY_PORT}/overlays/${details.name}.html`);
+  for (const [key, value] of Object.entries(details.query || {})) {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+  }
+  return url;
+}
+
+function trackOverlayOutputWindow(window) {
+  overlayOutputWindows.add(window);
+  window.on('closed', () => {
+    overlayOutputWindows.delete(window);
+    if (programOutputWindows.fill === window) programOutputWindows.fill = null;
+    if (programOutputWindows.key === window) programOutputWindows.key = null;
+  });
+}
+
+function displayInfo(display) {
+  const bounds = display.bounds;
+  return {
+    id: String(display.id),
+    label: `${display.id}${display === screen.getPrimaryDisplay() ? ' - Primary' : ''} (${bounds.width}x${bounds.height} @ ${bounds.x},${bounds.y})`,
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    scaleFactor: display.scaleFactor,
+    primary: display.id === screen.getPrimaryDisplay().id
+  };
+}
+
+function availableOutputDisplays() {
+  return screen.getAllDisplays().map(displayInfo);
+}
+
+function outputDisplaysPath() {
+  return path.join(app.getPath('userData'), 'overlay-output-displays.json');
+}
+
+function saveOutputDisplaySettings(settings = {}) {
+  const saved = normalizeOutputDisplaySettings(settings);
+  fs.writeFileSync(outputDisplaysPath(), JSON.stringify(saved, null, 2), 'utf8');
+  return saved;
+}
+
+function readOutputDisplaySettings() {
+  try {
+    return saveOutputDisplaySettings(JSON.parse(fs.readFileSync(outputDisplaysPath(), 'utf8')));
+  } catch {
+    return saveOutputDisplaySettings({});
+  }
+}
+
+function displayBySavedId(displayId, fallbackIndex = 0) {
+  const displays = orderedDisplays();
+  const matched = displays.find((display) => String(display.id) === String(displayId || ''));
+  return matched || displays[fallbackIndex] || displays[0] || null;
+}
+
+function createOverlayOutputWindow(details = {}, display = null) {
+  const outputUrl = overlayOutputUrl(details);
+  if (!outputUrl) return null;
+  const size = overlayOutputSize(details.query || {});
+  const outputMode = details.query?.output || 'fill';
+  const bounds = display?.bounds;
+  const options = {
+    width: size.width,
+    height: size.height,
+    minWidth: 640,
+    minHeight: 360,
+    title: `${details.name} ${outputMode} output`,
+    backgroundColor: '#000000',
+    autoHideMenuBar: true,
+    frame: false,
+    useContentSize: true,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      backgroundThrottling: false
+    }
+  };
+  if (bounds) {
+    options.x = bounds.x;
+    options.y = bounds.y;
+  }
+  const output = new BrowserWindow(options);
+  output.setAspectRatio(size.width / size.height);
+  output.outputDisplayBounds = bounds || null;
+  output.on('resize', () => fitOverlayOutputScale(output));
+  trackOverlayOutputWindow(output);
+  loadOverlayOutputWindow(output, details);
+  return output;
+}
+
+function loadOverlayOutputWindow(window, details = {}) {
+  const outputUrl = overlayOutputUrl(details);
+  if (!outputUrl) return Promise.resolve(false);
+  window.overlayReady = waitForOverlayWindow(window);
+  window.loadURL(outputUrl.toString());
+  return window.overlayReady;
+}
+
+function waitForOverlayWindow(window) {
+  return new Promise((resolve) => {
+    const done = () => resolve();
+    window.webContents.once('did-finish-load', done);
+    window.webContents.once('did-fail-load', done);
+  });
+}
+
+function orderedDisplays() {
+  const primary = screen.getPrimaryDisplay();
+  return [primary, ...screen.getAllDisplays().filter((display) => display.id !== primary.id)];
+}
+
+function showOverlayOutputWindow(window) {
+  if (window.outputDisplayBounds) window.setBounds(window.outputDisplayBounds);
+  window.show();
+  window.setFullScreen(true);
+  setTimeout(() => fitOverlayOutputScale(window), 100);
+}
+
+function fitOverlayOutputScale(window) {
+  const [width, height] = window.getContentSize();
+  const zoom = Math.max(0.1, Math.min(width / 1920, height / 1080));
+  window.webContents.setZoomFactor(zoom);
+}
+
+async function loadProgramOutput(name = programOutputName) {
+  if (!PROGRAM_OUTPUTS.has(name)) return false;
+  programOutputName = name;
+  const windows = [programOutputWindows.fill, programOutputWindows.key].filter(Boolean);
+  await Promise.all(windows.map((window) => window.webContents.executeJavaScript(
+    `window.setProgramOutputOverlay && window.setProgramOutputOverlay(${JSON.stringify(name)})`,
+    true
+  ).catch(() => false)));
+  windows.forEach(fitOverlayOutputScale);
+  return Boolean(windows.length);
+}
+
+async function openProgramOutput(name = programOutputName) {
+  if (!PROGRAM_OUTPUTS.has(name)) return false;
+  const outputDisplaySettings = readOutputDisplaySettings();
+  if (programOutputWindows.fill?.isDestroyed?.()) programOutputWindows.fill = null;
+  if (programOutputWindows.key?.isDestroyed?.()) programOutputWindows.key = null;
+  programOutputWindows.fill ||= createOverlayOutputWindow(
+    { name: 'program', query: { output: 'fill' } },
+    displayBySavedId(outputDisplaySettings.fillDisplayId, 0)
+  );
+  programOutputWindows.key ||= createOverlayOutputWindow(
+    { name: 'program', query: { output: 'key' } },
+    displayBySavedId(outputDisplaySettings.keyDisplayId, 1)
+  );
+  if (!programOutputWindows.fill || !programOutputWindows.key) return false;
+  await loadProgramOutput(name);
+  await Promise.all([programOutputWindows.fill.overlayReady, programOutputWindows.key.overlayReady]);
+  showOverlayOutputWindow(programOutputWindows.fill);
+  showOverlayOutputWindow(programOutputWindows.key);
+  return true;
+}
 
 function writeJson(response, statusCode, value) {
   response.writeHead(statusCode, {
@@ -228,6 +408,19 @@ function registerIpc() {
   ipcMain.on('companion:get-settings-sync', (event) => {
     event.returnValue = readCompanionSettings();
   });
+  ipcMain.on('overlay:get-output-display-settings-sync', (event) => {
+    event.returnValue = readOutputDisplaySettings();
+  });
+  ipcMain.handle('overlay:get-output-displays', () => ({
+    displays: availableOutputDisplays(),
+    settings: readOutputDisplaySettings()
+  }));
+  ipcMain.handle('overlay:configure-output-displays', (_event, settings = {}) => ({
+    displays: availableOutputDisplays(),
+    settings: saveOutputDisplaySettings(settings)
+  }));
+  ipcMain.handle('overlay:open-program-output', (_event, details = {}) => openProgramOutput(details.name || programOutputName));
+  ipcMain.handle('overlay:set-program-output', (_event, details = {}) => loadProgramOutput(details.name || programOutputName));
   ipcMain.handle('companion:configure', async (_event, settings = {}) => {
     const saved = saveCompanionSettings(settings);
     const status = await companionApiService.configure(saved);
@@ -285,8 +478,9 @@ function registerIpc() {
     return { name: path.basename(source), url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/user-assets/${filename}` };
   });
   ipcMain.handle('overlay:preview', (_event, details = {}) => {
-    const allowed = new Set(['scoreboard', 'map-pool', 'roster']);
-    if (!allowed.has(details.name)) return false;
+    const previewUrl = overlayOutputUrl(details);
+    if (!previewUrl) return false;
+    const size = overlayOutputSize(details.query || {});
     const preview = new BrowserWindow({
       width: 1120,
       height: 650,
@@ -297,15 +491,29 @@ function registerIpc() {
       autoHideMenuBar: true,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
     });
-    const previewUrl = new URL(`http://${OVERLAY_HOST}:${OVERLAY_PORT}/overlays/${details.name}.html`);
-    for (const [key, value] of Object.entries(details.query || {})) previewUrl.searchParams.set(key, value);
     const fitPreview = () => {
       const [width, height] = preview.getContentSize();
-      preview.webContents.setZoomFactor(Math.min(width / 1920, height / 1080));
+      preview.webContents.setZoomFactor(Math.min(width / size.width, height / size.height));
     };
     preview.webContents.once('did-finish-load', fitPreview);
     preview.on('resize', fitPreview);
     preview.loadURL(previewUrl.toString());
+    return true;
+  });
+  ipcMain.handle('overlay:open-output', async (_event, details = {}) => {
+    if (!OVERLAY_OUTPUTS.has(details.name)) return false;
+    if (details.query?.output === 'pair') {
+      return openProgramOutput(details.name);
+    }
+    const outputDisplaySettings = readOutputDisplaySettings();
+    const outputMode = details.query?.output || 'fill';
+    const targetDisplay = outputMode === 'key'
+      ? displayBySavedId(outputDisplaySettings.keyDisplayId, 1)
+      : displayBySavedId(outputDisplaySettings.fillDisplayId, 0);
+    const output = createOverlayOutputWindow(details, targetDisplay);
+    if (!output) return false;
+    await output.overlayReady;
+    showOverlayOutputWindow(output);
     return true;
   });
 }

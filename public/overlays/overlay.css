@@ -10,12 +10,11 @@
 [hidden] { display: none !important; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: transparent; }
-body[data-output="fill"],
 body[data-output="key"],
-body[data-output="test-fill"],
 body[data-output="test-key"],
 body[data-output="invalid"] { background: #000; }
 .obs-canvas { position: relative; width: 100vw; height: 100vh; }
+body[data-output="pair"].obs-canvas { width: 3840px; height: 1080px; }
 
 /* Shared graphic language */
 .obs-canvas::before {
@@ -30,9 +29,36 @@ body[data-output="invalid"] { background: #000; }
   mask-image: radial-gradient(circle at center, black, transparent 78%);
 }
 .key-output.obs-canvas::before { display: none; }
+body[data-output="pair"].obs-canvas::before { display: none; }
+body[data-output="fill"].obs-canvas::before,
+body[data-output="test-fill"].obs-canvas::before { display: none; }
 .key-output [data-overlay] {
   filter: brightness(0) invert(1);
 }
+.paired-output-root {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1920px 1920px;
+  width: 3840px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+.paired-scene {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+.paired-key-scene {
+  background: #000;
+}
+.paired-key-scene [data-overlay] {
+  filter: brightness(0) invert(1);
+}
+.paired-key-scene.obs-canvas::before,
+.paired-key-scene .obs-canvas::before { display: none; }
 
 /* Scoreboard */
 .scoreboard {
@@ -266,6 +292,8 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 .roster-stage.team-slide-in { animation: roster-camera-in 900ms cubic-bezier(.12,.78,.2,1) both; }
 .key-output .roster-stage.team-slide-out { animation-name: roster-key-camera-out; }
 .key-output .roster-stage.team-slide-in { animation-name: roster-key-camera-in; }
+.paired-key-scene .roster-stage.team-slide-out { animation-name: roster-paired-key-camera-out; }
+.paired-key-scene .roster-stage.team-slide-in { animation-name: roster-paired-key-camera-in; }
 
 @keyframes scoreboard-in { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes title-in { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
@@ -275,6 +303,8 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 @keyframes roster-camera-in { from { opacity: 0; transform: translateX(112%) skewX(4deg); filter: blur(5px); } to { opacity: 1; transform: translateX(0); filter: blur(0); } }
 @keyframes roster-key-camera-out { to { opacity: 0; transform: translateX(-112%) skewX(-4deg); filter: brightness(0) invert(1) blur(5px); } }
 @keyframes roster-key-camera-in { from { opacity: 0; transform: translateX(112%) skewX(4deg); filter: brightness(0) invert(1) blur(5px); } to { opacity: 1; transform: translateX(0); filter: brightness(0) invert(1) blur(0); } }
+@keyframes roster-paired-key-camera-out { to { opacity: 0; transform: translateX(-112%) skewX(-4deg); filter: brightness(0) invert(1) blur(5px); } }
+@keyframes roster-paired-key-camera-in { from { opacity: 0; transform: translateX(112%) skewX(4deg); filter: brightness(0) invert(1) blur(5px); } to { opacity: 1; transform: translateX(0); filter: brightness(0) invert(1) blur(0); } }
 
 .overlay-diagnostics {
   position: absolute;

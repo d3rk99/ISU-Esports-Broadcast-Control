@@ -36,6 +36,7 @@ function buildCompanionVariables(state = {}) {
   const active = rows[activeIndex] || {};
   const variables = {
     selected_game: gameKey,
+    active_output_overlay: scalar(state.activeOutputOverlay, 'scoreboard'),
     event: scalar(game.match?.event),
     round: scalar(game.match?.round),
     format: scalar(game.match?.format),
@@ -126,6 +127,7 @@ function buildCompanionCapabilities(state = {}) {
     { id: 'match.live.set', label: 'Set live/off-air', parameters: ['value', 'game?'] },
     { id: 'teams.swap', label: 'Swap home and away sides', parameters: ['game?'] },
     { id: 'game.select', label: 'Select the active game', parameters: ['game'] },
+    { id: 'output.select', label: 'Select Program output HTML: scoreboard, roster, map-pool, or clean', parameters: ['output'] },
     { id: 'map.activate', label: 'Activate a map/game number', parameters: ['number', 'game?'] },
     { id: 'map.winner.set', label: 'Set or clear a map/game winner', parameters: ['number', 'team', 'game?'] },
     { id: 'maps.reset', label: 'Clear all map/game results', parameters: ['game?'] }

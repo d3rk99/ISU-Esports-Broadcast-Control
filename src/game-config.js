@@ -383,6 +383,7 @@ export function createInitialState() {
     activeView: 'control',
     activeRoster: 'varsity',
     activeRosterSide: 'home',
+    activeOutputOverlay: 'scoreboard',
     updatedAt: null,
     games: Object.fromEntries(GAME_ORDER.map((key) => [key, createGameState(key)]))
   };

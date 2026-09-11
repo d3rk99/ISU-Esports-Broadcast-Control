@@ -1,0 +1,52 @@
+:root {
+  background: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+#program-root {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+
+body[data-output="pair"] #program-root {
+  display: grid;
+  grid-template-columns: 1920px 1920px;
+  width: 3840px;
+}
+
+.program-frame {
+  display: block;
+  width: 1920px;
+  height: 1080px;
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.program-frame[data-output="key"] {
+  background: #000;
+}
+
+.program-clean {
+  width: 1920px;
+  height: 1080px;
+  background: transparent;
+}
+
+.program-clean-key {
+  background: #000;
+}

@@ -76,6 +76,12 @@ export function applyCompanionAction(state, request = {}) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw actionError('Action request must be a JSON object');
   const action = String(request.action || '');
   if (!action) throw actionError('action is required');
+  if (action === 'output.select') {
+    const output = String(request.output || request.name || '').trim();
+    if (!['scoreboard', 'roster', 'map-pool', 'clean'].includes(output)) throw actionError('output must be scoreboard, roster, map-pool, or clean');
+    state.activeOutputOverlay = output;
+    return { message: `Program output selected: ${output}`, outputChanged: true };
+  }
   if (action === 'game.select') {
     if (!GAME_CONFIGS[request.game]) throw actionError(`Unknown game: ${request.game || '(empty)'}`);
     state.selectedGame = request.game;

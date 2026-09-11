@@ -28,6 +28,16 @@ test('Companion can target a non-selected game and select another game', () => {
   assert.equal(result.selectedGameChanged, true);
 });
 
+test('Companion can select the active program output', () => {
+  const state = createInitialState();
+  const result = applyCompanionAction(state, { action: 'output.select', output: 'roster' });
+  assert.equal(state.activeOutputOverlay, 'roster');
+  assert.equal(result.outputChanged, true);
+  applyCompanionAction(state, { action: 'output.select', output: 'clean' });
+  assert.equal(state.activeOutputOverlay, 'clean');
+  assert.throws(() => applyCompanionAction(state, { action: 'output.select', output: 'lower-third' }), /scoreboard, roster, map-pool, or clean/);
+});
+
 test('map winner and reset actions keep series score in sync', () => {
   const state = createInitialState();
   applyCompanionAction(state, { action: 'map.winner.set', number: 1, team: 'home' });
