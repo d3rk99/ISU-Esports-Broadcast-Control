@@ -1,4 +1,4 @@
-import { createInitialState, GAME_ORDER } from './game-config.js';
+import { createInitialState, GAME_CONFIGS, GAME_ORDER } from './game-config.js';
 
 export const STORAGE_KEY = 'isu-esports-control-state-v1';
 
@@ -13,6 +13,20 @@ export function loadState(storage = window.localStorage) {
         continue;
       }
       parsed.games[game] = { ...fallback.games[game], ...parsed.games[game] };
+      const config = GAME_CONFIGS[game];
+      parsed.games[game].seriesLength = Number(parsed.games[game].seriesLength) || config.defaultSeriesLength || fallback.games[game].seriesLength;
+      parsed.games[game].match = {
+        ...fallback.games[game].match,
+        ...(parsed.games[game].match || {}),
+        format: config.defaultSeriesLength ? `Best of ${parsed.games[game].seriesLength}` : parsed.games[game].match?.format || fallback.games[game].match.format
+      };
+      const savedRows = Array.isArray(parsed.games[game].mapRows) ? parsed.games[game].mapRows : [];
+      parsed.games[game].mapRows = config.modes.map((mode, index) => ({
+        ...fallback.games[game].mapRows[index],
+        ...(savedRows[index] || {}),
+        mode: config.modes.includes(savedRows[index]?.mode) ? savedRows[index].mode : fallback.games[game].mapRows[index]?.mode ?? mode
+      }));
+      parsed.games[game].activeMap = Math.max(0, Math.min(parsed.games[game].mapRows.length - 1, Number(parsed.games[game].activeMap) || 0));
       parsed.games[game].teams = fallback.games[game].teams.map((team, index) => ({
         ...team,
         ...(parsed.games[game].teams?.[index] || {})
@@ -27,7 +41,12 @@ export function loadState(storage = window.localStorage) {
           }));
         }
       }
-      parsed.games[game].characterArt = parsed.games[game].characterArt || {};
+      parsed.games[game].characterArt = game === 'overwatch'
+        ? { ...(parsed.games[game].characterArt || {}), ...fallback.games[game].characterArt }
+        : parsed.games[game].characterArt || {};
+      parsed.games[game].mapArt = game === 'overwatch'
+        ? { ...(parsed.games[game].mapArt || {}), ...fallback.games[game].mapArt }
+        : parsed.games[game].mapArt || {};
       if (game === 'rocketleague') {
         parsed.games[game].rocketLeague = {
           ...fallback.games[game].rocketLeague,

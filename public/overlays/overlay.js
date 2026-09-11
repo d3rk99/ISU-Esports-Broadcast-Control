@@ -1,4 +1,17 @@
 (() => {
+  const OVERLAY_QUERY = new URLSearchParams(location.search);
+  const OUTPUT_MODES = new Set(['fill', 'key', 'test-fill', 'test-key']);
+  const requestedOutput = (OVERLAY_QUERY.get('output') || '').toLowerCase();
+  const legacyKeyOutput = ['1', 'true', 'yes'].includes((OVERLAY_QUERY.get('key') || '').toLowerCase());
+  const OUTPUT_MODE = legacyKeyOutput ? 'key' : (requestedOutput || 'fill');
+  const OUTPUT_VALID = OUTPUT_MODES.has(OUTPUT_MODE);
+  const IS_KEY_OUTPUT = OUTPUT_MODE === 'key' || OUTPUT_MODE === 'test-key';
+  const IS_TEST_OUTPUT = OUTPUT_MODE === 'test-fill' || OUTPUT_MODE === 'test-key';
+  document.documentElement.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
+  document.body.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
+  document.body.classList.toggle('key-output', OUTPUT_VALID && IS_KEY_OUTPUT);
+  document.body.classList.toggle('test-output', OUTPUT_VALID && IS_TEST_OUTPUT);
+
   const GAME_META = {
     overwatch: { name: 'OVERWATCH 2', code: 'OW2', accent: '#f06414', score: 'MAP SCORE' },
     valorant: { name: 'VALORANT', code: 'VAL', accent: '#ff4655', score: 'SERIES SCORE' },
@@ -30,6 +43,7 @@
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  let lastMapPoolSignature = '';
   const setText = (selector, value, root = document) => {
     const element = $(selector, root);
     if (element) element.textContent = String(value ?? '');
@@ -144,13 +158,37 @@
     });
   }
 
-  function renderGenericMaps(game) {
+  function visibleMapRows(game, selectedGame) {
+    const length = Math.max(1, Number(game.seriesLength) || (game.mapRows || []).length);
+    const cappedLength = selectedGame === 'valorant' ? Math.min(3, length) : length;
+    return (game.mapRows || []).slice(0, Math.min((game.mapRows || []).length, cappedLength));
+  }
+
+  function renderGenericMaps(game, selectedGame) {
     const container = $('#generic-map-pool');
+    const rows = visibleMapRows(game, selectedGame);
+    const signature = JSON.stringify({
+      selectedGame,
+      activeMap: game.activeMap,
+      seriesLength: game.seriesLength,
+      teams: (game.teams || []).map((team) => ({ shortName: team.shortName, score: team.score })),
+      rows: rows.map((row) => ({ map: row.map, mode: row.mode, score: row.score, winner: row.winner, status: row.status }))
+    });
+    if (signature === lastMapPoolSignature) return;
+    lastMapPoolSignature = signature;
     container.replaceChildren();
+    container.style.setProperty('--map-count', Math.max(1, Math.min(7, rows.length)));
     const teams = game.teams || FALLBACK.games.overwatch.teams;
-    (game.mapRows || []).slice(0, 7).forEach((row, index) => {
+    rows.forEach((row, index) => {
       const card = document.createElement('article');
       card.className = `generic-map-card${index === game.activeMap ? ' active' : ''}${row.winner !== null ? ' complete' : ''}`;
+      const artwork = game.mapArt?.[row.map] || {};
+      const image = document.createElement('img');
+      image.className = 'generic-map-image';
+      image.alt = '';
+      const artworkUrl = safeImageUrl(artwork.url, '');
+      if (artworkUrl) image.src = artworkUrl;
+      else image.hidden = true;
       const number = document.createElement('span');
       number.textContent = `MAP ${String(index + 1).padStart(2, '0')}`;
       const map = document.createElement('strong');
@@ -159,7 +197,7 @@
       mode.textContent = row.mode || '';
       const score = document.createElement('p');
       score.textContent = row.score?.some(Boolean) ? `${row.score[0] || '0'} — ${row.score[1] || '0'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : 'UPCOMING';
-      card.append(number, map, mode, score);
+      card.append(image, number, map, mode, score);
       container.append(card);
     });
   }
@@ -180,17 +218,17 @@
     root.style.setProperty('--away-secondary', teams[1]?.secondaryColorEnabled ? teams[1].secondaryColor : teams[1]?.color || '#5e6673');
     const valorant = $('#valorant-veto');
     const generic = $('#generic-map-pool');
-    valorant.hidden = selectedGame !== 'valorant';
-    generic.hidden = selectedGame === 'valorant';
-    setText('.overlay-titlebar h1', selectedGame === 'valorant' ? 'MAP PICKS / BANS' : 'MAP POOL / SERIES');
-    if (selectedGame === 'valorant') renderValorantVeto(game);
-    else renderGenericMaps(game);
+    valorant.hidden = true;
+    generic.hidden = false;
+    setText('.overlay-titlebar h1', 'MAP POOL / SERIES');
+    renderGenericMaps(game, selectedGame);
   }
 
   let rosterTimers = [];
 
   function safeImageUrl(value, fallback) {
     if (typeof value === 'string' && value.startsWith('http://127.0.0.1:3174/user-assets/')) return value;
+    if (typeof value === 'string' && value.startsWith('/assets/')) return value;
     return fallback;
   }
 
@@ -237,8 +275,8 @@
       const characterImage = document.createElement('img');
       characterImage.className = 'character-photo';
       characterImage.alt = '';
-      const sharedArtwork = game.characterArt?.[player.character]?.url;
-      characterImage.src = safeImageUrl(sharedArtwork || player.characterImage, './assets/character-placeholder.svg');
+      const sharedArtwork = game.characterArt?.[player.character] || {};
+      characterImage.src = safeImageUrl(sharedArtwork.url || player.characterImage, './assets/character-placeholder.svg');
       const number = document.createElement('span');
       number.className = 'roster-number';
       number.textContent = String(index + 1).padStart(2, '0');
@@ -273,8 +311,7 @@
     const { selectedGame, game, meta } = getActive(state);
     applyTheme(selectedGame, meta);
     clearRosterTimers();
-    const query = new URLSearchParams(location.search);
-    const requestedProgram = query.get('program') || query.get('team');
+    const requestedProgram = OVERLAY_QUERY.get('program') || OVERLAY_QUERY.get('team');
     const program = requestedProgram === 'jv' ? 'jv' : (requestedProgram === 'varsity' ? 'varsity' : state.activeRoster || 'varsity');
     const stage = $('.roster-stage');
     stage.classList.remove('team-slide-out', 'team-slide-in');
@@ -299,9 +336,75 @@
   }
 
   function render(state) {
+    if (!OUTPUT_VALID) {
+      renderDiagnosticsPage(`Invalid output mode: ${OUTPUT_MODE || 'empty'}`);
+      return;
+    }
+    if (IS_TEST_OUTPUT) {
+      renderTestOutput(state);
+      return;
+    }
     renderScoreboard(state);
     renderMapPool(state);
     renderRoster(state);
+    updateDiagnostics(state);
+  }
+
+  function stateRevision(state) {
+    return state?.updatedAt ? Date.parse(state.updatedAt) || 0 : 0;
+  }
+
+  function animationEpoch(state) {
+    return state?.animationStartMs || stateRevision(state);
+  }
+
+  function updateDiagnostics(state) {
+    const root = $('[data-overlay]');
+    if (!root) return;
+    root.dataset.outputMode = OUTPUT_MODE;
+    root.dataset.stateRevision = String(stateRevision(state));
+    root.dataset.animationEpoch = String(animationEpoch(state));
+    if (OVERLAY_QUERY.get('diagnostics') !== '1') return;
+    let diagnostics = $('.overlay-diagnostics', root);
+    if (!diagnostics) {
+      diagnostics = document.createElement('div');
+      diagnostics.className = 'overlay-diagnostics';
+      root.append(diagnostics);
+    }
+    diagnostics.textContent = `${OUTPUT_MODE.toUpperCase()} · REV ${stateRevision(state)} · 1920x1080 · EPOCH ${animationEpoch(state)}`;
+  }
+
+  function renderDiagnosticsPage(message) {
+    document.body.replaceChildren();
+    const diagnostics = document.createElement('main');
+    diagnostics.className = 'overlay-diagnostics-page';
+    diagnostics.innerHTML = `<strong>OVERLAY OUTPUT ERROR</strong><span>${message}</span><small>Use output=fill, output=key, output=test-fill, or output=test-key.</small>`;
+    document.body.append(diagnostics);
+  }
+
+  function renderTestOutput(state) {
+    const revision = stateRevision(state);
+    const epoch = animationEpoch(state) || revision || Date.now();
+    let root = $('#overlay-test-root');
+    if (!root) {
+      document.body.replaceChildren();
+      root = document.createElement('main');
+      root.id = 'overlay-test-root';
+      root.dataset.overlay = 'test';
+      root.className = 'overlay-test-root';
+      root.innerHTML = `
+        <section class="test-ramp">
+          ${[0, 25, 50, 75, 100].map((value) => `<div style="--alpha:${value / 100}"><b>${value}%</b></div>`).join('')}
+        </section>
+        <section class="test-copy"><h1>ISU ESPORTS KEY/FILL TEST</h1><p>Colored antialiased text, alpha panels, shadow, glow, and motion.</p></section>
+        <div class="test-logo"><b>IS</b></div>
+        <div class="test-glow"></div>
+        <div class="test-motion"></div>
+        <footer class="overlay-diagnostics"></footer>`;
+      document.body.append(root);
+    }
+    root.style.setProperty('--animation-epoch', String(epoch));
+    root.querySelector('.overlay-diagnostics').textContent = `${OUTPUT_MODE.toUpperCase()} · REV ${revision} · 1920x1080 · EPOCH ${epoch}`;
   }
 
   async function start() {

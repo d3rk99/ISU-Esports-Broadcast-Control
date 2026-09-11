@@ -170,12 +170,14 @@ input:focus, select:focus { border-color: var(--orange); }
 .detail-score-row button:hover { color: white; background: #28282c; }
 .detail-score-row b { font-size: 24px; text-align: center; }
 
-.map-summary { display: grid; grid-template-columns: 1fr 170px 220px; min-height: 73px; margin-bottom: 14px; border: 1px solid #303034; background: linear-gradient(90deg, #171719, #121214); }
-.map-summary > div { display: flex; flex-direction: column; justify-content: center; padding: 0 21px; border-right: 1px solid #29292d; }
-.map-summary > div:last-child { border: 0; }
+.map-summary { display: grid; grid-template-columns: 1fr 150px 190px 210px; min-height: 73px; margin-bottom: 14px; border: 1px solid #303034; background: linear-gradient(90deg, #171719, #121214); }
+.map-summary > div, .map-summary > label { display: flex; flex-direction: column; justify-content: center; padding: 0 21px; border-right: 1px solid #29292d; }
+.map-summary > div:last-child, .map-summary > label:last-child { border: 0; }
 .map-summary span { margin-bottom: 6px; color: #65656c; font-size: 7px; font-weight: 900; letter-spacing: .13em; }
 .map-summary strong { font-size: 14px; }
 .map-summary i { margin: 0 8px; color: var(--orange); font-style: normal; }
+.format-select select { height: 30px; border: 1px solid #36363c; color: #f4f4f6; background: #111113; font-size: 11px; font-weight: 900; }
+.format-select small { margin-top: 4px; color: #74747b; font-size: 7px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .map-list { display: flex; flex-direction: column; gap: 7px; }
 .map-row { display: grid; grid-template-columns: 65px 150px minmax(160px, 1fr) 235px 134px; align-items: center; min-height: 78px; border: 1px solid #29292e; border-left: 2px solid transparent; border-radius: 2px; background: #141416; transition: background .15s, border .15s; }
 .map-row:hover { border-color: #3b3b41; border-left-color: #3b3b41; background: #18181b; }
@@ -269,6 +271,7 @@ input:focus, select:focus { border-color: var(--orange); }
 .roster-asset-tile button:hover { border-color: var(--orange); }
 .roster-asset-tile button:disabled { opacity: .3; cursor: not-allowed; }
 .roster-asset-tile button.clear-asset { margin-left: 4px; border-color: #493232; color: #ba6b65; background: transparent; }
+.roster-asset-tile em { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border: 1px solid #36363c; color: #85858d; background: #171719; font-size: 6px; font-style: normal; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
 .character-field { align-self: center; }
 .character-field > span { display: block !important; margin-bottom: 5px !important; }
 .character-field > small { display: block; margin-top: 4px; color: #57575e; font-size: 7px; line-height: 1.35; }
@@ -284,6 +287,9 @@ input:focus, select:focus { border-color: var(--orange); }
 .live-output-banner > strong i { width: 5px; height: 5px; border-radius: 50%; background: #70cd6a; box-shadow: 0 0 8px #70cd6a; }
 .output-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .output-card { border: 1px solid #2e2e33; border-radius: 3px; background: var(--panel); overflow: hidden; }
+.output-card.key-output-card { border-color: #4a4a52; background: #18181b; }
+.output-card.key-output-card .output-thumb { filter: grayscale(1); }
+.output-card.key-output-card .output-thumb > span { color: #d8d8dd; border-color: #5a5a62; }
 .output-thumb { position: relative; display: grid; place-items: center; height: 115px; border-bottom: 1px solid #2a2a2e; background: linear-gradient(135deg, #121214 25%, #19191c 25%, #19191c 50%, #121214 50%, #121214 75%, #19191c 75%); background-size: 16px 16px; }
 .output-thumb > span { position: absolute; left: 10px; top: 10px; padding: 4px 6px; border: 1px solid #39393f; color: #6b6b73; background: #121214; font-size: 6px; font-weight: 900; letter-spacing: .1em; }
 .ghost-score { display: grid; grid-template-columns: 5px 70px 75px 70px 5px; align-items: center; height: 32px; color: #83838b; background: rgba(10,10,11,.94); box-shadow: 0 8px 18px rgba(0,0,0,.4); }

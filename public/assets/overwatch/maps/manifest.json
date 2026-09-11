@@ -1,0 +1,465 @@
+{
+  "source": "https://overwatch.fandom.com/wiki/Maps",
+  "generatedFrom": "Overwatch Wiki Category:Maps pageimages API",
+  "targetSize": {
+    "width": 1280,
+    "height": 720
+  },
+  "maps": [
+    {
+      "name": "Aatlis",
+      "slug": "aatlis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e6/Aatlis_loading_screen.png/revision/latest/scale-to-width-down/1600?cb=20250624194631",
+      "file": "/assets/overwatch/maps/aatlis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Antarctic Peninsula",
+      "slug": "antarctic-peninsula",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/b/b1/New_Antarctic_Peninsula.webp/revision/latest?cb=20260718185125",
+      "file": "/assets/overwatch/maps/antarctic-peninsula.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Arena Victoriae",
+      "slug": "arena-victoriae",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/c5/Gladius.png/revision/latest/scale-to-width-down/1600?cb=20250329185406",
+      "file": "/assets/overwatch/maps/arena-victoriae.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Ayutthaya",
+      "slug": "ayutthaya",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/9d/Ayutthaya.png/revision/latest/scale-to-width-down/1600?cb=20180416190309",
+      "file": "/assets/overwatch/maps/ayutthaya.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Black Forest",
+      "slug": "black-forest",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/98/Black-Forest.jpg/revision/latest/scale-to-width-down/1600?cb=20180520064204",
+      "file": "/assets/overwatch/maps/black-forest.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Blizzard World",
+      "slug": "blizzard-world",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f8/Blizzard_World.jpg/revision/latest/scale-to-width-down/1600?cb=20190401012157",
+      "file": "/assets/overwatch/maps/blizzard-world.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Busan",
+      "slug": "busan",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/09/Overwatch_Busan.jpg/revision/latest/scale-to-width-down/1600?cb=20190412043201",
+      "file": "/assets/overwatch/maps/busan.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Busan Stadium",
+      "slug": "busan-stadium",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/72/Busan_Stadium.png/revision/latest/scale-to-width-down/1600?cb=20180825005317",
+      "file": "/assets/overwatch/maps/busan-stadium.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Castillo",
+      "slug": "castillo",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e8/Castillo.jpg/revision/latest/scale-to-width-down/1600?cb=20180520064007",
+      "file": "/assets/overwatch/maps/castillo.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Château Guillard",
+      "slug": "chateau-guillard",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/9b/Chateau_Guillard.jpg/revision/latest/scale-to-width-down/1600?cb=20180520064415",
+      "file": "/assets/overwatch/maps/chateau-guillard.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Circuit Royal",
+      "slug": "circuit-royal",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/10/Monte_Carlo.jpg/revision/latest/scale-to-width-down/1600?cb=20220926230154",
+      "file": "/assets/overwatch/maps/circuit-royal.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Colosseo",
+      "slug": "colosseo",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/32/Colosseo_%28day%29.png/revision/latest?cb=20240228131205",
+      "file": "/assets/overwatch/maps/colosseo.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Dorado",
+      "slug": "dorado",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/ec/Dorado-streets2.jpg/revision/latest/scale-to-width-down/1600?cb=20180520045217",
+      "file": "/assets/overwatch/maps/dorado.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Ecopoint: Antarctica",
+      "slug": "ecopoint-antarctica",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/00/Ecopoint_Antarctica_BlizzCon_2016.png/revision/latest/scale-to-width-down/1600?cb=20180520063219",
+      "file": "/assets/overwatch/maps/ecopoint-antarctica.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Eichenwalde",
+      "slug": "eichenwalde",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/aa/Eichenwalde.png/revision/latest/scale-to-width-down/1600?cb=20190412043329",
+      "file": "/assets/overwatch/maps/eichenwalde.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Esperança",
+      "slug": "esperanca",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f5/PortugalPush.jpg/revision/latest/scale-to-width-down/1600?cb=20220926215956",
+      "file": "/assets/overwatch/maps/esperanca.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Estádio das Rãs",
+      "slug": "estadio-das-ras",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/8b/EstadioDasRas.jpg/revision/latest/scale-to-width-down/1600?cb=20180520065337",
+      "file": "/assets/overwatch/maps/estadio-das-ras.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Gogadoro",
+      "slug": "gogadoro",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/96/Gogadoro.png/revision/latest/scale-to-width-down/1600?cb=20250329190513",
+      "file": "/assets/overwatch/maps/gogadoro.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Gothenburg",
+      "slug": "gothenburg",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/b/b5/Gothenburg.jpg/revision/latest/scale-to-width-down/1600?cb=20191101204801",
+      "file": "/assets/overwatch/maps/gothenburg.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Hanamura",
+      "slug": "hanamura",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/4/46/Hanamura_concept.jpg/revision/latest/scale-to-width-down/1600?cb=20180520041011",
+      "file": "/assets/overwatch/maps/hanamura.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Hanaoka",
+      "slug": "hanaoka",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/39/Hanaoka_2.jpg/revision/latest/scale-to-width-down/1600?cb=20231105081811",
+      "file": "/assets/overwatch/maps/hanaoka.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Havana",
+      "slug": "havana",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/93/Havana.png/revision/latest/scale-to-width-down/1600?cb=20190512033804",
+      "file": "/assets/overwatch/maps/havana.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Hollywood",
+      "slug": "hollywood",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/80/HollywoodNight.png/revision/latest/scale-to-width-down/1600?cb=20230423062420",
+      "file": "/assets/overwatch/maps/hollywood.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Horizon Lunar Colony",
+      "slug": "horizon-lunar-colony",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/7c/Horizon_Lunar_Colony2.jpg/revision/latest/scale-to-width-down/1600?cb=20180520044632",
+      "file": "/assets/overwatch/maps/horizon-lunar-colony.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Ilios",
+      "slug": "ilios",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/4/45/Ilios.jpg/revision/latest/scale-to-width-down/1600?cb=20180520062425",
+      "file": "/assets/overwatch/maps/ilios.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Junkertown",
+      "slug": "junkertown",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e3/Junkertown.jpg/revision/latest/scale-to-width-down/1600?cb=20170822090741",
+      "file": "/assets/overwatch/maps/junkertown.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Kanezaka",
+      "slug": "kanezaka",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f7/Kanezaka.jpg/revision/latest?cb=20210113071451",
+      "file": "/assets/overwatch/maps/kanezaka.webp",
+      "status": "ok"
+    },
+    {
+      "name": "King's Row",
+      "slug": "king-s-row",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1b/King%27s_Row_concept.jpg/revision/latest/scale-to-width-down/1600?cb=20180520052818",
+      "file": "/assets/overwatch/maps/king-s-row.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Lijiang Tower",
+      "slug": "lijiang-tower",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/9b/Lijiang_Tower_loading_screen.jpg/revision/latest/scale-to-width-down/1600?cb=20180520062020",
+      "file": "/assets/overwatch/maps/lijiang-tower.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Malevento",
+      "slug": "malevento",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/7b/Malevento.jpg/revision/latest/scale-to-width-down/1600?cb=20220926232223",
+      "file": "/assets/overwatch/maps/malevento.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Midtown",
+      "slug": "midtown",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/0b/MidtownLoading.png/revision/latest/scale-to-width-down/1600?cb=20230423062028",
+      "file": "/assets/overwatch/maps/midtown.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Necropolis",
+      "slug": "necropolis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/6/69/Necropolis.jpg/revision/latest/scale-to-width-down/1600?cb=20180520063534",
+      "file": "/assets/overwatch/maps/necropolis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Neon Junction",
+      "slug": "neon-junction",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/4/4e/NeonJunction1.png/revision/latest/scale-to-width-down/1600?cb=20260524051418",
+      "file": "/assets/overwatch/maps/neon-junction.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Nepal",
+      "slug": "nepal",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f3/Nepal_loading_screen.jpg/revision/latest/scale-to-width-down/1600?cb=20190412043102",
+      "file": "/assets/overwatch/maps/nepal.webp",
+      "status": "ok"
+    },
+    {
+      "name": "New Junk City",
+      "slug": "new-junk-city",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/80/New_Junk_City.png/revision/latest/scale-to-width-down/1600?cb=20230911160933",
+      "file": "/assets/overwatch/maps/new-junk-city.webp",
+      "status": "ok"
+    },
+    {
+      "name": "New Queen Street",
+      "slug": "new-queen-street",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/91/Toronto.jpg/revision/latest/scale-to-width-down/1600?cb=20220926222923",
+      "file": "/assets/overwatch/maps/new-queen-street.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Numbani",
+      "slug": "numbani",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1b/Numbani_Loading_Screen.jpg/revision/latest/scale-to-width-down/1600?cb=20180520055541",
+      "file": "/assets/overwatch/maps/numbani.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Oasis",
+      "slug": "oasis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/fc/Oasis.jpg/revision/latest/scale-to-width-down/1600?cb=20180520062749",
+      "file": "/assets/overwatch/maps/oasis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Paraíso",
+      "slug": "paraiso",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/90/Para%C3%ADso_pvp.jpg/revision/latest/scale-to-width-down/1600?cb=20220630025520",
+      "file": "/assets/overwatch/maps/paraiso.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Paris",
+      "slug": "paris",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1e/Paris_map.jpg/revision/latest/scale-to-width-down/1600?cb=20190323024121",
+      "file": "/assets/overwatch/maps/paris.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Petra",
+      "slug": "petra",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/18/Petra.jpg/revision/latest/scale-to-width-down/1600?cb=20190412043902",
+      "file": "/assets/overwatch/maps/petra.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Place Lacroix",
+      "slug": "place-lacroix",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/38/Paris_%28Stadium%29.png/revision/latest/scale-to-width-down/1600?cb=20250329191032",
+      "file": "/assets/overwatch/maps/place-lacroix.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Powder Keg Mine",
+      "slug": "powder-keg-mine",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/c1/Powder_Keg_Mine.png/revision/latest/scale-to-width-down/1600?cb=20250822184005",
+      "file": "/assets/overwatch/maps/powder-keg-mine.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Practice Range",
+      "slug": "practice-range",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1a/Practice_Range.jpg/revision/latest/scale-to-width-down/1600?cb=20190512035034",
+      "file": "/assets/overwatch/maps/practice-range.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Redwood Dam",
+      "slug": "redwood-dam",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f9/Dam.png/revision/latest/scale-to-width-down/1600?cb=20250329185612",
+      "file": "/assets/overwatch/maps/redwood-dam.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Rialto",
+      "slug": "rialto",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/ff/Rialto.jpg/revision/latest/scale-to-width-down/1600?cb=20190412043512",
+      "file": "/assets/overwatch/maps/rialto.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Route 66",
+      "slug": "route-66",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a6/Route_66.jpg/revision/latest/scale-to-width-down/1600?cb=20180520050707",
+      "file": "/assets/overwatch/maps/route-66.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Runasapi",
+      "slug": "runasapi",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/07/Runasapi_2.jpg/revision/latest/scale-to-width-down/1600?cb=20240623180847",
+      "file": "/assets/overwatch/maps/runasapi.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Samoa",
+      "slug": "samoa",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/b/b4/Samoa.jpg/revision/latest?cb=20231002031650",
+      "file": "/assets/overwatch/maps/samoa.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Serenza",
+      "slug": "serenza",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/15/Rialto_%28Stadium%29.png/revision/latest/scale-to-width-down/1600?cb=20260323154724",
+      "file": "/assets/overwatch/maps/serenza.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Shambali Monastery",
+      "slug": "shambali-monastery",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/81/ShambaliEscort.png/revision/latest/scale-to-width-down/1600?cb=20230421235244",
+      "file": "/assets/overwatch/maps/shambali-monastery.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Suravasa",
+      "slug": "suravasa",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/6/6f/Suravasa.jpg/revision/latest/scale-to-width-down/1600?cb=20230622084852",
+      "file": "/assets/overwatch/maps/suravasa.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Sydney Harbour Arena",
+      "slug": "sydney-harbour-arena",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e2/Sydneyharbourarena.png/revision/latest/scale-to-width-down/1600?cb=20180520065033",
+      "file": "/assets/overwatch/maps/sydney-harbour-arena.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Talantis",
+      "slug": "talantis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a8/Talantis_Map.png/revision/latest/scale-to-width-down/1600?cb=20230421230131",
+      "file": "/assets/overwatch/maps/talantis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Temple of Anubis",
+      "slug": "temple-of-anubis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/d/de/Anubis_concept.jpg/revision/latest/scale-to-width-down/1600?cb=20180520043151",
+      "file": "/assets/overwatch/maps/temple-of-anubis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Thames District",
+      "slug": "thames-district",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/78/Thames_District.png/revision/latest/scale-to-width-down/1600?cb=20250822183925",
+      "file": "/assets/overwatch/maps/thames-district.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Throne of Anubis",
+      "slug": "throne-of-anubis",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/ab/Throne_of_Anubis.png/revision/latest/scale-to-width-down/1600?cb=20241111080124",
+      "file": "/assets/overwatch/maps/throne-of-anubis.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Toronto",
+      "slug": "toronto",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/91/Toronto.jpg/revision/latest/scale-to-width-down/1600?cb=20220926222923",
+      "file": "/assets/overwatch/maps/toronto.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Volskaya Industries",
+      "slug": "volskaya-industries",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/d/de/Volskaya_Industries.jpg/revision/latest/scale-to-width-down/1600?cb=20180520044033",
+      "file": "/assets/overwatch/maps/volskaya-industries.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Watchpoint: Gibraltar",
+      "slug": "watchpoint-gibraltar",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/8b/Gibraltar.jpg/revision/latest/scale-to-width-down/1600?cb=20180520050120",
+      "file": "/assets/overwatch/maps/watchpoint-gibraltar.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Workshop Chamber",
+      "slug": "workshop-chamber",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/15/Workshop_Chamber.png/revision/latest/scale-to-width-down/1600?cb=20200227042924",
+      "file": "/assets/overwatch/maps/workshop-chamber.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Workshop Expanse",
+      "slug": "workshop-expanse",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/4/46/Workshop_Expanse.png/revision/latest/scale-to-width-down/1600?cb=20200227042923",
+      "file": "/assets/overwatch/maps/workshop-expanse.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Workshop Green Screen",
+      "slug": "workshop-green-screen",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/16/Workshop_Green_Screen.png/revision/latest/scale-to-width-down/1600?cb=20230516171526",
+      "file": "/assets/overwatch/maps/workshop-green-screen.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Workshop Island",
+      "slug": "workshop-island",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/5c/Workshop_Island.png/revision/latest/scale-to-width-down/1600?cb=20200227042922",
+      "file": "/assets/overwatch/maps/workshop-island.webp",
+      "status": "ok"
+    },
+    {
+      "name": "Wuxing University - Water College",
+      "slug": "wuxing-university-water-college",
+      "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/70/Wuxing_University_Water_College.png/revision/latest/scale-to-width-down/1600?cb=20251230163106",
+      "file": "/assets/overwatch/maps/wuxing-university-water-college.webp",
+      "status": "ok"
+    }
+  ]
+}

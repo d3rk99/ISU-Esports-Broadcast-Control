@@ -199,6 +199,10 @@ function startOverlayServer() {
       serveFile(response, safeFilePath(assetRoot, relativePath));
       return;
     }
+    if (requestUrl.pathname.startsWith('/assets/')) {
+      serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
+      return;
+    }
     if (requestUrl.pathname.startsWith('/overlays/')) {
       serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
       return;

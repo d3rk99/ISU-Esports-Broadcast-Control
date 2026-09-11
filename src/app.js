@@ -140,7 +140,7 @@ function renderSidebar(config) {
         ${ICONS.settings}<span>Settings</span>
       </button>
       <div class="system-state"><span></span><div><b>LOCAL SYSTEM</b><small>Ready for production</small></div></div>
-      <div class="brand-footer">IDAHO STATE UNIVERSITY <b>•</b> POCATELLO</div>
+      <div class="brand-footer">IDAHO STATE UNIVERSITY <b>&bull;</b> POCATELLO</div>
     </aside>`;
 }
 
@@ -177,7 +177,8 @@ function renderView(config) {
 function renderControl(config) {
   const game = current();
   const activeMap = game.mapRows[game.activeMap] || game.mapRows[0];
-  const nextMapIndex = (game.activeMap + 1) % game.mapRows.length;
+  const length = seriesLength(game, config);
+  const nextMapIndex = (game.activeMap + 1) % length;
   const rlLive = game.rocketLeague?.live;
   const detailLabel = state.selectedGame === 'valorant' ? 'CURRENT ROUND SCORE' : state.selectedGame === 'rocketleague' ? 'CURRENT GAME GOALS' : state.selectedGame === 'smash' ? 'CURRENT STOCKS' : 'LIVE MAP SCORE';
   return `
@@ -191,15 +192,15 @@ function renderControl(config) {
           <div class="preview-meta"><span>${escapeHtml(game.match.event)}</span><strong>${escapeHtml(game.match.round)}</strong><span>${escapeHtml(game.match.format)}</span></div>
           <div class="preview-teams">
             ${renderPreviewTeam(game.teams[0], 'left')}
-            <div class="preview-center"><small>${escapeHtml(config.scoreLabel)}</small><b>${game.teams[0].score}<i>—</i>${game.teams[1].score}</b><span>${game.match.live ? 'LIVE' : 'PREVIEW'}</span></div>
+            <div class="preview-center"><small>${escapeHtml(config.scoreLabel)}</small><b>${game.teams[0].score}<i>&mdash;</i>${game.teams[1].score}</b><span>${game.match.live ? 'LIVE' : 'PREVIEW'}</span></div>
             ${renderPreviewTeam(game.teams[1], 'right')}
           </div>
           <div class="preview-map"><span>${state.selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${game.activeMap + 1}</span><strong>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive?.arena ? rlLive.arena.replace(/_P$/i, '').replaceAll('_', ' ') : activeMap.map)}</strong><i></i><em>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive ? formatGameClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode)}</em></div>
         </div>
-        <div class="preview-label"><span></span>CONTROL PREVIEW · OVERLAY LAYOUT TO FOLLOW</div>
+        <div class="preview-label"><span></span>CONTROL PREVIEW &middot; OVERLAY LAYOUT TO FOLLOW</div>
       </div>
       <div class="control-grid">
-        ${renderTeamControl(game.teams[0], 0, config)}
+        ${renderTeamControl(game.teams[0], 0, config, game)}
         <div class="middle-controls">
           <button class="swap-button" data-action="swap-teams" title="Swap team sides">
             <svg viewBox="0 0 24 24"><path d="m7 7-4 4 4 4M3 11h14M17 17l4-4-4-4M21 13H7"/></svg>SWAP SIDES
@@ -207,7 +208,7 @@ function renderControl(config) {
           <button class="reset-button" data-action="reset-scores">RESET SCORES</button>
           <button class="next-match-button" data-action="next-match"><span>NEXT MATCH</span><small>TO ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'GAME' : 'MAP'} ${nextMapIndex + 1}</small></button>
         </div>
-        ${renderTeamControl(game.teams[1], 1, config)}
+        ${renderTeamControl(game.teams[1], 1, config, game)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
       <div class="lower-grid">
@@ -218,14 +219,14 @@ function renderControl(config) {
             ${field('Round / stage', 'match.round', game.match.round)}
             ${field('Series format', 'match.format', game.match.format)}
             <label class="field"><span>Active map</span><select data-field="activeMap">
-              ${game.mapRows.map((row, index) => `<option value="${index}" ${index === game.activeMap ? 'selected' : ''}>${index + 1} — ${escapeHtml(row.map)}</option>`).join('')}
+              ${visibleMapRows(game, config).map((row, index) => `<option value="${index}" ${index === game.activeMap ? 'selected' : ''}>${index + 1} &mdash; ${escapeHtml(row.map || 'TBD')}</option>`).join('')}
             </select></label>
           </div>
         </article>
         <article class="panel quick-score">
           <div class="panel-title compact"><div><h2>${detailLabel}</h2><p>Optional in-game value</p></div></div>
           <div class="detail-score-row">
-            ${game.teams.map((team, index) => `<div><span>${escapeHtml(team.shortName)}</span><button data-action="detail-minus" data-index="${index}">−</button><b>${team.detailScore}</b><button data-action="detail-plus" data-index="${index}">+</button></div>`).join('')}
+            ${game.teams.map((team, index) => `<div><span>${escapeHtml(team.shortName)}</span><button data-action="detail-minus" data-index="${index}">&minus;</button><b>${team.detailScore}</b><button data-action="detail-plus" data-index="${index}">+</button></div>`).join('')}
           </div>
         </article>
       </div>
@@ -248,36 +249,36 @@ function renderRocketLeaguePanel(game) {
   const live = rl.live;
   const sourceFields = rl.source === 'remote' ? `
     <label class="field"><span>RECEIVER PORT</span><input type="number" min="1" max="65535" data-rl-prop="bridgePort" value="${rl.bridgePort}"></label>
-    <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-rl-prop="bridgeToken" value="${escapeHtml(rl.bridgeToken)}" placeholder="Generate a private key"><button data-action="generate-bridge-key">GENERATE</button><small>Graphics PC: ${escapeHtml(networkAddresses.join(' · ') || 'address unavailable')}</small></label>` : `
-    <label class="field"><span>TRANSPORT</span><select data-rl-prop="transport"><option value="auto" ${rl.transport === 'auto' ? 'selected' : ''}>Automatic (WebSocket → TCP)</option><option value="websocket" ${rl.transport === 'websocket' ? 'selected' : ''}>WebSocket · 49124</option><option value="tcp" ${rl.transport === 'tcp' ? 'selected' : ''}>TCP · 49123</option></select></label>
+    <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-rl-prop="bridgeToken" value="${escapeHtml(rl.bridgeToken)}" placeholder="Generate a private key"><button data-action="generate-bridge-key">GENERATE</button><small>Graphics PC: ${escapeHtml(networkAddresses.join(' / ') || 'address unavailable')}</small></label>` : `
+    <label class="field"><span>TRANSPORT</span><select data-rl-prop="transport"><option value="auto" ${rl.transport === 'auto' ? 'selected' : ''}>Automatic (WebSocket &rarr; TCP)</option><option value="websocket" ${rl.transport === 'websocket' ? 'selected' : ''}>WebSocket &middot; 49124</option><option value="tcp" ${rl.transport === 'tcp' ? 'selected' : ''}>TCP &middot; 49123</option></select></label>
     <label class="field"><span>ROCKET LEAGUE HOST</span><input data-rl-prop="host" value="${escapeHtml(rl.host)}"></label>
     <label class="field"><span>TCP PORT</span><input type="number" min="1" max="65535" data-rl-prop="tcpPort" value="${rl.tcpPort}"></label>
     <label class="field"><span>WEBSOCKET PORT</span><input type="number" min="1" max="65535" data-rl-prop="webPort" value="${rl.webPort}"></label>`;
   return `
     <article class="panel rl-live-panel">
       <header class="rl-panel-heading">
-        <div><span>ROCKET LEAGUE STATS API</span><h2>Live game connection</h2><p>Official game telemetry · no BakkesMod required</p></div>
+        <div><span>ROCKET LEAGUE STATS API</span><h2>Live game connection</h2><p>Official game telemetry &middot; no BakkesMod required</p></div>
         <div class="rl-status ${escapeHtml(live.status)}"><i></i><span>${escapeHtml(live.status.toUpperCase())}</span><small>${escapeHtml(live.message)}</small></div>
       </header>
       <div class="rl-connection-grid">
         <label class="rl-enable-toggle"><input type="checkbox" data-rl-prop="enabled" ${rl.enabled ? 'checked' : ''}><i></i><span><b>LIVE DATA</b><small>${rl.enabled ? 'Enabled' : 'Disabled'}</small></span></label>
         <label class="field"><span>DATA SOURCE</span><select data-rl-prop="source"><option value="local" ${rl.source === 'local' ? 'selected' : ''}>This PC / direct</option><option value="remote" ${rl.source === 'remote' ? 'selected' : ''}>Game PC bridge</option></select></label>
-        <label class="field"><span>BOOST UPDATE INTERVAL</span><input type="number" min="1" max="50" step="1" data-rl-prop="updateIntervalMs" value="${rl.updateIntervalMs}"><small>1–50 ms · game request ${rocketLeaguePacketRate(rl.updateIntervalMs)} updates/sec</small></label>
+        <label class="field"><span>BOOST UPDATE INTERVAL</span><input type="number" min="1" max="50" step="1" data-rl-prop="updateIntervalMs" value="${rl.updateIntervalMs}"><small>1&ndash;50 ms &middot; game request ${rocketLeaguePacketRate(rl.updateIntervalMs)} updates/sec</small></label>
         ${sourceFields}
       </div>
       <div class="rl-toolbar">
         <button class="secondary-button" data-action="copy-rl-config">COPY GAME CONFIG</button>
         <button class="secondary-button" data-action="${live.status === 'simulating' ? 'stop-rl-simulator' : 'start-rl-simulator'}">${live.status === 'simulating' ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
-        <span>${live.lastPacketAt ? `LAST PACKET ${escapeHtml(new Date(live.lastPacketAt).toLocaleTimeString())}` : 'NO MATCH DATA RECEIVED'} · ${live.packets || 0} PACKETS · ${Number(live.packetRate || 0).toFixed(1)} PKT/S${rl.source === 'remote' ? ` · ${live.bridgeClients || 0} BRIDGE` : ''}</span>
+        <span>${live.lastPacketAt ? `LAST PACKET ${escapeHtml(new Date(live.lastPacketAt).toLocaleTimeString())}` : 'NO MATCH DATA RECEIVED'} &middot; ${live.packets || 0} PACKETS &middot; ${Number(live.packetRate || 0).toFixed(1)} PKT/S${rl.source === 'remote' ? ` &middot; ${live.bridgeClients || 0} BRIDGE` : ''}</span>
       </div>
       <div class="rl-live-summary">
         <div><span>GAME CLOCK</span><strong>${formatGameClock(live.timeSeconds, live.overtime)}</strong></div>
         <div><span>ARENA</span><strong>${escapeHtml(live.arena || 'WAITING FOR MATCH')}</strong></div>
-        <div><span>MATCH ID</span><strong title="${escapeHtml(live.matchGuid)}">${escapeHtml(live.matchGuid ? live.matchGuid.slice(0, 14) : '—')}</strong></div>
-        <div><span>SPECTATING</span><strong>${escapeHtml(live.spectatedPlayer || '—')}</strong></div>
+        <div><span>MATCH ID</span><strong title="${escapeHtml(live.matchGuid)}">${escapeHtml(live.matchGuid ? live.matchGuid.slice(0, 14) : '-')}</strong></div>
+        <div><span>SPECTATING</span><strong>${escapeHtml(live.spectatedPlayer || '-')}</strong></div>
       </div>
       <div class="rl-settings-grid">
-        <section><h3>TEAM MAPPING</h3><label class="field"><span>BLUE TEAM IS</span><select data-rl-prop="blueTeam"><option value="0" ${Number(rl.blueTeam) === 0 ? 'selected' : ''}>Home · ${escapeHtml(game.teams[0].shortName)}</option><option value="1" ${Number(rl.blueTeam) === 1 ? 'selected' : ''}>Away · ${escapeHtml(game.teams[1].shortName)}</option></select></label><p>Orange is assigned to the opposite side.</p></section>
+        <section><h3>TEAM MAPPING</h3><label class="field"><span>BLUE TEAM IS</span><select data-rl-prop="blueTeam"><option value="0" ${Number(rl.blueTeam) === 0 ? 'selected' : ''}>Home &middot; ${escapeHtml(game.teams[0].shortName)}</option><option value="1" ${Number(rl.blueTeam) === 1 ? 'selected' : ''}>Away &middot; ${escapeHtml(game.teams[1].shortName)}</option></select></label><p>Orange is assigned to the opposite side.</p></section>
         <section><h3>AUTOMATION</h3><div class="rl-checks">
           ${rlCheckbox('syncGoals', 'Game goals', rl.syncGoals)}
           ${rlCheckbox('syncClock', 'Clock & overtime', rl.syncClock)}
@@ -298,7 +299,7 @@ function renderLivePlayer(player, rl, game) {
   const mappedIndex = Number(player.teamNum) === 0 ? Number(rl.blueTeam) : 1 - Number(rl.blueTeam);
   const team = game.teams[mappedIndex];
   const boost = player.boost === null || player.boost === undefined ? null : Math.max(0, Math.min(100, Number(player.boost)));
-  return `<div class="rl-player" style="--player-team:${escapeHtml(team.color)}"><header><span>${escapeHtml(team.shortName)}</span><strong>${escapeHtml(player.name)}</strong><small>${player.spectated ? 'ON CAMERA' : ''}</small></header><div class="boost-track"><i style="width:${boost ?? 0}%"></i></div><footer><b>${boost === null ? '—' : Math.round(boost)}</b><span>BOOST</span><em>${Number(player.goals) || 0} G · ${Number(player.assists) || 0} A · ${Number(player.saves) || 0} S</em></footer></div>`;
+  return `<div class="rl-player" style="--player-team:${escapeHtml(team.color)}"><header><span>${escapeHtml(team.shortName)}</span><strong>${escapeHtml(player.name)}</strong><small>${player.spectated ? 'ON CAMERA' : ''}</small></header><div class="boost-track"><i style="width:${boost ?? 0}%"></i></div><footer><b>${boost === null ? '&mdash;' : Math.round(boost)}</b><span>BOOST</span><em>${Number(player.goals) || 0} G &middot; ${Number(player.assists) || 0} A &middot; ${Number(player.saves) || 0} S</em></footer></div>`;
 }
 
 function renderPreviewTeam(team, side) {
@@ -306,7 +307,8 @@ function renderPreviewTeam(team, side) {
   return `<div class="preview-team ${side}"><div class="team-badge" style="--team-color:${escapeHtml(team.color)};--team-secondary:${escapeHtml(secondary)}">${escapeHtml(team.shortName.slice(0, 3))}</div><div><small>${side === 'left' ? 'HOME' : 'AWAY'}</small><strong>${escapeHtml(team.name)}</strong></div></div>`;
 }
 
-function renderTeamControl(team, index, config) {
+function renderTeamControl(team, index, config, game = current()) {
+  const target = seriesTarget(game, config);
   return `<article class="team-control team-${index}">
     <div class="team-control-head"><span>${index === 0 ? 'HOME TEAM' : 'AWAY TEAM'}</span><i style="background:linear-gradient(90deg,${escapeHtml(team.color)} 0 55%,${escapeHtml(team.secondaryColorEnabled ? team.secondaryColor : team.color)} 55%)"></i></div>
     <div class="team-fields">
@@ -316,7 +318,7 @@ function renderTeamControl(team, index, config) {
       <label class="color-field secondary-color-field ${team.secondaryColorEnabled ? 'enabled' : ''}"><span>SECONDARY</span><input type="color" data-team="${index}" data-prop="secondaryColor" value="${escapeHtml(team.secondaryColor)}" ${team.secondaryColorEnabled ? '' : 'disabled'}></label>
       <label class="mini-switch"><input type="checkbox" data-team="${index}" data-prop="secondaryColorEnabled" ${team.secondaryColorEnabled ? 'checked' : ''}><i></i><span>USE</span></label>
     </div>
-    <div class="score-control"><button data-action="score-minus" data-index="${index}" aria-label="Decrease ${escapeHtml(team.name)} score">−</button><div><span>${escapeHtml(config.scoreLabel)}</span><strong>${team.score}</strong><small>of ${config.maxScore}</small></div><button class="plus" data-action="score-plus" data-index="${index}" aria-label="Increase ${escapeHtml(team.name)} score">+</button></div>
+    <div class="score-control"><button data-action="score-minus" data-index="${index}" aria-label="Decrease ${escapeHtml(team.name)} score">&minus;</button><div><span>${escapeHtml(config.scoreLabel)}</span><strong>${team.score}</strong><small>of ${target}</small></div><button class="plus" data-action="score-plus" data-index="${index}" aria-label="Increase ${escapeHtml(team.name)} score">+</button></div>
   </article>`;
 }
 
@@ -324,20 +326,53 @@ function field(label, path, value) {
   return `<label class="field"><span>${label}</span><input data-field="${path}" value="${escapeHtml(value)}" maxlength="60"></label>`;
 }
 
+function seriesLength(game, config = GAME_CONFIGS[state.selectedGame]) {
+  const allowed = config.formatOptions || [];
+  const fallback = config.defaultSeriesLength || game.mapRows.length;
+  const requested = Number(game.seriesLength) || fallback;
+  return allowed.length ? allowed.includes(requested) ? requested : fallback : requested;
+}
+
+function seriesTarget(game, config = GAME_CONFIGS[state.selectedGame]) {
+  return Math.ceil(seriesLength(game, config) / 2);
+}
+
+function visibleMapRows(game, config = GAME_CONFIGS[state.selectedGame]) {
+  return game.mapRows.slice(0, Math.min(game.mapRows.length, seriesLength(game, config)));
+}
+
+function syncFormat(game, length) {
+  game.seriesLength = Number(length);
+  game.match.format = `Best of ${game.seriesLength}`;
+  game.activeMap = Math.min(game.activeMap, visibleMapRows(game).length - 1);
+  game.mapRows.forEach((row, index) => {
+    if (index >= game.seriesLength) row.status = 'upcoming';
+    else if (row.winner !== null) row.status = 'complete';
+    else row.status = index === game.activeMap ? 'ready' : 'upcoming';
+  });
+  game.teams.forEach((team, teamIndex) => {
+    team.score = visibleMapRows(game).filter((row) => row.winner === teamIndex).length;
+  });
+}
+
 function renderMaps(config) {
   const game = current();
+  const rows = visibleMapRows(game, config);
+  const target = seriesTarget(game, config);
+  const formatControls = config.formatOptions ? `<label class="format-select"><span>FORMAT</span><select data-format-length>${config.formatOptions.map((length) => `<option value="${length}" ${seriesLength(game, config) === length ? 'selected' : ''}>Best of ${length}</option>`).join('')}</select><small>First to ${target}</small></label>` : `<div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>`;
   return `<section class="view-stack">
-    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Series map order</h2><p>${escapeHtml(config.format)} · select, score, and advance maps</p></div></div>
+    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Series map order</h2><p>${escapeHtml(game.match.format)} &middot; select, score, and advance maps</p></div></div>
       <button class="secondary-button" data-action="clear-maps">Clear results</button>
     </div>
     <div class="map-summary">
-      <div><span>SERIES</span><strong>${escapeHtml(game.teams[0].shortName)} ${game.teams[0].score} <i>—</i> ${game.teams[1].score} ${escapeHtml(game.teams[1].shortName)}</strong></div>
+      <div><span>SERIES</span><strong>${escapeHtml(game.teams[0].shortName)} ${game.teams[0].score} <i>&mdash;</i> ${game.teams[1].score} ${escapeHtml(game.teams[1].shortName)}</strong></div>
       <div><span>ACTIVE</span><strong>MAP ${game.activeMap + 1}</strong></div>
-      <div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>
+      <div><span>TARGET</span><strong>FIRST TO ${target}</strong></div>
+      ${formatControls}
     </div>
     ${state.selectedGame === 'valorant' ? renderValorantVetoEditor(config, game) : ''}
     <div class="map-list">
-      ${game.mapRows.map((row, index) => renderMapRow(row, index, config, game)).join('')}
+      ${rows.map((row, index) => renderMapRow(row, index, config, game)).join('')}
     </div>
     <div class="map-note"><span>LIVE OUTPUT</span> Changes on this page are sent to the Map Pool browser source immediately.</div>
   </section>`;
@@ -350,7 +385,7 @@ function renderValorantVetoEditor(config, game) {
       ...game.veto.picks.filter((_, index) => slotType !== 'pick' || index !== slotIndex).map((pick) => pick.map)
     ].filter(Boolean));
     const availableMaps = config.maps.filter((map) => map === currentValue || !usedMaps.has(map));
-    return `<option value="" ${currentValue ? '' : 'selected'}>Select map…</option>${availableMaps.map((option) => `<option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}`;
+    return `<option value="" ${currentValue ? '' : 'selected'}>Select map&hellip;</option>${availableMaps.map((option) => `<option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}`;
   };
   return `<article class="panel veto-editor">
     <div class="veto-editor-heading"><div><span>VALORANT VETO</span><h3>Map picks & bans</h3></div><div class="veto-heading-actions"><button data-action="reset-veto">RESET MAP SELECTIONS</button><button data-action="preview-overlay" data-overlay="map-pool">OPEN PREVIEW</button></div></div>
@@ -365,11 +400,13 @@ function renderValorantVetoEditor(config, game) {
 
 function renderMapRow(row, index, config, game) {
   const isActive = index === game.activeMap;
+  const modeOptions = `<option value="" ${row.mode ? '' : 'selected'}>TBD</option>${config.modes.map((mode) => `<option ${mode === row.mode ? 'selected' : ''}>${escapeHtml(mode)}</option>`).join('')}`;
+  const mapOptions = `<option value="" ${row.map ? '' : 'selected'}>TBD</option>${config.maps.map((map) => `<option ${map === row.map ? 'selected' : ''}>${escapeHtml(map)}</option>`).join('')}`;
   return `<article class="map-row ${isActive ? 'active' : ''} ${row.winner !== null ? 'complete' : ''}">
     <button class="map-index" data-action="activate-map" data-index="${index}"><span>${isActive ? 'LIVE' : row.winner !== null ? 'FINAL' : 'MAP'}</span><strong>${String(index + 1).padStart(2, '0')}</strong></button>
-    <label><span>MODE</span><select data-map-index="${index}" data-map-prop="mode">${config.modes.map((mode) => `<option ${mode === row.mode ? 'selected' : ''}>${escapeHtml(mode)}</option>`).join('')}</select></label>
-    <label class="map-name"><span>MAP / STAGE</span><select data-map-index="${index}" data-map-prop="map">${config.maps.map((map) => `<option ${map === row.map ? 'selected' : ''}>${escapeHtml(map)}</option>`).join('')}</select></label>
-    <div class="map-score"><span>${escapeHtml(game.teams[0].shortName)}</span><input data-map-index="${index}" data-map-score="0" value="${escapeHtml(row.score[0])}" inputmode="numeric" maxlength="3"><i>—</i><input data-map-index="${index}" data-map-score="1" value="${escapeHtml(row.score[1])}" inputmode="numeric" maxlength="3"><span>${escapeHtml(game.teams[1].shortName)}</span></div>
+    <label><span>MODE</span><select data-map-index="${index}" data-map-prop="mode">${modeOptions}</select></label>
+    <label class="map-name"><span>MAP / STAGE</span><select data-map-index="${index}" data-map-prop="map">${mapOptions}</select></label>
+    <div class="map-score"><span>${escapeHtml(game.teams[0].shortName)}</span><input data-map-index="${index}" data-map-score="0" value="${escapeHtml(row.score[0])}" inputmode="numeric" maxlength="3"><i>&mdash;</i><input data-map-index="${index}" data-map-score="1" value="${escapeHtml(row.score[1])}" inputmode="numeric" maxlength="3"><span>${escapeHtml(game.teams[1].shortName)}</span></div>
     <div class="winner-buttons"><button class="${row.winner === 0 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="0">${escapeHtml(game.teams[0].shortName)}</button><button class="${row.winner === 1 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="1">${escapeHtml(game.teams[1].shortName)}</button></div>
   </article>`;
 }
@@ -389,7 +426,7 @@ function renderRosters(config) {
         <button class="${state.activeRosterSide === 'home' ? 'active' : ''}" data-roster-side="home"><span>HOME</span><strong>${escapeHtml(game.teams[0].name)}</strong></button>
         ${game.showAwayRoster ? `<button class="${state.activeRosterSide === 'away' ? 'active' : ''}" data-roster-side="away"><span>AWAY</span><strong>${escapeHtml(game.teams[1].name)}</strong></button>` : ''}
       </div>
-      <label class="away-roster-toggle"><div><strong>Include away-team roster</strong><small>${game.showAwayRoster ? 'Overlay cycles Home → Away' : 'Overlay shows Home only'}</small></div><input type="checkbox" data-away-roster-toggle ${game.showAwayRoster ? 'checked' : ''}><i></i></label>
+      <label class="away-roster-toggle"><div><strong>Include away-team roster</strong><small>${game.showAwayRoster ? 'Overlay cycles Home &rarr; Away' : 'Overlay shows Home only'}</small></div><input type="checkbox" data-away-roster-toggle ${game.showAwayRoster ? 'checked' : ''}><i></i></label>
     </div>
     <div class="roster-tabs">
       <button class="${state.activeRoster === 'varsity' ? 'active' : ''}" data-roster="varsity"><span>V</span><div><strong>Varsity</strong><small>${collection.varsity.filter((p) => p.handle || p.name).length} players entered</small></div></button>
@@ -408,9 +445,17 @@ function renderRosters(config) {
 
 function renderPlayerEditor(player, index, config, game) {
   const selectedArt = game.characterArt[player.character] || {};
+  const isOverwatch = state.selectedGame === 'overwatch';
+  const displayAssetUrl = (value) => typeof value === 'string' && value.startsWith('/assets/')
+    ? `${overlayBaseUrl}${value}`
+    : value;
   const imageTile = (type, label, value, filename, character = '') => `<div class="roster-asset-tile">
-    <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(value)}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
+    <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(displayAssetUrl(value))}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
     <div><b>${label}</b><small>${escapeHtml(filename || (character ? `No ${character} artwork yet` : 'No image selected'))}</small><button data-action="pick-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}" ${type === 'characterArtwork' && !character ? 'disabled' : ''}>${value ? 'REPLACE' : 'CHOOSE PNG'}</button>${value ? `<button class="clear-asset" data-action="clear-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}">CLEAR</button>` : ''}</div>
+  </div>`;
+  const automaticArtTile = (label, value, filename, character = '') => `<div class="roster-asset-tile">
+    <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(displayAssetUrl(value))}" alt="">` : `<span>${escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
+    <div><b>${label}</b><small>${escapeHtml(character ? (filename || `No ${character} artwork assigned`) : `Select a ${config.characterLabel.toLowerCase()} to preview art`)}</small><em>Assigned automatically</em></div>
   </div>`;
   return `<div class="player-entry">
     <div class="player-row">
@@ -419,21 +464,34 @@ function renderPlayerEditor(player, index, config, game) {
       <label><span>PLAYER NAME</span><input data-player="${index}" data-player-prop="name" value="${escapeHtml(player.name)}" placeholder="First Last" maxlength="40"></label>
       <label><span>ROLE</span><select data-player="${index}" data-player-prop="role">${config.roles.map((role) => `<option ${player.role === role ? 'selected' : ''}>${escapeHtml(role)}</option>`).join('')}</select></label>
       <span class="starter-state ${index < config.rosterSize ? 'on' : ''}">${index < config.rosterSize ? 'STARTER' : 'RESERVE'}</span>
-      <button class="remove-player" data-action="remove-player" data-index="${index}" title="Remove player">×</button>
+      <button class="remove-player" data-action="remove-player" data-index="${index}" title="Remove player">&times;</button>
     </div>
     <div class="player-media-row">
       ${imageTile('playerImage', 'Player portrait', player.playerImage, player.playerImageName)}
-      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>Artwork is shared across every ${escapeHtml(config.name)} roster.</small></label>
-      ${imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
+      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isOverwatch ? 'Hero art is assigned automatically from the selected hero.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
+      ${isOverwatch
+        ? automaticArtTile('Hero artwork', selectedArt.url, selectedArt.name, player.character)
+        : imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
     </div>
   </div>`;
 }
 
 function renderOutputs() {
+  const fillOutputs = [
+    { name: 'scoreboard', tag: 'SCORE', title: 'Main Scoreboard Fill', description: 'Full-color scoreboard graphic for the switcher fill input.', query: { output: 'fill' } },
+    { name: 'map-pool', tag: 'MAPS', title: 'Map Pool Fill', description: 'Full-color map pool graphic for the switcher fill input.', query: { output: 'fill' } },
+    { name: 'roster', tag: 'TEAM', title: 'Roster Fill', description: current().showAwayRoster ? 'Full-color Home and Away roster cycle for the switcher fill input.' : 'Full-color roster screen for the switcher fill input.', query: { output: 'fill', program: state.activeRoster } }
+  ];
   const outputs = [
-    { name: 'scoreboard', tag: 'SCORE', title: 'Main Scoreboard', description: 'Automatically changes design and labels with the selected game.' },
-    { name: 'map-pool', tag: 'MAPS', title: 'Map Pool & Bans', description: 'Valorant veto cards plus game-aware series map layouts.' },
-    { name: 'roster', tag: 'TEAM', title: 'Roster Screen', description: current().showAwayRoster ? 'Home and Away lineups cycle through player and character artwork.' : 'Home player portraits transition to character artwork after seven seconds.', query: { program: state.activeRoster } }
+    ...fillOutputs,
+    ...fillOutputs.map((output) => ({
+      ...output,
+      title: output.title.replace(' Fill', ' Key'),
+      tag: `${output.tag} KEY`,
+      description: output.description.replace('Full-color', 'Grayscale').replace('fill input', 'key input'),
+      query: { ...(output.query || {}), output: 'key' },
+      keyOutput: true
+    }))
   ];
   const urlFor = (output) => {
     const url = new URL(`${overlayBaseUrl}/overlays/${output.name}.html`);
@@ -441,9 +499,9 @@ function renderOutputs() {
     return url.toString();
   };
   return `<section class="view-stack">
-    <div class="coming-banner live-output-banner"><div class="coming-icon">&lt;/&gt;</div><div><span>LOCAL OVERLAY SERVER</span><h2>OBS graphics are ready</h2><p>Keep this application open during the broadcast. Add each URL below as an OBS Browser Source at 1920 × 1080; every saved control change is pushed live.</p></div><strong><i></i>ONLINE · PORT 3174</strong></div>
-    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Browser-source outputs</h2><p>Transparent HTML graphics · current game: ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)}</p></div></div></div>
-    <div class="output-grid">${outputs.map((output) => `<article class="output-card"><div class="output-thumb"><span>${output.tag}</span><div class="ghost-score"><i></i><b>ISU</b><strong>${output.name === 'roster' ? 'PLAYER → HERO' : '0 — 0'}</strong><b>OPP</b><i></i></div></div><div class="output-info"><div><h3>${output.title}</h3><p>${output.description}</p></div><span>1920 × 1080</span></div><div class="output-url">${escapeHtml(urlFor(output))}</div><footer><span class="planned-dot online"></span>LIVE OUTPUT <button data-action="preview-overlay" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>PREVIEW</button><button data-action="copy-overlay-url" data-url="${escapeHtml(urlFor(output))}">COPY URL</button></footer></article>`).join('')}</div>
+    <div class="coming-banner live-output-banner"><div class="coming-icon">&lt;/&gt;</div><div><span>LOCAL OVERLAY SERVER</span><h2>OBS graphics are ready</h2><p>Use each fill output for the normal OBS source and its matching grayscale key output for the Blackmagic key input.</p></div><strong><i></i>ONLINE &middot; PORT 3174</strong></div>
+    <div class="section-heading"><div><span class="section-number">01</span><div><h2>Browser-source outputs</h2><p>Fill and key HTML graphics &middot; current game: ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)}</p></div></div></div>
+    <div class="output-grid">${outputs.map((output) => `<article class="output-card ${output.keyOutput ? 'key-output-card' : ''}"><div class="output-thumb"><span>${output.tag}</span><div class="ghost-score"><i></i><b>ISU</b><strong>${output.name === 'roster' ? 'PLAYER &rarr; HERO' : '0 &mdash; 0'}</strong><b>OPP</b><i></i></div></div><div class="output-info"><div><h3>${output.title}</h3><p>${output.description}</p></div><span>1920 &times; 1080</span></div><div class="output-url">${escapeHtml(urlFor(output))}</div><footer><span class="planned-dot online"></span>${output.keyOutput ? 'KEY OUTPUT' : 'FILL OUTPUT'} <button data-action="preview-overlay" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>PREVIEW</button><button data-action="copy-overlay-url" data-url="${escapeHtml(urlFor(output))}">COPY URL</button></footer></article>`).join('')}</div>
   </section>`;
 }
 
@@ -454,9 +512,9 @@ function renderSettings() {
   return `<section class="view-stack settings-view">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Workspace data</h2><p>Local-first settings for a dependable broadcast desk</p></div></div></div>
     <div class="settings-grid">
-      <article class="panel setting-card"><div class="setting-icon">↻</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game">RESET GAME</button></article>
-      <article class="panel setting-card"><div class="setting-icon">✓</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
-      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control · Rocket League live telemetry · Companion control API</p></div><span class="version-badge">v0.6.0</span></article>
+      <article class="panel setting-card"><div class="setting-icon">&#8635;</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game">RESET GAME</button></article>
+      <article class="panel setting-card"><div class="setting-icon">&#10003;</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
+      <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control &middot; Rocket League live telemetry &middot; Companion control API</p></div><span class="version-badge">v0.6.0</span></article>
     </div>
     <div class="section-heading companion-heading"><div><span class="section-number">02</span><div><h2>Bitfocus Companion API</h2><p>Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules</p></div></div></div>
     <article class="panel companion-api-panel">
@@ -468,7 +526,7 @@ function renderSettings() {
       </div>
       <div class="companion-url-row"><div><span>COMPANION BASE URL</span><code>${escapeHtml(companionBaseUrl)}</code></div><button data-action="copy-companion-url" data-url="${escapeHtml(companionBaseUrl)}">COPY URL</button><button data-action="copy-companion-key" data-url="${escapeHtml(companionSettings.token)}">COPY KEY</button></div>
       ${companionStatus.error ? `<p class="companion-error">${escapeHtml(companionStatus.error)}</p>` : ''}
-      <footer><strong>Generic HTTP setup</strong><span>Base URL above · Add header <code>X-ISU-API-Key: your-key</code> to each request · POST <code>/action</code> with a JSON body</span><span>Variables: GET <code>/variables</code> · Actions list: GET <code>/capabilities</code> · Live variables: GET <code>/events</code></span></footer>
+      <footer><strong>Generic HTTP setup</strong><span>Base URL above &middot; Add header <code>X-ISU-API-Key: your-key</code> to each request &middot; POST <code>/action</code> with a JSON body</span><span>Variables: GET <code>/variables</code> &middot; Actions list: GET <code>/capabilities</code> &middot; Live variables: GET <code>/events</code></span></footer>
     </article>
     <div class="brand-statement"><div class="brand-mark large"><span>IS</span><i></i></div><div><span>BUILT FOR</span><strong>IDAHO STATE ESPORTS</strong><p>Roarange. Bengal Black. Broadcast ready.</p></div></div>
   </section>`;
@@ -603,13 +661,13 @@ function handleRocketLeagueEvent(envelope) {
       activeRow.status = 'complete';
       activeRow.score = [String(game.teams[0].detailScore), String(game.teams[1].detailScore)];
     }
-    if (rl.autoSeriesScore) game.teams[winner].score = Math.min(GAME_CONFIGS.rocketleague.maxScore, game.teams[winner].score + 1);
+    if (rl.autoSeriesScore) game.teams[winner].score = Math.min(seriesTarget(game, GAME_CONFIGS.rocketleague), game.teams[winner].score + 1);
   }, `${game.teams[winner].shortName} game win received`);
   persistState();
   render();
-  if (rl.autoAdvance && Math.max(...game.teams.map((team) => team.score)) < GAME_CONFIGS.rocketleague.maxScore) {
+  if (rl.autoAdvance && Math.max(...game.teams.map((team) => team.score)) < seriesTarget(game, GAME_CONFIGS.rocketleague)) {
     window.setTimeout(() => {
-      const nextIndex = Math.min(game.activeMap + 1, game.mapRows.length - 1);
+      const nextIndex = Math.min(game.activeMap + 1, visibleMapRows(game, GAME_CONFIGS.rocketleague).length - 1);
       commit(() => {
         game.activeMap = nextIndex;
         game.teams.forEach((team) => { team.detailScore = 0; });
@@ -760,27 +818,47 @@ root.addEventListener('click', async (event) => {
   }
   const actions = {
     'toggle-live': () => commit(() => { game.match.live = !game.match.live; }, game.match.live ? 'Overlay taken off air' : 'Overlay is live'),
-    'score-plus': () => commit(() => { game.teams[index].score = Math.min(config.maxScore, game.teams[index].score + 1); }),
+    'score-plus': () => commit(() => { game.teams[index].score = Math.min(seriesTarget(game, config), game.teams[index].score + 1); }),
     'score-minus': () => commit(() => { game.teams[index].score = Math.max(0, game.teams[index].score - 1); }),
     'detail-plus': () => commit(() => { game.teams[index].detailScore += 1; }),
     'detail-minus': () => commit(() => { game.teams[index].detailScore = Math.max(0, game.teams[index].detailScore - 1); }),
     'swap-teams': () => commit(() => swapGameTeams(game), 'Team sides swapped'),
-    'reset-scores': () => commit(() => { game.teams.forEach((team) => { team.score = 0; team.detailScore = 0; }); }, 'Scores reset'),
+    'reset-scores': () => commit(() => { game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; }); }, 'Scores reset'),
     'next-match': () => {
-      const nextIndex = (game.activeMap + 1) % game.mapRows.length;
-      commit(() => advanceGameMatch(game), `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
+      const nextIndex = (game.activeMap + 1) % visibleMapRows(game, config).length;
+      commit(() => advanceGameMatch(game, state.selectedGame), `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
     },
     'activate-map': () => commit(() => { game.activeMap = index; game.mapRows.forEach((row, i) => { if (row.winner === null) row.status = i === index ? 'ready' : 'upcoming'; }); }, `Map ${index + 1} active`),
     'map-winner': () => commit(() => {
       const winner = Number(button.dataset.winner);
       game.mapRows[index].winner = game.mapRows[index].winner === winner ? null : winner;
       game.mapRows[index].status = game.mapRows[index].winner === null ? 'ready' : 'complete';
-      game.teams.forEach((team, teamIndex) => { team.score = game.mapRows.filter((row) => row.winner === teamIndex).length; });
+      game.teams.forEach((team, teamIndex) => { team.score = visibleMapRows(game, config).filter((row) => row.winner === teamIndex).length; });
     }, 'Map result saved'),
-    'clear-maps': () => commit(() => { game.mapRows.forEach((row, i) => { row.winner = null; row.score = ['', '']; row.status = i === 0 ? 'ready' : 'upcoming'; }); game.teams.forEach((team) => { team.score = 0; }); game.activeMap = 0; }, 'Map results cleared'),
+    'clear-maps': () => commit(() => {
+      game.mapRows.forEach((row, i) => {
+        row.winner = null;
+        row.score = ['', ''];
+        if (state.selectedGame === 'overwatch') {
+          row.map = '';
+          row.mode = '';
+        }
+        row.status = i === 0 ? 'ready' : 'upcoming';
+      });
+      game.teams.forEach((team) => { team.score = 0; });
+      game.activeMap = 0;
+    }, 'Map results cleared'),
     'reset-veto': () => commit(() => {
       game.veto.bans = game.veto.bans.map(() => '');
       game.veto.picks = game.veto.picks.map((pick) => ({ ...pick, map: '', score: ['', ''], winner: null }));
+      game.mapRows.forEach((row, i) => {
+        row.map = '';
+        row.score = ['', ''];
+        row.winner = null;
+        row.status = i === 0 ? 'ready' : 'upcoming';
+      });
+      game.activeMap = 0;
+      game.teams.forEach((team) => { team.score = 0; });
     }, 'Veto map selections reset'),
     'add-player': () => commit(() => { const roster = activeRosterCollection(game)[state.activeRoster]; roster.push(createPlayer(config, roster.length)); }, 'Roster slot added'),
     'remove-player': () => commit(() => { activeRosterCollection(game)[state.activeRoster].splice(index, 1); }, 'Player removed'),
@@ -833,6 +911,11 @@ root.addEventListener('change', (event) => {
     render();
     return;
   }
+  if (target.dataset.formatLength !== undefined) {
+    commit(() => syncFormat(current(), Number(target.value)), `Format set to Best of ${target.value}`);
+    render();
+    return;
+  }
   if (target.dataset.field) {
     commit(() => updatePath(target.dataset.field, target.dataset.field === 'activeMap' ? Number(target.value) : target.value));
   }
@@ -846,10 +929,14 @@ root.addEventListener('change', (event) => {
     }, target.checked ? 'Away roster enabled' : 'Home-only roster enabled');
   }
   if (target.dataset.mapIndex !== undefined) {
-    const row = current().mapRows[Number(target.dataset.mapIndex)];
+    const rowIndex = Number(target.dataset.mapIndex);
+    const row = current().mapRows[rowIndex];
     commit(() => {
       if (target.dataset.mapScore !== undefined) row.score[Number(target.dataset.mapScore)] = target.value;
-      else row[target.dataset.mapProp] = target.value;
+      else {
+        row[target.dataset.mapProp] = target.value;
+        if (state.selectedGame === 'valorant' && target.dataset.mapProp === 'map' && current().veto?.picks?.[rowIndex]) current().veto.picks[rowIndex].map = target.value;
+      }
     });
   }
   if (target.dataset.vetoBan !== undefined) {
@@ -857,7 +944,11 @@ root.addEventListener('change', (event) => {
   }
   if (target.dataset.vetoPick !== undefined) {
     commit(() => {
-      current().veto.picks[Number(target.dataset.vetoPick)][target.dataset.vetoProp] = target.dataset.vetoProp === 'attackers' ? Number(target.value) : target.value;
+      const pickIndex = Number(target.dataset.vetoPick);
+      const prop = target.dataset.vetoProp;
+      const value = prop === 'attackers' ? Number(target.value) : target.value;
+      current().veto.picks[pickIndex][prop] = value;
+      if (state.selectedGame === 'valorant' && prop === 'map' && current().mapRows[pickIndex]) current().mapRows[pickIndex].map = value;
     });
   }
   if (target.dataset.player !== undefined) {
@@ -891,3 +982,4 @@ function initialize() {
 }
 
 initialize();
+

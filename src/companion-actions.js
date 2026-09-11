@@ -28,10 +28,44 @@ export function swapGameTeams(game) {
   game.veto?.picks?.forEach((pick) => { pick.attackers = Number(pick.attackers) === 0 ? 1 : 0; });
 }
 
-export function advanceGameMatch(game) {
-  const nextIndex = (game.activeMap + 1) % game.mapRows.length;
+function resetDetailScores(game, gameKey) {
+  const resetValue = gameKey === 'smash' ? 12 : 0;
+  game.teams.forEach((team) => { team.detailScore = resetValue; });
+}
+
+function resetAllScores(game, gameKey) {
+  resetDetailScores(game, gameKey);
+  game.teams.forEach((team) => { team.score = 0; });
+}
+
+function seriesLength(game) {
+  return Math.max(1, Number(game.seriesLength) || game.mapRows.length);
+}
+
+function seriesTarget(game) {
+  return Math.ceil(seriesLength(game) / 2);
+}
+
+function visibleMapRows(game) {
+  return game.mapRows.slice(0, Math.min(game.mapRows.length, seriesLength(game)));
+}
+
+function saveActiveMapResult(game) {
+  const row = game.mapRows[game.activeMap];
+  if (!row) return;
+  const scores = game.teams.map((team) => Number(team.detailScore) || 0);
+  row.score = scores.map((score) => String(score));
+  row.winner = scores[0] === scores[1] ? null : Number(scores[1] > scores[0]);
+  row.status = row.winner === null ? 'ready' : 'complete';
+  game.teams.forEach((team, index) => { team.score = visibleMapRows(game).filter((mapRow) => mapRow.winner === index).length; });
+}
+
+export function advanceGameMatch(game, gameKey) {
+  const length = visibleMapRows(game).length;
+  const nextIndex = (game.activeMap + 1) % length;
+  saveActiveMapResult(game);
   game.activeMap = nextIndex;
-  game.teams.forEach((team) => { team.detailScore = 0; });
+  resetDetailScores(game, gameKey);
   game.mapRows.forEach((row, rowIndex) => {
     row.status = row.winner !== null ? 'complete' : (rowIndex === nextIndex ? 'ready' : 'upcoming');
   });
@@ -56,7 +90,7 @@ export function applyCompanionAction(state, request = {}) {
     'score.increment': () => {
       const index = teamIndex(request.team);
       const amount = wholeNumber(request.amount, 'amount', { min: 1, fallback: 1 });
-      game.teams[index].score = Math.min(config.maxScore, (Number(game.teams[index].score) || 0) + amount);
+      game.teams[index].score = Math.min(seriesTarget(game), (Number(game.teams[index].score) || 0) + amount);
     },
     'score.decrement': () => {
       const index = teamIndex(request.team);
@@ -65,7 +99,7 @@ export function applyCompanionAction(state, request = {}) {
     },
     'score.set': () => {
       const index = teamIndex(request.team);
-      game.teams[index].score = wholeNumber(request.value, 'value', { max: config.maxScore });
+      game.teams[index].score = wholeNumber(request.value, 'value', { max: seriesTarget(game) });
     },
     'detail_score.increment': () => {
       const index = teamIndex(request.team);
@@ -79,8 +113,8 @@ export function applyCompanionAction(state, request = {}) {
       const index = teamIndex(request.team);
       game.teams[index].detailScore = wholeNumber(request.value, 'value');
     },
-    'match.next': () => advanceGameMatch(game),
-    'scores.reset': () => game.teams.forEach((team) => { team.score = 0; team.detailScore = 0; }),
+    'match.next': () => advanceGameMatch(game, gameKey),
+    'scores.reset': () => resetAllScores(game, gameKey),
     'match.live.toggle': () => { game.match.live = !game.match.live; },
     'match.live.set': () => {
       if (typeof request.value !== 'boolean') throw actionError('value must be true or false');
@@ -88,19 +122,27 @@ export function applyCompanionAction(state, request = {}) {
     },
     'teams.swap': () => swapGameTeams(game),
     'map.activate': () => {
-      const index = wholeNumber(request.number, 'number', { min: 1, max: game.mapRows.length }) - 1;
+      const index = wholeNumber(request.number, 'number', { min: 1, max: visibleMapRows(game).length }) - 1;
       game.activeMap = index;
       game.mapRows.forEach((row, rowIndex) => { if (row.winner === null) row.status = rowIndex === index ? 'ready' : 'upcoming'; });
     },
     'map.winner.set': () => {
-      const index = wholeNumber(request.number, 'number', { min: 1, max: game.mapRows.length }) - 1;
+      const index = wholeNumber(request.number, 'number', { min: 1, max: visibleMapRows(game).length }) - 1;
       const winner = request.team === null || request.team === '' || request.team === 'clear' ? null : teamIndex(request.team);
       game.mapRows[index].winner = winner;
       game.mapRows[index].status = winner === null ? (index === game.activeMap ? 'ready' : 'upcoming') : 'complete';
-      game.teams.forEach((team, currentTeamIndex) => { team.score = game.mapRows.filter((row) => row.winner === currentTeamIndex).length; });
+      game.teams.forEach((team, currentTeamIndex) => { team.score = visibleMapRows(game).filter((row) => row.winner === currentTeamIndex).length; });
     },
     'maps.reset': () => {
-      game.mapRows.forEach((row, index) => { row.winner = null; row.score = ['', '']; row.status = index === 0 ? 'ready' : 'upcoming'; });
+      game.mapRows.forEach((row, index) => {
+        row.winner = null;
+        row.score = ['', ''];
+        if (gameKey === 'overwatch') {
+          row.map = '';
+          row.mode = '';
+        }
+        row.status = index === 0 ? 'ready' : 'upcoming';
+      });
       game.teams.forEach((team) => { team.score = 0; });
       game.activeMap = 0;
     },
@@ -108,6 +150,14 @@ export function applyCompanionAction(state, request = {}) {
       if (gameKey !== 'valorant') throw actionError('veto.reset is only available for VALORANT');
       game.veto.bans = game.veto.bans.map(() => '');
       game.veto.picks = game.veto.picks.map((pick) => ({ ...pick, map: '', score: ['', ''], winner: null }));
+      game.mapRows.forEach((row, index) => {
+        row.map = '';
+        row.score = ['', ''];
+        row.winner = null;
+        row.status = index === 0 ? 'ready' : 'upcoming';
+      });
+      game.teams.forEach((team) => { team.score = 0; });
+      game.activeMap = 0;
     }
   };
   if (!mutators[action]) throw actionError(`Unknown action: ${action}`, 404);

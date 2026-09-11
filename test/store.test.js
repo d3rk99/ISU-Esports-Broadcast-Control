@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGameState, createInitialState, GAME_ORDER } from '../src/game-config.js';
+import { createGameState, createInitialState, GAME_CONFIGS, GAME_ORDER } from '../src/game-config.js';
 import { loadState, saveState, STORAGE_KEY } from '../src/store.js';
 
 function memoryStorage(initial = {}) {
@@ -21,6 +21,10 @@ test('game state creates the expected default roster size', () => {
   assert.equal(createGameState('rocketleague').rosters.varsity.length, 3);
   assert.equal(createGameState('rocketleague').awayRosters.varsity.length, 3);
   assert.equal(createGameState('overwatch').rosters.varsity.length, 5);
+  assert.equal(createGameState('overwatch').mapRows[0].map, '');
+  assert.equal(createGameState('overwatch').mapRows[0].mode, '');
+  assert.equal(createGameState('valorant').mapRows.length, 3);
+  assert.equal(createGameState('smash').mapRows.length, 3);
   assert.equal(createGameState('valorant').veto.picks.length, 3);
   assert.equal(createGameState('valorant').rosters.varsity[0].playerImage, '');
   assert.equal(createGameState('valorant').showAwayRoster, false);
@@ -59,8 +63,34 @@ test('version 1 data migrates dual rosters, media, colors, and veto fields', () 
 
 test('character choices and shared artwork library are game specific', () => {
   const state = createInitialState();
-  assert.ok(state.games.overwatch.characterArt);
+  const overwatch = createGameState('overwatch');
+  for (const hero of GAME_CONFIGS.overwatch.characters) {
+    assert.ok(overwatch.characterArt[hero], `${hero} is missing hero art`);
+    assert.ok(overwatch.characterArt[hero].url.startsWith('/assets/overwatch/heroes/'));
+  }
+  for (const map of GAME_CONFIGS.overwatch.maps) {
+    assert.ok(overwatch.mapArt[map], `${map} is missing map art`);
+    assert.ok(overwatch.mapArt[map].url.startsWith('/assets/overwatch/maps/'));
+  }
+  assert.equal(createGameState('valorant').characterArt && Object.keys(createGameState('valorant').characterArt).length, 0);
+  assert.equal(createGameState('valorant').mapArt && Object.keys(createGameState('valorant').mapArt).length, 0);
   assert.equal(state.version, 4);
+});
+
+test('saved Overwatch data inherits built-in hero art', () => {
+  const saved = createInitialState();
+  saved.games.overwatch.characterArt = {};
+  saved.games.overwatch.mapArt = {};
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const overwatch = loadState(storage).games.overwatch;
+  for (const hero of GAME_CONFIGS.overwatch.characters) {
+    assert.ok(overwatch.characterArt[hero], `${hero} is missing migrated hero art`);
+  }
+  for (const map of GAME_CONFIGS.overwatch.maps) {
+    assert.ok(overwatch.mapArt[map], `${map} is missing migrated map art`);
+  }
+  assert.ok(overwatch.characterArt.Tracer.url.endsWith('/tracer.webp'));
+  assert.ok(overwatch.mapArt.Midtown.url.endsWith('/midtown.webp'));
 });
 
 test('saved veto data drops duplicate map selections', () => {
@@ -71,6 +101,19 @@ test('saved veto data drops duplicate map selections', () => {
   const veto = loadState(storage).games.valorant.veto;
   assert.equal(veto.bans[1], '');
   assert.equal(veto.picks[0].map, '');
+});
+
+test('saved map rows migrate to current configured row counts', () => {
+  const legacy = createInitialState();
+  legacy.games.valorant.mapRows.push({ mode: 'Map 4', map: 'Split', status: 'upcoming', winner: null, score: ['', ''] });
+  legacy.games.valorant.mapRows.push({ mode: 'Map 5', map: 'Sunset', status: 'upcoming', winner: null, score: ['', ''] });
+  legacy.games.smash.mapRows.push({ mode: 'Game 4', map: 'Town and City', status: 'upcoming', winner: null, score: ['', ''] });
+  legacy.games.smash.mapRows.push({ mode: 'Game 5', map: 'Smashville', status: 'upcoming', winner: null, score: ['', ''] });
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(legacy) });
+  const migrated = loadState(storage);
+  assert.equal(migrated.games.valorant.mapRows.length, 3);
+  assert.equal(migrated.games.smash.mapRows.length, 3);
+  assert.equal(migrated.games.rocketleague.mapRows.length, 7);
 });
 
 test('saved Rocket League session telemetry is cleared on app launch', () => {
