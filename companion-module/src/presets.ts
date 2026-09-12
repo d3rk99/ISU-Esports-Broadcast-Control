@@ -8,6 +8,7 @@ const ORANGE = 0xf47920
 const GREEN = 0x2e7d32
 const RED = 0xc62828
 const GRAY = 0x333338
+const BLUE = 0x2d8cff
 
 function scorePreset(name: string, team: 'home' | 'away', operation: 'increment' | 'decrement', detail = false) {
 	const side = team === 'home' ? 'HOME' : 'AWAY'
@@ -68,6 +69,19 @@ export function UpdatePresets(self: ModuleInstance): void {
 				},
 			],
 		},
+		{
+			id: 'program-output',
+			name: 'Program Output',
+			definitions: [
+				{
+					id: 'program',
+					name: 'Program output selection',
+					description: 'Switch the persistent Fill+Key program output without reopening projector windows',
+					type: 'simple',
+					presets: ['program-scoreboard', 'program-roster', 'program-map-pool', 'program-clean'],
+				},
+			],
+		},
 	]
 
 	const presets: CompanionPresetDefinitions<ModuleSchema> = {
@@ -113,7 +127,33 @@ export function UpdatePresets(self: ModuleInstance): void {
 			steps: [{ down: [{ actionId: 'reset_scores', options: {} }], up: [] }],
 			feedbacks: [],
 		},
+		'program-scoreboard': programOutputPreset('Scoreboard', 'scoreboard'),
+		'program-roster': programOutputPreset('Roster', 'roster'),
+		'program-map-pool': programOutputPreset('Map Pool', 'map-pool'),
+		'program-clean': programOutputPreset('Clean', 'clean'),
 	}
 
 	self.setPresetDefinitions(structure, presets)
+}
+
+function programOutputPreset(label: string, output: 'scoreboard' | 'roster' | 'map-pool' | 'clean') {
+	return {
+		type: 'simple' as const,
+		name: `Program output: ${label}`,
+		style: {
+			text: `PGM\n${label.toUpperCase().replace(' ', '\n')}`,
+			size: 'auto' as const,
+			color: WHITE,
+			bgcolor: BLACK,
+			show_topbar: false,
+		},
+		steps: [{ down: [{ actionId: 'select_program_output' as const, options: { output } }], up: [] }],
+		feedbacks: [
+			{
+				feedbackId: 'program_output_selected' as const,
+				options: { output },
+				style: { color: WHITE, bgcolor: output === 'clean' ? GRAY : BLUE },
+			},
+		],
+	}
 }

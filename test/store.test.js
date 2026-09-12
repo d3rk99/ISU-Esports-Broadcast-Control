@@ -40,6 +40,16 @@ test('saved state can be restored', () => {
   assert.ok(storage.getItem(STORAGE_KEY));
 });
 
+test('saved empty rosters are backfilled with default slots', () => {
+  const saved = createInitialState();
+  saved.games.rocketleague.rosters.varsity = [];
+  saved.games.rocketleague.awayRosters.varsity = [];
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const rocketLeague = loadState(storage).games.rocketleague;
+  assert.equal(rocketLeague.rosters.varsity.length, 3);
+  assert.equal(rocketLeague.awayRosters.varsity.length, 3);
+});
+
 test('invalid saved data falls back safely', () => {
   const storage = memoryStorage({ [STORAGE_KEY]: '{not json' });
   assert.equal(loadState(storage).selectedGame, 'overwatch');
@@ -72,8 +82,13 @@ test('character choices and shared artwork library are game specific', () => {
     assert.ok(overwatch.mapArt[map], `${map} is missing map art`);
     assert.ok(overwatch.mapArt[map].url.startsWith('/assets/overwatch/maps/'));
   }
-  assert.equal(createGameState('valorant').characterArt && Object.keys(createGameState('valorant').characterArt).length, 0);
-  assert.equal(createGameState('valorant').mapArt && Object.keys(createGameState('valorant').mapArt).length, 0);
+  const valorant = createGameState('valorant');
+  assert.equal(valorant.characterArt && Object.keys(valorant.characterArt).length, 0);
+  assert.ok(valorant.mapArt.Ascent.url.endsWith('/ascent.webp'));
+  assert.ok(valorant.mapArt.Fracture.url.endsWith('/fracture.webp'));
+  assert.ok(valorant.mapArt.Range.url.endsWith('/range.webp'));
+  assert.ok(createGameState('rocketleague').mapArt.Mannfield.url.endsWith('/mannfield.webp'));
+  assert.ok(createGameState('rocketleague').mapArt['Forbidden Temple'].url.endsWith('/forbidden-temple.webp'));
   assert.equal(state.version, 4);
 });
 
@@ -91,6 +106,30 @@ test('saved Overwatch data inherits built-in hero art', () => {
   }
   assert.ok(overwatch.characterArt.Tracer.url.endsWith('/tracer.webp'));
   assert.ok(overwatch.mapArt.Midtown.url.endsWith('/midtown.webp'));
+});
+
+test('saved Valorant data inherits built-in map art', () => {
+  const saved = createInitialState();
+  saved.games.valorant.mapArt = {};
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const valorant = loadState(storage).games.valorant;
+  for (const map of GAME_CONFIGS.valorant.maps) {
+    assert.ok(valorant.mapArt[map], `${map} is missing migrated map art`);
+  }
+  assert.ok(valorant.mapArt.Ascent.url.endsWith('/ascent.webp'));
+  assert.ok(valorant.mapArt.Corrode.url.endsWith('/corrode.webp'));
+});
+
+test('saved Rocket League shared car art migrates to player car PNGs', () => {
+  const saved = createInitialState();
+  saved.games.rocketleague.rosters.varsity[0].character = 'Octane';
+  saved.games.rocketleague.characterArt = {
+    Octane: { url: '/assets/rocketleague/octane-player.webp', name: 'octane-player.webp' }
+  };
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const player = loadState(storage).games.rocketleague.rosters.varsity[0];
+  assert.equal(player.characterImage, '/assets/rocketleague/octane-player.webp');
+  assert.equal(player.characterImageName, 'octane-player.webp');
 });
 
 test('saved veto data drops duplicate map selections', () => {

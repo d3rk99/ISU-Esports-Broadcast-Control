@@ -17,6 +17,7 @@ let overlayServer;
 let rocketLeagueService;
 let companionApiService;
 let companionRequestId = 0;
+let controllerWindow = null;
 const pendingCompanionActions = new Map();
 const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
@@ -278,8 +279,14 @@ function readCompanionSettings() {
   }
 }
 
+function getControllerWindow() {
+  if (controllerWindow && !controllerWindow.isDestroyed()) return controllerWindow;
+  controllerWindow = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed() && window.isControllerWindow) || null;
+  return controllerWindow;
+}
+
 function dispatchCompanionAction(action) {
-  const target = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed());
+  const target = getControllerWindow();
   if (!target) return Promise.reject(Object.assign(new Error('Controller window is not ready'), { statusCode: 503 }));
   const id = String(++companionRequestId);
   return new Promise((resolve, reject) => {
@@ -460,8 +467,9 @@ function registerIpc() {
   });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
+    const imageType = details.type === 'teamLogo' ? 'team logo' : details.type === 'characterImage' ? 'character' : 'player';
     const result = await dialog.showOpenDialog(parent, {
-      title: `Choose ${details.type === 'characterImage' ? 'character' : 'player'} PNG`,
+      title: `Choose ${imageType} image`,
       properties: ['openFile'],
       filters: [
         { name: 'Broadcast Images', extensions: ['png', 'webp', 'jpg', 'jpeg'] },
@@ -537,6 +545,11 @@ function createWindow() {
     }
   });
 
+  controllerWindow = window;
+  window.isControllerWindow = true;
+  window.on('closed', () => {
+    if (controllerWindow === window) controllerWindow = null;
+  });
   window.once('ready-to-show', () => window.show());
   window.webContents.on('preload-error', (_event, preloadPath, error) => recordDiagnostic('preload-error', `${preloadPath}: ${error?.message || error}`));
   window.webContents.on('did-fail-load', (_event, code, description) => recordDiagnostic('did-fail-load', `${code}: ${description}`));
@@ -589,12 +602,12 @@ app.whenReady().then(async () => {
   }
   createWindow();
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!getControllerWindow()) createWindow();
   });
 });
 
 app.on('second-instance', () => {
-  const window = BrowserWindow.getAllWindows()[0];
+  const window = getControllerWindow();
   if (!window) return;
   if (window.isMinimized()) window.restore();
   window.focus();

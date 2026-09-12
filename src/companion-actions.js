@@ -1,4 +1,4 @@
-import { GAME_CONFIGS } from './game-config.js';
+import { GAME_CONFIGS, rocketLeagueArenaName } from './game-config.js';
 
 function actionError(message, statusCode = 400) {
   const error = new Error(message);
@@ -36,6 +36,7 @@ function resetDetailScores(game, gameKey) {
 function resetAllScores(game, gameKey) {
   resetDetailScores(game, gameKey);
   game.teams.forEach((team) => { team.score = 0; });
+  if (gameKey === 'valorant') resetMapResults(game, gameKey);
 }
 
 function seriesLength(game) {
@@ -50,10 +51,43 @@ function visibleMapRows(game) {
   return game.mapRows.slice(0, Math.min(game.mapRows.length, seriesLength(game)));
 }
 
-function saveActiveMapResult(game) {
+function resetValorantPickResults(game) {
+  game.veto?.picks?.forEach((pick) => {
+    pick.score = ['', ''];
+    pick.winner = null;
+  });
+}
+
+function resetMapResults(game, gameKey) {
+  game.mapRows.forEach((row, index) => {
+    row.winner = null;
+    row.score = ['', ''];
+    row.overtime = false;
+    row.overtimeSeconds = 0;
+    if (gameKey === 'overwatch') {
+      row.map = '';
+      row.mode = '';
+    }
+    row.status = index === 0 ? 'ready' : 'upcoming';
+  });
+  if (gameKey === 'valorant') resetValorantPickResults(game);
+  game.teams.forEach((team) => { team.score = 0; });
+  game.activeMap = 0;
+}
+
+function saveActiveMapResult(game, gameKey) {
   const row = game.mapRows[game.activeMap];
   if (!row) return;
   const scores = game.teams.map((team) => Number(team.detailScore) || 0);
+  if (gameKey === 'rocketleague') {
+    const arena = rocketLeagueArenaName(game.rocketLeague?.live?.arena);
+    if (arena) row.map = arena;
+    const live = game.rocketLeague?.live || {};
+    const overtimeSeconds = Math.max(0, Math.floor(Number(live.overtimeSeconds || 0)));
+    const wentToOvertime = Boolean(live.overtime) || overtimeSeconds > 0;
+    row.overtime = wentToOvertime;
+    row.overtimeSeconds = wentToOvertime ? overtimeSeconds || Math.max(0, Math.floor(Number(live.timeSeconds || 0))) : 0;
+  }
   row.score = scores.map((score) => String(score));
   row.winner = scores[0] === scores[1] ? null : Number(scores[1] > scores[0]);
   row.status = row.winner === null ? 'ready' : 'complete';
@@ -63,7 +97,7 @@ function saveActiveMapResult(game) {
 export function advanceGameMatch(game, gameKey) {
   const length = visibleMapRows(game).length;
   const nextIndex = (game.activeMap + 1) % length;
-  saveActiveMapResult(game);
+  saveActiveMapResult(game, gameKey);
   game.activeMap = nextIndex;
   resetDetailScores(game, gameKey);
   game.mapRows.forEach((row, rowIndex) => {
@@ -140,17 +174,7 @@ export function applyCompanionAction(state, request = {}) {
       game.teams.forEach((team, currentTeamIndex) => { team.score = visibleMapRows(game).filter((row) => row.winner === currentTeamIndex).length; });
     },
     'maps.reset': () => {
-      game.mapRows.forEach((row, index) => {
-        row.winner = null;
-        row.score = ['', ''];
-        if (gameKey === 'overwatch') {
-          row.map = '';
-          row.mode = '';
-        }
-        row.status = index === 0 ? 'ready' : 'upcoming';
-      });
-      game.teams.forEach((team) => { team.score = 0; });
-      game.activeMap = 0;
+      resetMapResults(game, gameKey);
     },
     'veto.reset': () => {
       if (gameKey !== 'valorant') throw actionError('veto.reset is only available for VALORANT');
@@ -159,6 +183,8 @@ export function applyCompanionAction(state, request = {}) {
       game.mapRows.forEach((row, index) => {
         row.map = '';
         row.score = ['', ''];
+        row.overtime = false;
+        row.overtimeSeconds = 0;
         row.winner = null;
         row.status = index === 0 ? 'ready' : 'upcoming';
       });

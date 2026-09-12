@@ -190,8 +190,128 @@ const OVERWATCH_MAP_ART = {
   'Wuxing University - Water College': { url: '/assets/overwatch/maps/wuxing-university-water-college.webp', name: 'wuxing-university-water-college.webp' }
 };
 
+export const ROCKET_LEAGUE_ARENA_NAMES = {
+  Stadium_P: 'DFH Stadium',
+  Stadium_Winter_P: 'DFH Stadium',
+  EuroStadium_P: 'Mannfield',
+  EuroStadium_Night_P: 'Mannfield',
+  EuroStadium_Rainy_P: 'Mannfield',
+  ChampsStadium_P: 'Champions Field',
+  UtopiaStadium_P: 'Utopia Coliseum',
+  Park_P: 'Beckwith Park',
+  Park_Night_P: 'Beckwith Park',
+  CHN_Stadium_P: 'Forbidden Temple',
+  cs_day_p: 'Deadeye Canyon',
+  CS_Day_P: 'Deadeye Canyon',
+  CS_HW_P: 'Deadeye Canyon',
+  Farm_P: 'Farmstead',
+  Farm_Night_P: 'Farmstead',
+  Farm_UpsideDown_P: 'Farmstead',
+  NeoTokyo_P: 'Neo Tokyo',
+  TrainStation_P: 'Urban Central',
+  TrainStation_Night_P: 'Urban Central',
+  TrainStation_Dawn_P: 'Urban Central',
+  Underwater_P: 'AquaDome',
+  Beach_P: 'Salty Shores',
+  Beach_Night_P: 'Salty Shores',
+  Wasteland_P: 'Wasteland',
+  ARC_P: 'Starbase ARC',
+  ThrowbackStadium_P: 'Throwback Stadium',
+  SovereignHeights_P: 'Sovereign Heights',
+  Core707_P: 'Core 707',
+  Rivals_P: 'Rivals Arena'
+};
+
+export const ROCKET_LEAGUE_SOCCAR_ARENAS = [
+  'AquaDome',
+  'Beckwith Park',
+  'Boostfield Mall',
+  'Champions Field',
+  'Deadeye Canyon',
+  'DFH Stadium',
+  'Drift Woods',
+  'Estadio Vida',
+  'Farmstead',
+  'Forbidden Temple',
+  'Futura Garden',
+  'Mannfield',
+  'Neon Fields',
+  'Neo Tokyo',
+  'Parc de Paris',
+  'Rivals Arena',
+  'Salty Shores',
+  'Sovereign Heights',
+  'Starbase ARC',
+  'Urban Central',
+  'Utopia Coliseum',
+  'Wasteland'
+];
+
+const ROCKET_LEAGUE_MAP_ART = {
+  AquaDome: { url: '/assets/rocket league/maps/aquadome.webp', name: 'aquadome.webp' },
+  'Beckwith Park': { url: '/assets/rocket league/maps/beckwith-park.webp', name: 'beckwith-park.webp' },
+  'Boostfield Mall': { url: '/assets/rocket league/maps/boostfield-mall.webp', name: 'boostfield-mall.webp' },
+  'Champions Field': { url: '/assets/rocket league/maps/champions-field.webp', name: 'champions-field.webp' },
+  'Deadeye Canyon': { url: '/assets/rocket league/maps/deadeye-canyon.webp', name: 'deadeye-canyon.webp' },
+  'DFH Stadium': { url: '/assets/rocket league/maps/dfh-stadium.webp', name: 'dfh-stadium.webp' },
+  'Drift Woods': { url: '/assets/rocket league/maps/drift-woods.webp', name: 'drift-woods.webp' },
+  'Estadio Vida': { url: '/assets/rocket league/maps/estadio-vida.webp', name: 'estadio-vida.webp' },
+  Farmstead: { url: '/assets/rocket league/maps/farmstead.webp', name: 'farmstead.webp' },
+  'Forbidden Temple': { url: '/assets/rocket league/maps/forbidden-temple.webp', name: 'forbidden-temple.webp' },
+  'Futura Garden': { url: '/assets/rocket league/maps/futura-garden.webp', name: 'futura-garden.webp' },
+  Mannfield: { url: '/assets/rocket league/maps/mannfield.webp', name: 'mannfield.webp' },
+  'Neon Fields': { url: '/assets/rocket league/maps/neon-fields.webp', name: 'neon-fields.webp' },
+  'Neo Tokyo': { url: '/assets/rocket league/maps/neo-tokyo.webp', name: 'neo-tokyo.webp' },
+  'Parc de Paris': { url: '/assets/rocket league/maps/parc-de-paris.webp', name: 'parc-de-paris.webp' },
+  'Rivals Arena': { url: '/assets/rocket league/maps/rivals-arena.webp', name: 'rivals-arena.webp' },
+  'Salty Shores': { url: '/assets/rocket league/maps/salty-shores.webp', name: 'salty-shores.webp' },
+  'Sovereign Heights': { url: '/assets/rocket league/maps/sovereign-heights.webp', name: 'sovereign-heights.webp' },
+  'Starbase ARC': { url: '/assets/rocket league/maps/starbase-arc.webp', name: 'starbase-arc.webp' },
+  'Urban Central': { url: '/assets/rocket league/maps/urban-central.webp', name: 'urban-central.webp' },
+  'Utopia Coliseum': { url: '/assets/rocket league/maps/utopia-coliseum.webp', name: 'utopia-coliseum.webp' },
+  Wasteland: { url: '/assets/rocket league/maps/wasteland.webp', name: 'wasteland.webp' }
+};
+
+const VALORANT_MAPS = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset'];
+
+const VALORANT_MAP_ART = {
+  Abyss: { url: '/assets/valorant/maps/abyss.webp', name: 'abyss.webp' },
+  Ascent: { url: '/assets/valorant/maps/ascent.webp', name: 'ascent.webp' },
+  Bind: { url: '/assets/valorant/maps/bind.webp', name: 'bind.webp' },
+  Breeze: { url: '/assets/valorant/maps/breeze.webp', name: 'breeze.webp' },
+  Corrode: { url: '/assets/valorant/maps/corrode.webp', name: 'corrode.webp' },
+  Fracture: { url: '/assets/valorant/maps/fracture.webp', name: 'fracture.webp' },
+  Haven: { url: '/assets/valorant/maps/haven.webp', name: 'haven.webp' },
+  Icebox: { url: '/assets/valorant/maps/icebox.webp', name: 'icebox.webp' },
+  Lotus: { url: '/assets/valorant/maps/lotus.webp', name: 'lotus.webp' },
+  Pearl: { url: '/assets/valorant/maps/pearl.webp', name: 'pearl.webp' },
+  Range: { url: '/assets/valorant/maps/range.webp', name: 'range.webp' },
+  Split: { url: '/assets/valorant/maps/split.webp', name: 'split.webp' },
+  Sunset: { url: '/assets/valorant/maps/sunset.webp', name: 'sunset.webp' }
+};
+
+export function rocketLeagueArenaName(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (ROCKET_LEAGUE_ARENA_NAMES[raw]) return ROCKET_LEAGUE_ARENA_NAMES[raw];
+  return raw
+    .replace(/_P$/i, '')
+    .replaceAll('_', ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function createOverwatchMapArt() {
   return { ...OVERWATCH_MAP_ART };
+}
+
+function createRocketLeagueMapArt() {
+  return { ...ROCKET_LEAGUE_MAP_ART };
+}
+
+function createValorantMapArt() {
+  return { ...VALORANT_MAP_ART };
 }
 
 function createOverwatchCharacterArt() {
@@ -226,7 +346,7 @@ export const GAME_CONFIGS = {
     formatOptions: [1, 3, 5, 7],
     defaultSeriesLength: 3,
     modes: ['Pick 1', 'Pick 2', 'Pick 3'],
-    maps: ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset'],
+    maps: VALORANT_MAPS,
     roles: ['Duelist', 'Initiator', 'Controller', 'Sentinel', 'Flex', 'Coach'],
     characters: [
       'Astra', 'Breach', 'Brimstone', 'Chamber', 'Clove', 'Cypher', 'Deadlock', 'Fade', 'Gekko', 'Harbor',
@@ -242,7 +362,7 @@ export const GAME_CONFIGS = {
     formatOptions: [1, 3, 5, 7],
     defaultSeriesLength: 7,
     modes: ['Game 1', 'Game 2', 'Game 3', 'Game 4', 'Game 5', 'Game 6', 'Game 7'],
-    maps: ['DFH Stadium', 'Mannfield', 'Champions Field', 'Utopia Coliseum', 'Beckwith Park', 'Forbidden Temple'],
+    maps: ROCKET_LEAGUE_SOCCAR_ARENAS,
     roles: ['Starter', 'Substitute', 'Coach'],
     characters: [
       'Octane', 'Fennec', 'Dominus', 'Breakout', 'Batmobile (2016)', 'Merc', 'Scarab', 'Takumi', 'Endo',
@@ -307,8 +427,8 @@ export function createGameState(gameKey) {
   const config = GAME_CONFIGS[gameKey];
   return {
     teams: [
-      { name: 'IDAHO STATE', shortName: 'ISU', color: '#f47920', secondaryColor: '#101012', secondaryColorEnabled: true, score: 0, detailScore: gameKey === 'smash' ? 12 : 0 },
-      { name: 'OPPONENT', shortName: 'OPP', color: '#5e6673', secondaryColor: '#d9dce2', secondaryColorEnabled: false, score: 0, detailScore: gameKey === 'smash' ? 12 : 0 }
+      { name: 'IDAHO STATE', shortName: 'ISU', color: '#f47920', secondaryColor: '#101012', secondaryColorEnabled: true, logoImage: '', logoImageName: '', score: 0, detailScore: gameKey === 'smash' ? 12 : 0 },
+      { name: 'OPPONENT', shortName: 'OPP', color: '#5e6673', secondaryColor: '#d9dce2', secondaryColorEnabled: false, logoImage: '', logoImageName: '', score: 0, detailScore: gameKey === 'smash' ? 12 : 0 }
     ],
     seriesLength: config.defaultSeriesLength || config.modes.length,
     match: { event: 'COLLEGIATE ESPORTS', round: 'REGULAR SEASON', format: config.defaultSeriesLength ? `Best of ${config.defaultSeriesLength}` : config.format, live: false },
@@ -318,7 +438,9 @@ export function createGameState(gameKey) {
       map: gameKey === 'overwatch' ? '' : gameKey === 'valorant' ? ['Ascent', 'Bind', 'Haven'][index] || '' : config.maps[index % config.maps.length],
       status: index === 0 ? 'ready' : 'upcoming',
       winner: null,
-      score: ['', '']
+      score: ['', ''],
+      overtime: false,
+      overtimeSeconds: 0
     })),
     veto: {
       bans: ['Breeze', 'Icebox', 'Pearl', 'Sunset'],
@@ -338,7 +460,13 @@ export function createGameState(gameKey) {
     },
     showAwayRoster: false,
     characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : {},
-    mapArt: gameKey === 'overwatch' ? createOverwatchMapArt() : {},
+    mapArt: gameKey === 'overwatch'
+      ? createOverwatchMapArt()
+      : gameKey === 'valorant'
+        ? createValorantMapArt()
+        : gameKey === 'rocketleague'
+          ? createRocketLeagueMapArt()
+          : {},
     rocketLeague: gameKey === 'rocketleague' ? {
       enabled: false,
       source: 'local',
@@ -368,6 +496,7 @@ export function createGameState(gameKey) {
         matchGuid: '',
         timeSeconds: 300,
         overtime: false,
+        overtimeSeconds: 0,
         arena: '',
         spectatedPlayer: '',
         players: []
@@ -384,6 +513,7 @@ export function createInitialState() {
     activeRoster: 'varsity',
     activeRosterSide: 'home',
     activeOutputOverlay: 'scoreboard',
+    programTransitionSeconds: 1,
     updatedAt: null,
     games: Object.fromEntries(GAME_ORDER.map((key) => [key, createGameState(key)]))
   };

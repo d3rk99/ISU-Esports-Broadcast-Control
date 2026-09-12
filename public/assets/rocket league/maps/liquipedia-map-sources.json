@@ -1,0 +1,222 @@
+[
+  {
+    "map": "Mannfield",
+    "source_file": "Mannfield.jpg",
+    "url": "https://liquipedia.net/commons/images/1/18/Mannfield.jpg",
+    "saved": "public/assets/rocket league/maps/mannfield.webp",
+    "size": [
+      800,
+      400
+    ]
+  },
+  {
+    "map": "Forbidden Temple",
+    "source_file": "Forbidden_Temple.jpg",
+    "url": "https://liquipedia.net/commons/images/5/52/Forbidden_Temple.jpg",
+    "saved": "public/assets/rocket league/maps/forbidden-temple.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "DFH Stadium",
+    "source_file": "DFH_Stadium.jpg",
+    "url": "https://liquipedia.net/commons/images/7/78/DFH_Stadium.jpg",
+    "saved": "public/assets/rocket league/maps/dfh-stadium.webp",
+    "size": [
+      1918,
+      962
+    ]
+  },
+  {
+    "map": "Utopia Coliseum",
+    "source_file": "Utopia_Coliseum.jpg",
+    "url": "https://liquipedia.net/commons/images/0/00/Utopia_Coliseum.jpg",
+    "saved": "public/assets/rocket league/maps/utopia-coliseum.webp",
+    "size": [
+      800,
+      400
+    ]
+  },
+  {
+    "map": "AquaDome",
+    "source_file": "AquaDome2.jpg",
+    "url": "https://liquipedia.net/commons/images/c/c7/AquaDome2.jpg",
+    "saved": "public/assets/rocket league/maps/aquadome.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Neo Tokyo",
+    "source_file": "Neo_Tokyo_std1.jpg",
+    "url": "https://liquipedia.net/commons/images/d/dd/Neo_Tokyo_std1.jpg",
+    "saved": "public/assets/rocket league/maps/neo-tokyo.webp",
+    "size": [
+      1024,
+      576
+    ]
+  },
+  {
+    "map": "Champions Field",
+    "source_file": "Champions_Field.jpg",
+    "url": "https://liquipedia.net/commons/images/d/db/Champions_Field.jpg",
+    "saved": "public/assets/rocket league/maps/champions-field.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Beckwith Park",
+    "source_file": "Beckwith_Park.jpg",
+    "url": "https://liquipedia.net/commons/images/3/34/Beckwith_Park.jpg",
+    "saved": "public/assets/rocket league/maps/beckwith-park.webp",
+    "size": [
+      800,
+      400
+    ]
+  },
+  {
+    "map": "Urban Central",
+    "source_file": "Urban_Central.jpg",
+    "url": "https://liquipedia.net/commons/images/4/4e/Urban_Central.jpg",
+    "saved": "public/assets/rocket league/maps/urban-central.webp",
+    "size": [
+      800,
+      400
+    ]
+  },
+  {
+    "map": "Wasteland",
+    "source_file": "Wasteland-Standard.jpg",
+    "url": "https://liquipedia.net/commons/images/0/0d/Wasteland-Standard.jpg",
+    "saved": "public/assets/rocket league/maps/wasteland.webp",
+    "size": [
+      960,
+      540
+    ]
+  },
+  {
+    "map": "Starbase ARC",
+    "source_file": "Starbase_ARC.jpg",
+    "url": "https://liquipedia.net/commons/images/6/67/Starbase_ARC.jpg",
+    "saved": "public/assets/rocket league/maps/starbase-arc.webp",
+    "size": [
+      960,
+      540
+    ]
+  },
+  {
+    "map": "Farmstead",
+    "source_file": "Farmstead_RL_std.jpg",
+    "url": "https://liquipedia.net/commons/images/4/4c/Farmstead_RL_std.jpg",
+    "saved": "public/assets/rocket league/maps/farmstead.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Salty Shores",
+    "source_file": "Salty_Shores_RL_std.jpg",
+    "url": "https://liquipedia.net/commons/images/a/aa/Salty_Shores_RL_std.jpg",
+    "saved": "public/assets/rocket league/maps/salty-shores.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Rivals Arena",
+    "source_file": "Rivals_Arena2.jpg",
+    "url": "https://liquipedia.net/commons/images/4/42/Rivals_Arena2.jpg",
+    "saved": "public/assets/rocket league/maps/rivals-arena.webp",
+    "size": [
+      960,
+      540
+    ]
+  },
+  {
+    "map": "Neon Fields",
+    "source_file": "Neon_Fields.jpg",
+    "url": "https://liquipedia.net/commons/images/3/3a/Neon_Fields.jpg",
+    "saved": "public/assets/rocket league/maps/neon-fields.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Deadeye Canyon",
+    "source_file": "Deadeye_Canyon.jpg",
+    "url": "https://liquipedia.net/commons/images/7/7b/Deadeye_Canyon.jpg",
+    "saved": "public/assets/rocket league/maps/deadeye-canyon.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Sovereign Heights",
+    "source_file": "Sovereign_Heights.jpg",
+    "url": "https://liquipedia.net/commons/images/7/7c/Sovereign_Heights.jpg",
+    "saved": "public/assets/rocket league/maps/sovereign-heights.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Estadio Vida",
+    "source_file": "Estadio_Vida.jpeg",
+    "url": "https://liquipedia.net/commons/images/8/8c/Estadio_Vida.jpeg",
+    "saved": "public/assets/rocket league/maps/estadio-vida.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Drift Woods",
+    "source_file": "Drift_Woods.jpeg",
+    "url": "https://liquipedia.net/commons/images/3/32/Drift_Woods.jpeg",
+    "saved": "public/assets/rocket league/maps/drift-woods.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Futura Garden",
+    "source_file": "Futura_garden.jpeg",
+    "url": "https://liquipedia.net/commons/images/0/08/Futura_garden.jpeg",
+    "saved": "public/assets/rocket league/maps/futura-garden.webp",
+    "size": [
+      1920,
+      1080
+    ]
+  },
+  {
+    "map": "Boostfield Mall",
+    "source_file": "Boostfield_Mall.jpg",
+    "url": "https://liquipedia.net/commons/images/d/d3/Boostfield_Mall.jpg",
+    "saved": "public/assets/rocket league/maps/boostfield-mall.webp",
+    "size": [
+      1440,
+      900
+    ]
+  },
+  {
+    "map": "Parc de Paris",
+    "source_file": "Parc_de_Paris.jpg",
+    "url": "https://liquipedia.net/commons/images/5/55/Parc_de_Paris.jpg",
+    "saved": "public/assets/rocket league/maps/parc-de-paris.webp",
+    "size": [
+      1440,
+      900
+    ]
+  }
+]

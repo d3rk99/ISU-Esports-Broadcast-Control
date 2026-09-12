@@ -4,6 +4,7 @@ export type FeedbacksSchema = {
 	controller_connected: { type: 'boolean'; options: Record<string, never> }
 	is_live: { type: 'boolean'; options: Record<string, never> }
 	selected_game: { type: 'boolean'; options: { game: string } }
+	program_output_selected: { type: 'boolean'; options: { output: string } }
 	team_leading: { type: 'boolean'; options: { team: 'home' | 'away'; scoreType: 'series' | 'detail' } }
 }
 
@@ -13,6 +14,13 @@ const GAME_CHOICES = [
 	{ id: 'rocketleague', label: 'Rocket League' },
 	{ id: 'smash', label: 'Smash Bros. Ultimate' },
 	{ id: 'callofduty', label: 'Call of Duty' },
+]
+
+const PROGRAM_OUTPUT_CHOICES = [
+	{ id: 'scoreboard', label: 'Scoreboard' },
+	{ id: 'roster', label: 'Roster' },
+	{ id: 'map-pool', label: 'Map Pool' },
+	{ id: 'clean', label: 'Clean' },
 ]
 
 export function UpdateFeedbacks(self: ModuleInstance): void {
@@ -37,6 +45,15 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			defaultStyle: { bgcolor: 0xf47920, color: 0x101012 },
 			options: [{ id: 'game', type: 'dropdown', label: 'Game', default: 'overwatch', choices: GAME_CHOICES }],
 			callback: (feedback) => self.getVariableValue('selected_game') === feedback.options.game,
+		},
+		program_output_selected: {
+			name: 'Program output is selected',
+			type: 'boolean',
+			defaultStyle: { bgcolor: 0x2d8cff, color: 0xffffff },
+			options: [
+				{ id: 'output', type: 'dropdown', label: 'Output', default: 'scoreboard', choices: PROGRAM_OUTPUT_CHOICES },
+			],
+			callback: (feedback) => self.getVariableValue('active_output_overlay') === feedback.options.output,
 		},
 		team_leading: {
 			name: 'Team is leading',

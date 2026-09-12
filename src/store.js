@@ -35,19 +35,32 @@ export function loadState(storage = window.localStorage) {
         parsed.games[game][collection] ||= fallback.games[game][collection];
         for (const rosterType of ['varsity', 'jv']) {
           const savedRoster = parsed.games[game][collection]?.[rosterType] || [];
-          parsed.games[game][collection][rosterType] = savedRoster.map((player, index) => ({
-            ...(fallback.games[game][collection][rosterType][index] || fallback.games[game][collection][rosterType][0]),
-            ...player
+          const fallbackRoster = fallback.games[game][collection][rosterType];
+          const rosterLength = Math.max(savedRoster.length, fallbackRoster.length);
+          parsed.games[game][collection][rosterType] = Array.from({ length: rosterLength }, (_, index) => ({
+            ...(fallbackRoster[index] || fallbackRoster[0]),
+            ...(savedRoster[index] || {})
           }));
         }
       }
       parsed.games[game].characterArt = game === 'overwatch'
         ? { ...(parsed.games[game].characterArt || {}), ...fallback.games[game].characterArt }
         : parsed.games[game].characterArt || {};
-      parsed.games[game].mapArt = game === 'overwatch'
+      parsed.games[game].mapArt = game === 'overwatch' || game === 'valorant' || game === 'rocketleague'
         ? { ...(parsed.games[game].mapArt || {}), ...fallback.games[game].mapArt }
         : parsed.games[game].mapArt || {};
       if (game === 'rocketleague') {
+        for (const collection of ['rosters', 'awayRosters']) {
+          for (const rosterType of ['varsity', 'jv']) {
+            parsed.games[game][collection][rosterType].forEach((player) => {
+              const sharedCarArt = parsed.games[game].characterArt?.[player.character];
+              if (!player.characterImage && sharedCarArt?.url) {
+                player.characterImage = sharedCarArt.url;
+                player.characterImageName = sharedCarArt.name || '';
+              }
+            });
+          }
+        }
         parsed.games[game].rocketLeague = {
           ...fallback.games[game].rocketLeague,
           ...(parsed.games[game].rocketLeague || {}),
@@ -68,7 +81,12 @@ export function loadState(storage = window.localStorage) {
         });
       }
     }
-    return { ...fallback, ...parsed, version: 4 };
+    return {
+      ...fallback,
+      ...parsed,
+      programTransitionSeconds: Math.max(0.1, Math.min(5, Number(parsed.programTransitionSeconds ?? fallback.programTransitionSeconds) || 1)),
+      version: 4
+    };
   } catch {
     return createInitialState();
   }

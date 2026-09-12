@@ -65,6 +65,31 @@ test('format length controls target score and visible map actions', () => {
   assert.equal(state.games.valorant.teams[1].score, 1);
 });
 
+test('Valorant score reset clears map results without clearing veto selections', () => {
+  const state = createInitialState();
+  state.selectedGame = 'valorant';
+  const game = state.games.valorant;
+  game.veto.bans = ['Bind', 'Haven', 'Lotus', 'Pearl'];
+  game.veto.picks[0].map = 'Ascent';
+  game.veto.picks[0].score = ['13', '9'];
+  game.veto.picks[0].winner = 0;
+  game.mapRows[0].map = 'Ascent';
+  game.mapRows[0].score = ['13', '9'];
+  game.mapRows[0].winner = 0;
+  game.mapRows[0].status = 'complete';
+  game.teams[0].score = 1;
+  applyCompanionAction(state, { action: 'scores.reset' });
+  assert.deepEqual(game.veto.bans, ['Bind', 'Haven', 'Lotus', 'Pearl']);
+  assert.equal(game.veto.picks[0].map, 'Ascent');
+  assert.deepEqual(game.veto.picks[0].score, ['', '']);
+  assert.equal(game.veto.picks[0].winner, null);
+  assert.equal(game.mapRows[0].map, 'Ascent');
+  assert.deepEqual(game.mapRows[0].score, ['', '']);
+  assert.equal(game.mapRows[0].winner, null);
+  assert.equal(game.mapRows[0].status, 'ready');
+  assert.equal(game.teams[0].score, 0);
+});
+
 test('next-match leaves tied map scores without an automatic winner', () => {
   const state = createInitialState();
   applyCompanionAction(state, { action: 'detail_score.set', team: 'home', value: 7 });
@@ -93,6 +118,22 @@ test('Smash score reset and next-match restore stocks to 12', () => {
   assert.equal(state.games.smash.teams[1].score, 0);
   assert.equal(state.games.smash.teams[0].detailScore, 12);
   assert.equal(state.games.smash.teams[1].detailScore, 12);
+});
+
+test('Rocket League next-match saves the live arena to map pool', () => {
+  const state = createInitialState();
+  state.selectedGame = 'rocketleague';
+  state.games.rocketleague.rocketLeague.live.arena = 'cs_day_p';
+  state.games.rocketleague.rocketLeague.live.overtime = true;
+  state.games.rocketleague.rocketLeague.live.overtimeSeconds = 73;
+  applyCompanionAction(state, { action: 'detail_score.set', team: 'home', value: 4 });
+  applyCompanionAction(state, { action: 'detail_score.set', team: 'away', value: 2 });
+  applyCompanionAction(state, { action: 'match.next' });
+  assert.equal(state.games.rocketleague.mapRows[0].map, 'Deadeye Canyon');
+  assert.deepEqual(state.games.rocketleague.mapRows[0].score, ['4', '2']);
+  assert.equal(state.games.rocketleague.mapRows[0].winner, 0);
+  assert.equal(state.games.rocketleague.mapRows[0].overtime, true);
+  assert.equal(state.games.rocketleague.mapRows[0].overtimeSeconds, 73);
 });
 
 test('invalid Companion actions fail without valid-looking results', () => {

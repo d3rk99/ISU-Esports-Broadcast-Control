@@ -1,5 +1,5 @@
 import './styles.css';
-import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer } from './game-config.js';
+import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 
@@ -55,6 +55,7 @@ function activeRosterCollection(game = current()) {
 }
 
 function persistState() {
+  state.programTransitionSeconds = Math.max(0.1, Math.min(5, Number(state.programTransitionSeconds) || 1));
   state = saveState(state);
   window.isuDesktop?.publishState(state);
   return state;
@@ -202,7 +203,7 @@ function renderControl(config) {
             <div class="preview-center"><small>${escapeHtml(config.scoreLabel)}</small><b>${game.teams[0].score}<i>&mdash;</i>${game.teams[1].score}</b><span>${game.match.live ? 'LIVE' : 'PREVIEW'}</span></div>
             ${renderPreviewTeam(game.teams[1], 'right')}
           </div>
-          <div class="preview-map"><span>${state.selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${game.activeMap + 1}</span><strong>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive?.arena ? rlLive.arena.replace(/_P$/i, '').replaceAll('_', ' ') : activeMap.map)}</strong><i></i><em>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive ? formatGameClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode)}</em></div>
+          <div class="preview-map"><span>${state.selectedGame === 'rocketleague' ? 'GAME' : 'MAP'} ${game.activeMap + 1}</span><strong>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive?.arena ? rocketLeagueArenaName(rlLive.arena) : activeMap.map)}</strong><i></i><em>${escapeHtml(state.selectedGame === 'rocketleague' && rlLive ? formatGameClock(rlLive.timeSeconds, rlLive.overtime) : activeMap.mode)}</em></div>
         </div>
         <div class="preview-label"><span></span>CONTROL PREVIEW &middot; OVERLAY LAYOUT TO FOLLOW</div>
       </div>
@@ -245,6 +246,25 @@ function formatGameClock(seconds, overtime = false) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = String(safeSeconds % 60).padStart(2, '0');
   return overtime ? `OT +${minutes}:${remainder}` : `${minutes}:${remainder}`;
+}
+
+function formatDuration(seconds) {
+  const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = String(safeSeconds % 60).padStart(2, '0');
+  return `${minutes}:${remainder}`;
+}
+
+function updateRocketLeagueOvertime(live, overtime, seconds) {
+  live.overtime = Boolean(overtime);
+  if (!live.overtime) {
+    live.overtimeSeconds = 0;
+    return;
+  }
+  live.overtimeSeconds = Math.max(
+    Math.max(0, Math.floor(Number(live.overtimeSeconds) || 0)),
+    Math.max(0, Math.floor(Number(seconds) || 0))
+  );
 }
 
 function rocketLeaguePacketRate(intervalMs) {
@@ -309,13 +329,21 @@ function renderLivePlayer(player, rl, game) {
   return `<div class="rl-player" style="--player-team:${escapeHtml(team.color)}"><header><span>${escapeHtml(team.shortName)}</span><strong>${escapeHtml(player.name)}</strong><small>${player.spectated ? 'ON CAMERA' : ''}</small></header><div class="boost-track"><i style="width:${boost ?? 0}%"></i></div><footer><b>${boost === null ? '&mdash;' : Math.round(boost)}</b><span>BOOST</span><em>${Number(player.goals) || 0} G &middot; ${Number(player.assists) || 0} A &middot; ${Number(player.saves) || 0} S</em></footer></div>`;
 }
 
+function displayAssetUrl(value) {
+  return typeof value === 'string' && value.startsWith('/assets/')
+    ? `${overlayBaseUrl}${value}`
+    : value;
+}
+
 function renderPreviewTeam(team, side) {
   const secondary = team.secondaryColorEnabled ? team.secondaryColor : team.color;
-  return `<div class="preview-team ${side}"><div class="team-badge" style="--team-color:${escapeHtml(team.color)};--team-secondary:${escapeHtml(secondary)}">${escapeHtml(team.shortName.slice(0, 3))}</div><div><small>${side === 'left' ? 'HOME' : 'AWAY'}</small><strong>${escapeHtml(team.name)}</strong></div></div>`;
+  const logo = team.logoImage ? `<img src="${escapeHtml(displayAssetUrl(team.logoImage))}" alt="">` : escapeHtml(team.shortName.slice(0, 3));
+  return `<div class="preview-team ${side}"><div class="team-badge ${team.logoImage ? 'has-image' : ''}" style="--team-color:${escapeHtml(team.color)};--team-secondary:${escapeHtml(secondary)}">${logo}</div><div><small>${side === 'left' ? 'HOME' : 'AWAY'}</small><strong>${escapeHtml(team.name)}</strong></div></div>`;
 }
 
 function renderTeamControl(team, index, config, game = current()) {
   const target = seriesTarget(game, config);
+  const logoName = team.logoImageName || (team.logoImage ? 'Custom URL' : 'No logo selected');
   return `<article class="team-control team-${index}">
     <div class="team-control-head"><span>${index === 0 ? 'HOME TEAM' : 'AWAY TEAM'}</span><i style="background:linear-gradient(90deg,${escapeHtml(team.color)} 0 55%,${escapeHtml(team.secondaryColorEnabled ? team.secondaryColor : team.color)} 55%)"></i></div>
     <div class="team-fields">
@@ -324,6 +352,11 @@ function renderTeamControl(team, index, config, game = current()) {
       <label class="color-field"><span>PRIMARY</span><input type="color" data-team="${index}" data-prop="color" value="${escapeHtml(team.color)}"></label>
       <label class="color-field secondary-color-field ${team.secondaryColorEnabled ? 'enabled' : ''}"><span>SECONDARY</span><input type="color" data-team="${index}" data-prop="secondaryColor" value="${escapeHtml(team.secondaryColor)}" ${team.secondaryColorEnabled ? '' : 'disabled'}></label>
       <label class="mini-switch"><input type="checkbox" data-team="${index}" data-prop="secondaryColorEnabled" ${team.secondaryColorEnabled ? 'checked' : ''}><i></i><span>USE</span></label>
+    </div>
+    <div class="team-logo-row">
+      <div class="asset-thumb ${team.logoImage ? 'has-image' : ''}">${team.logoImage ? `<img src="${escapeHtml(displayAssetUrl(team.logoImage))}" alt="">` : `<span>LOGO</span>`}</div>
+      <label><span>LOGO URL</span><input data-team="${index}" data-prop="logoImage" value="${escapeHtml(team.logoImage || '')}" placeholder="https://... or choose local file"></label>
+      <div class="team-logo-actions"><small>${escapeHtml(logoName)}</small><button data-action="pick-team-logo" data-index="${index}">${team.logoImage ? 'REPLACE FILE' : 'CHOOSE FILE'}</button>${team.logoImage ? `<button class="clear-asset" data-action="clear-team-logo" data-index="${index}">CLEAR</button>` : ''}</div>
     </div>
     <div class="score-control"><button data-action="score-minus" data-index="${index}" aria-label="Decrease ${escapeHtml(team.name)} score">&minus;</button><div><span>${escapeHtml(config.scoreLabel)}</span><strong>${team.score}</strong><small>of ${target}</small></div><button class="plus" data-action="score-plus" data-index="${index}" aria-label="Increase ${escapeHtml(team.name)} score">+</button></div>
   </article>`;
@@ -360,6 +393,21 @@ function syncFormat(game, length) {
   game.teams.forEach((team, teamIndex) => {
     team.score = visibleMapRows(game).filter((row) => row.winner === teamIndex).length;
   });
+}
+
+function clearValorantMapResults(game) {
+  game.mapRows.forEach((row, index) => {
+    row.score = ['', ''];
+    row.winner = null;
+    row.overtime = false;
+    row.overtimeSeconds = 0;
+    row.status = index === 0 ? 'ready' : 'upcoming';
+  });
+  game.veto?.picks?.forEach((pick) => {
+    pick.score = ['', ''];
+    pick.winner = null;
+  });
+  game.activeMap = 0;
 }
 
 function renderMaps(config) {
@@ -408,12 +456,14 @@ function renderValorantVetoEditor(config, game) {
 function renderMapRow(row, index, config, game) {
   const isActive = index === game.activeMap;
   const modeOptions = `<option value="" ${row.mode ? '' : 'selected'}>TBD</option>${config.modes.map((mode) => `<option ${mode === row.mode ? 'selected' : ''}>${escapeHtml(mode)}</option>`).join('')}`;
-  const mapOptions = `<option value="" ${row.map ? '' : 'selected'}>TBD</option>${config.maps.map((map) => `<option ${map === row.map ? 'selected' : ''}>${escapeHtml(map)}</option>`).join('')}`;
+  const mapList = row.map && !config.maps.includes(row.map) ? [row.map, ...config.maps] : config.maps;
+  const mapOptions = `<option value="" ${row.map ? '' : 'selected'}>TBD</option>${mapList.map((map) => `<option ${map === row.map ? 'selected' : ''}>${escapeHtml(map)}</option>`).join('')}`;
+  const overtime = row.overtime ? `<em class="map-overtime"><b>OT</b> ${formatDuration(row.overtimeSeconds)}</em>` : '';
   return `<article class="map-row ${isActive ? 'active' : ''} ${row.winner !== null ? 'complete' : ''}">
     <button class="map-index" data-action="activate-map" data-index="${index}"><span>${isActive ? 'LIVE' : row.winner !== null ? 'FINAL' : 'MAP'}</span><strong>${String(index + 1).padStart(2, '0')}</strong></button>
     <label><span>MODE</span><select data-map-index="${index}" data-map-prop="mode">${modeOptions}</select></label>
     <label class="map-name"><span>MAP / STAGE</span><select data-map-index="${index}" data-map-prop="map">${mapOptions}</select></label>
-    <div class="map-score"><span>${escapeHtml(game.teams[0].shortName)}</span><input data-map-index="${index}" data-map-score="0" value="${escapeHtml(row.score[0])}" inputmode="numeric" maxlength="3"><i>&mdash;</i><input data-map-index="${index}" data-map-score="1" value="${escapeHtml(row.score[1])}" inputmode="numeric" maxlength="3"><span>${escapeHtml(game.teams[1].shortName)}</span></div>
+    <div class="map-score"><span>${escapeHtml(game.teams[0].shortName)}</span><input data-map-index="${index}" data-map-score="0" value="${escapeHtml(row.score[0])}" inputmode="numeric" maxlength="3"><i>&mdash;</i><input data-map-index="${index}" data-map-score="1" value="${escapeHtml(row.score[1])}" inputmode="numeric" maxlength="3"><span>${escapeHtml(game.teams[1].shortName)}</span>${overtime}</div>
     <div class="winner-buttons"><button class="${row.winner === 0 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="0">${escapeHtml(game.teams[0].shortName)}</button><button class="${row.winner === 1 ? 'selected' : ''}" data-action="map-winner" data-index="${index}" data-winner="1">${escapeHtml(game.teams[1].shortName)}</button></div>
   </article>`;
 }
@@ -453,9 +503,7 @@ function renderRosters(config) {
 function renderPlayerEditor(player, index, config, game) {
   const selectedArt = game.characterArt[player.character] || {};
   const isOverwatch = state.selectedGame === 'overwatch';
-  const displayAssetUrl = (value) => typeof value === 'string' && value.startsWith('/assets/')
-    ? `${overlayBaseUrl}${value}`
-    : value;
+  const isRocketLeague = state.selectedGame === 'rocketleague';
   const imageTile = (type, label, value, filename, character = '') => `<div class="roster-asset-tile">
     <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(displayAssetUrl(value))}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
     <div><b>${label}</b><small>${escapeHtml(filename || (character ? `No ${character} artwork yet` : 'No image selected'))}</small><button data-action="pick-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}" ${type === 'characterArtwork' && !character ? 'disabled' : ''}>${value ? 'REPLACE' : 'CHOOSE PNG'}</button>${value ? `<button class="clear-asset" data-action="clear-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}">CLEAR</button>` : ''}</div>
@@ -475,10 +523,12 @@ function renderPlayerEditor(player, index, config, game) {
     </div>
     <div class="player-media-row">
       ${imageTile('playerImage', 'Player portrait', player.playerImage, player.playerImageName)}
-      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isOverwatch ? 'Hero art is assigned automatically from the selected hero.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
+      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isOverwatch ? 'Hero art is assigned automatically from the selected hero.' : isRocketLeague ? 'Car PNG is unique to this player.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
       ${isOverwatch
         ? automaticArtTile('Hero artwork', selectedArt.url, selectedArt.name, player.character)
-        : imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
+        : isRocketLeague
+          ? imageTile('characterImage', 'Player car PNG', player.characterImage, player.characterImageName, player.character)
+          : imageTile('characterArtwork', `${config.characterLabel} artwork`, selectedArt.url, selectedArt.name, player.character)}
     </div>
   </div>`;
 }
@@ -562,6 +612,7 @@ function renderSettings() {
       <div class="companion-fields">
         <label class="field"><span>FILL SCREEN</span><select data-output-display-prop="fillDisplayId">${renderDisplayOptions(outputDisplaySettings.fillDisplayId, 'Primary display')}</select><small>Used by Fill and the left side of Paired dual output.</small></label>
         <label class="field"><span>KEY SCREEN</span><select data-output-display-prop="keyDisplayId">${renderDisplayOptions(outputDisplaySettings.keyDisplayId, 'Second display')}</select><small>Used by Key and the right side of Paired dual output.</small></label>
+        <label class="field compact-setting"><span>PROGRAM FADE OUT</span><input type="number" min="0.1" max="5" step="0.1" data-program-transition value="${Number(state.programTransitionSeconds || 1).toFixed(1)}"><small>Seconds. Applies when switching Scoreboard, Roster, Map Pool, or Clean.</small></label>
       </div>
       <footer><strong>Output scale</strong><span>Each app output window is created as a 1920 &times; 1080 source and then fullscreened on the selected display.</span><span>Use Preview for setup checks; Open Dual takes over both selected screens.</span></footer>
     </article>
@@ -663,10 +714,11 @@ function handleRocketLeagueEvent(envelope) {
     const gameData = data.Game || {};
     rl.live.matchGuid = data.MatchGuid || rl.live.matchGuid;
     if (rl.syncClock) {
-      rl.live.timeSeconds = Number(gameData.TimeSeconds ?? rl.live.timeSeconds);
-      rl.live.overtime = Boolean(gameData.bOvertime);
+      const timeSeconds = Number(gameData.TimeSeconds ?? rl.live.timeSeconds);
+      rl.live.timeSeconds = timeSeconds;
+      updateRocketLeagueOvertime(rl.live, gameData.bOvertime === undefined ? rl.live.overtime : gameData.bOvertime, timeSeconds);
     }
-    rl.live.arena = gameData.Arena || rl.live.arena;
+    rl.live.arena = rocketLeagueArenaName(gameData.Arena || rl.live.arena);
     rl.live.spectatedPlayer = gameData.Target?.Name || '';
     rl.live.teamScores = (gameData.Teams || []).reduce((scores, team) => {
       scores[Number(team.TeamNum)] = Number(team.Score) || 0;
@@ -679,8 +731,9 @@ function handleRocketLeagueEvent(envelope) {
   }
   if (envelope?.Event === 'ClockUpdatedSeconds' && rl.syncClock) {
     rl.live.matchGuid = data.MatchGuid || rl.live.matchGuid;
-    rl.live.timeSeconds = Number(data.TimeSeconds ?? rl.live.timeSeconds);
-    rl.live.overtime = Boolean(data.bOvertime);
+    const timeSeconds = Number(data.TimeSeconds ?? rl.live.timeSeconds);
+    rl.live.timeSeconds = timeSeconds;
+    updateRocketLeagueOvertime(rl.live, data.bOvertime === undefined ? rl.live.overtime : data.bOvertime, timeSeconds);
     scheduleLiveUpdate();
     return;
   }
@@ -688,6 +741,7 @@ function handleRocketLeagueEvent(envelope) {
     rl.live.matchGuid = data.MatchGuid || '';
     rl.live.timeSeconds = 300;
     rl.live.overtime = false;
+    rl.live.overtimeSeconds = 0;
     rl.live.players = [];
     rl.live.teamScores = [0, 0];
     if (rl.syncGoals) game.teams.forEach((team) => { team.detailScore = 0; });
@@ -706,6 +760,11 @@ function handleRocketLeagueEvent(envelope) {
     rl.processedMatches = rl.processedMatches.slice(-30);
     const activeRow = game.mapRows[game.activeMap];
     if (activeRow) {
+      const arena = rocketLeagueArenaName(data.Game?.Arena || rl.live.arena);
+      if (arena) activeRow.map = arena;
+      const endedInOvertime = Boolean(data.Game?.bOvertime ?? rl.live.overtime) || Number(rl.live.overtimeSeconds) > 0;
+      activeRow.overtime = endedInOvertime;
+      activeRow.overtimeSeconds = endedInOvertime ? Math.max(0, Math.floor(Number(data.Game?.OvertimeSeconds ?? rl.live.overtimeSeconds ?? data.Game?.TimeSeconds ?? rl.live.timeSeconds) || 0)) : 0;
       activeRow.winner = winner;
       activeRow.status = 'complete';
       activeRow.score = [String(game.teams[0].detailScore), String(game.teams[1].detailScore)];
@@ -781,6 +840,29 @@ root.addEventListener('click', async (event) => {
   const index = Number(button.dataset.index);
   const game = current();
   const config = GAME_CONFIGS[state.selectedGame];
+  if (button.dataset.action === 'pick-team-logo') {
+    const selected = await window.isuDesktop?.pickImage({
+      gameKey: state.selectedGame,
+      team: index,
+      type: 'teamLogo'
+    });
+    if (selected) {
+      commit(() => {
+        game.teams[index].logoImage = selected.url;
+        game.teams[index].logoImageName = selected.name;
+      }, 'Team logo saved');
+      render();
+    }
+    return;
+  }
+  if (button.dataset.action === 'clear-team-logo') {
+    commit(() => {
+      game.teams[index].logoImage = '';
+      game.teams[index].logoImageName = '';
+    }, 'Team logo cleared');
+    render();
+    return;
+  }
   if (button.dataset.action === 'pick-player-image') {
     const type = button.dataset.imageType;
     const character = button.dataset.character;
@@ -893,7 +975,10 @@ root.addEventListener('click', async (event) => {
     'detail-plus': () => commit(() => { game.teams[index].detailScore += 1; }),
     'detail-minus': () => commit(() => { game.teams[index].detailScore = Math.max(0, game.teams[index].detailScore - 1); }),
     'swap-teams': () => commit(() => swapGameTeams(game), 'Team sides swapped'),
-    'reset-scores': () => commit(() => { game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; }); }, 'Scores reset'),
+    'reset-scores': () => commit(() => {
+      game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; });
+      if (state.selectedGame === 'valorant') clearValorantMapResults(game);
+    }, 'Scores reset'),
     'next-match': () => {
       const nextIndex = (game.activeMap + 1) % visibleMapRows(game, config).length;
       commit(() => advanceGameMatch(game, state.selectedGame), `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
@@ -909,6 +994,8 @@ root.addEventListener('click', async (event) => {
       game.mapRows.forEach((row, i) => {
         row.winner = null;
         row.score = ['', ''];
+        row.overtime = false;
+        row.overtimeSeconds = 0;
         if (state.selectedGame === 'overwatch') {
           row.map = '';
           row.mode = '';
@@ -916,6 +1003,12 @@ root.addEventListener('click', async (event) => {
         row.status = i === 0 ? 'ready' : 'upcoming';
       });
       game.teams.forEach((team) => { team.score = 0; });
+      if (state.selectedGame === 'valorant') {
+        game.veto?.picks?.forEach((pick) => {
+          pick.score = ['', ''];
+          pick.winner = null;
+        });
+      }
       game.activeMap = 0;
     }, 'Map results cleared'),
     'reset-veto': () => commit(() => {
@@ -924,6 +1017,8 @@ root.addEventListener('click', async (event) => {
       game.mapRows.forEach((row, i) => {
         row.map = '';
         row.score = ['', ''];
+        row.overtime = false;
+        row.overtimeSeconds = 0;
         row.winner = null;
         row.status = i === 0 ? 'ready' : 'upcoming';
       });
@@ -976,6 +1071,13 @@ root.addEventListener('change', (event) => {
     });
     return;
   }
+  if (target.dataset.programTransition !== undefined) {
+    commit(() => {
+      state.programTransitionSeconds = Math.max(0.1, Math.min(5, Number(target.value) || 1));
+    }, 'Program transition saved');
+    render();
+    return;
+  }
   if (target.dataset.rlProp) {
     const prop = target.dataset.rlProp;
     commit(() => {
@@ -1001,7 +1103,11 @@ root.addEventListener('change', (event) => {
     commit(() => updatePath(target.dataset.field, target.dataset.field === 'activeMap' ? Number(target.value) : target.value));
   }
   if (target.dataset.team !== undefined) {
-    commit(() => { current().teams[Number(target.dataset.team)][target.dataset.prop] = target.type === 'checkbox' ? target.checked : target.value; });
+    commit(() => {
+      const team = current().teams[Number(target.dataset.team)];
+      team[target.dataset.prop] = target.type === 'checkbox' ? target.checked : target.value;
+      if (target.dataset.prop === 'logoImage') team.logoImageName = target.value ? 'Custom URL' : '';
+    });
   }
   if (target.dataset.awayRosterToggle !== undefined) {
     commit(() => {

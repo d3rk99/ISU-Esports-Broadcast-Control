@@ -52,6 +52,22 @@
     if (element) element.textContent = String(value ?? '');
   };
 
+  function renderLogo(selector, team) {
+    const node = typeof selector === 'string' ? $(selector) : selector;
+    if (!node) return;
+    const logo = safeImageUrl(team?.logoImage, '');
+    node.classList.toggle('has-image', Boolean(logo));
+    node.replaceChildren();
+    if (logo) {
+      const image = document.createElement('img');
+      image.src = logo;
+      image.alt = '';
+      node.append(image);
+    } else {
+      node.textContent = team?.shortName || '';
+    }
+  }
+
   function getActive(state) {
     const selectedGame = GAME_META[state?.selectedGame] ? state.selectedGame : 'overwatch';
     const game = state?.games?.[selectedGame] || FALLBACK.games.overwatch;
@@ -72,7 +88,12 @@
   function arenaName(value) {
     const known = {
       Stadium_P: 'DFH STADIUM', EuroStadium_P: 'MANNFIELD', ChampsStadium_P: 'CHAMPIONS FIELD',
-      UtopiaStadium_P: 'UTOPIA COLISEUM', Park_P: 'BECKWITH PARK', CHN_Stadium_P: 'FORBIDDEN TEMPLE'
+      UtopiaStadium_P: 'UTOPIA COLISEUM', Park_P: 'BECKWITH PARK', CHN_Stadium_P: 'FORBIDDEN TEMPLE',
+      cs_day_p: 'DEADEYE CANYON', CS_Day_P: 'DEADEYE CANYON', CS_HW_P: 'DEADEYE CANYON',
+      Farm_P: 'FARMSTEAD', NeoTokyo_P: 'NEO TOKYO', TrainStation_P: 'URBAN CENTRAL',
+      Underwater_P: 'AQUADOME', Beach_P: 'SALTY SHORES', Wasteland_P: 'WASTELAND',
+      ARC_P: 'STARBASE ARC', ThrowbackStadium_P: 'THROWBACK STADIUM',
+      SovereignHeights_P: 'SOVEREIGN HEIGHTS', Core707_P: 'CORE 707', Rivals_P: 'RIVALS ARENA'
     };
     if (!value) return '';
     return known[value] || String(value).replace(/_P$/i, '').replaceAll('_', ' ').toUpperCase();
@@ -122,8 +143,8 @@
     setText('#game-code', game.match?.live ? 'LIVE' : meta.code);
     setText('#home-name', teams[0]?.name);
     setText('#away-name', teams[1]?.name);
-    setText('#home-logo', teams[0]?.shortName);
-    setText('#away-logo', teams[1]?.shortName);
+    renderLogo('#home-logo', teams[0]);
+    renderLogo('#away-logo', teams[1]);
     setText('#home-score', teams[0]?.score ?? 0);
     setText('#away-score', teams[1]?.score ?? 0);
     const rlLive = game.rocketLeague?.live;
@@ -143,14 +164,25 @@
   function renderValorantVeto(game) {
     const teams = game.teams || FALLBACK.games.overwatch.teams;
     const veto = game.veto || FALLBACK.games.overwatch.veto;
-    $$('[data-ban]').forEach((element, index) => { element.textContent = veto.bans?.[index] || 'TBD'; });
+    $$('[data-ban]').forEach((element, index) => {
+      const map = veto.bans?.[index] || 'TBD';
+      element.textContent = map;
+      const half = element.closest('.ban-half');
+      const card = element.closest('.ban-card');
+      const artwork = safeImageUrl(game.mapArt?.[map]?.url, '');
+      if (half) half.style.setProperty('--map-art', artwork ? `url("${artwork}")` : 'none');
+      if (card) card.classList.toggle('has-map-art', Boolean(artwork));
+    });
     $$('[data-pick-card]').forEach((card, index) => {
       const pick = veto.picks?.[index] || {};
       const attacker = Number(pick.attackers) === 1 ? 1 : 0;
       const defender = attacker === 0 ? 1 : 0;
       setText(`[data-pick-map="${index}"]`, pick.map || 'TBD');
-      setText(`[data-attacker="${index}"]`, teams[attacker]?.shortName || 'TBD');
-      setText(`[data-defender="${index}"]`, teams[defender]?.shortName || 'TBD');
+      const artwork = safeImageUrl(game.mapArt?.[pick.map]?.url, '');
+      card.classList.toggle('has-map-art', Boolean(artwork));
+      card.style.setProperty('--map-art', artwork ? `url("${artwork}")` : 'none');
+      renderLogo(`[data-attacker="${index}"]`, teams[attacker]);
+      renderLogo(`[data-defender="${index}"]`, teams[defender]);
       card.style.setProperty('--attacker-primary', teams[attacker]?.color || '#f47920');
       card.style.setProperty('--attacker-secondary', teams[attacker]?.secondaryColorEnabled ? teams[attacker].secondaryColor : teams[attacker]?.color || '#f47920');
       card.style.setProperty('--defender-primary', teams[defender]?.color || '#4da1ff');
@@ -167,6 +199,20 @@
     return (game.mapRows || []).slice(0, Math.min((game.mapRows || []).length, cappedLength));
   }
 
+  function hasStartedScore(score = []) {
+    return score.some((value) => Number(value) > 0);
+  }
+
+  function valorantHasMapResults(game) {
+    return visibleMapRows(game, 'valorant').some((row) => hasStartedScore(row.score || []))
+      || (game.veto?.picks || []).some((pick) => hasStartedScore(pick.score || []));
+  }
+
+  function formatDuration(seconds) {
+    const safeSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+    return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
+  }
+
   function renderGenericMaps(game, selectedGame) {
     const container = $('#generic-map-pool');
     const rows = visibleMapRows(game, selectedGame);
@@ -175,7 +221,7 @@
       activeMap: game.activeMap,
       seriesLength: game.seriesLength,
       teams: (game.teams || []).map((team) => ({ shortName: team.shortName, score: team.score })),
-      rows: rows.map((row) => ({ map: row.map, mode: row.mode, score: row.score, winner: row.winner, status: row.status }))
+      rows: rows.map((row) => ({ map: row.map, mode: row.mode, score: row.score, winner: row.winner, status: row.status, overtime: row.overtime, overtimeSeconds: row.overtimeSeconds }))
     });
     const renderRoot = activeRenderRoot || document;
     if (signature === lastMapPoolSignatureByRoot.get(renderRoot)) return;
@@ -200,7 +246,15 @@
       const mode = document.createElement('small');
       mode.textContent = row.mode || '';
       const score = document.createElement('p');
-      score.textContent = row.score?.some(Boolean) ? `${row.score[0] || '0'} — ${row.score[1] || '0'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : 'UPCOMING';
+      score.textContent = row.score?.some(Boolean) ? `${row.score[0] || '0'} - ${row.score[1] || '0'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : 'UPCOMING';
+      if (row.overtime) {
+        const overtime = document.createElement('span');
+        overtime.className = 'map-overtime';
+        const label = document.createElement('b');
+        label.textContent = 'OT';
+        overtime.append(label, document.createTextNode(` ${formatDuration(row.overtimeSeconds)}`));
+        score.append(overtime);
+      }
       card.append(image, number, map, mode, score);
       container.append(card);
     });
@@ -215,6 +269,8 @@
     setText('#map-game-name', meta.name);
     setText('#map-event', game.match?.event);
     setText('#map-series', `${teams[0]?.shortName || 'HOME'} ${teams[0]?.score || 0} — ${teams[1]?.score || 0} ${teams[1]?.shortName || 'AWAY'}`);
+    renderLogo('#map-home-logo', teams[0]);
+    renderLogo('#map-away-logo', teams[1]);
     const root = $('[data-overlay="map-pool"]');
     root.style.setProperty('--home-color', teams[0]?.color || '#f47920');
     root.style.setProperty('--home-secondary', teams[0]?.secondaryColorEnabled ? teams[0].secondaryColor : teams[0]?.color || '#f47920');
@@ -222,16 +278,24 @@
     root.style.setProperty('--away-secondary', teams[1]?.secondaryColorEnabled ? teams[1].secondaryColor : teams[1]?.color || '#5e6673');
     const valorant = $('#valorant-veto');
     const generic = $('#generic-map-pool');
-    valorant.hidden = true;
-    generic.hidden = false;
-    setText('.overlay-titlebar h1', 'MAP POOL / SERIES');
-    renderGenericMaps(game, selectedGame);
+    const showValorantVeto = selectedGame === 'valorant' && !valorantHasMapResults(game);
+    valorant.hidden = !showValorantVeto;
+    generic.hidden = showValorantVeto;
+    if (showValorantVeto) {
+      setText('.overlay-titlebar h1', 'MAP PICKS / BANS');
+      renderValorantVeto(game);
+    } else {
+      setText('.overlay-titlebar h1', 'MAP POOL / SERIES');
+      renderGenericMaps(game, selectedGame);
+    }
   }
 
   const rosterTimersByRoot = new WeakMap();
+  const lastRosterSignatureByRoot = new WeakMap();
 
   function safeImageUrl(value, fallback) {
     if (typeof value === 'string' && value.startsWith('http://127.0.0.1:3174/user-assets/')) return value;
+    if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
     if (typeof value === 'string' && value.startsWith('/assets/')) return value;
     return fallback;
   }
@@ -258,12 +322,15 @@
 
   function renderRosterTeam(game, meta, program, side) {
     const container = $('#roster-cards');
+    const selectedGame = document.body.dataset.game || '';
     const teamIndex = side === 'away' ? 1 : 0;
     const team = game.teams?.[teamIndex] || FALLBACK.games.overwatch.teams[teamIndex];
     const rosterCollection = side === 'away' ? game.awayRosters : game.rosters;
     const roster = rosterCollection?.[program] || [];
     const visibleRoster = roster.filter((player) => player.handle || player.name || player.playerImage || player.character || player.characterImage);
-    const players = (visibleRoster.length ? visibleRoster : roster).slice(0, 6);
+    const fallbackCount = selectedGame === 'rocketleague' ? 3 : selectedGame === 'smash' ? 1 : selectedGame === 'callofduty' ? 4 : 5;
+    const fallbackRoster = Array.from({ length: fallbackCount }, (_, index) => ({ role: index === 0 ? 'Starter' : 'Starter' }));
+    const players = (visibleRoster.length ? visibleRoster : roster.length ? roster : fallbackRoster).slice(0, 6);
     setText('#roster-game', meta.name);
     setText('#roster-team-name', team.name || (side === 'home' ? 'HOME TEAM' : 'AWAY TEAM'));
     setText('#roster-program', program === 'jv' ? 'JUNIOR VARSITY' : 'VARSITY');
@@ -274,6 +341,7 @@
     stage.style.setProperty('--team-secondary', team.secondaryColorEnabled ? team.secondaryColor : team.color || '#f47920');
     stage.dataset.side = side;
     stage.classList.remove('character-mode');
+    stage.classList.add('roster-sequence');
     container.style.setProperty('--roster-count', Math.max(players.length, 1));
     container.replaceChildren();
 
@@ -286,12 +354,13 @@
       const playerImage = document.createElement('img');
       playerImage.className = 'player-photo';
       playerImage.alt = '';
-      playerImage.src = safeImageUrl(player.playerImage, './assets/player-placeholder.svg');
       const characterImage = document.createElement('img');
       characterImage.className = 'character-photo';
       characterImage.alt = '';
       const sharedArtwork = game.characterArt?.[player.character] || {};
-      characterImage.src = safeImageUrl(sharedArtwork.url || player.characterImage, './assets/character-placeholder.svg');
+      const characterArtUrl = selectedGame === 'rocketleague' ? player.characterImage : sharedArtwork.url || player.characterImage;
+      playerImage.src = safeImageUrl(player.playerImage || (selectedGame === 'rocketleague' ? characterArtUrl : ''), './assets/player-placeholder.svg');
+      characterImage.src = safeImageUrl(characterArtUrl, './assets/character-placeholder.svg');
       const number = document.createElement('span');
       number.className = 'roster-number';
       number.textContent = String(index + 1).padStart(2, '0');
@@ -311,6 +380,7 @@
       copy.append(role, name, realName, character);
       card.append(media, copy);
       container.append(card);
+      rosterAfter(() => card.classList.add('is-visible'), 250 + (index * 140));
     });
   }
 
@@ -325,12 +395,42 @@
     if (!container) return;
     const { selectedGame, game, meta } = getActive(state);
     applyTheme(selectedGame, meta);
-    clearRosterTimers();
     const requestedProgram = OVERLAY_QUERY.get('program') || OVERLAY_QUERY.get('team');
     const program = requestedProgram === 'jv' ? 'jv' : (requestedProgram === 'varsity' ? 'varsity' : state.activeRoster || 'varsity');
+    const renderRoot = activeRenderRoot || document;
+    const rosterSignature = JSON.stringify({
+      selectedGame,
+      program,
+      showAwayRoster: game.showAwayRoster,
+      teams: (game.teams || []).map((team) => ({
+        name: team.name,
+        color: team.color,
+        secondaryColor: team.secondaryColor,
+        secondaryColorEnabled: team.secondaryColorEnabled
+      })),
+      home: (game.rosters?.[program] || []).map((player) => ({
+        handle: player.handle,
+        name: player.name,
+        role: player.role,
+        character: player.character,
+        playerImage: player.playerImage,
+        characterImage: player.characterImage
+      })),
+      away: (game.awayRosters?.[program] || []).map((player) => ({
+        handle: player.handle,
+        name: player.name,
+        role: player.role,
+        character: player.character,
+        playerImage: player.playerImage,
+        characterImage: player.characterImage
+      }))
+    });
+    if (rosterSignature === lastRosterSignatureByRoot.get(renderRoot)) return;
+    lastRosterSignatureByRoot.set(renderRoot, rosterSignature);
+    clearRosterTimers();
     const stage = $('.roster-stage');
     stage.classList.remove('team-slide-out', 'team-slide-in');
-    setText('#roster-cycle-label', game.showAwayRoster ? 'HOME → AWAY · 15 SEC' : 'PLAYER → CHARACTER · 7 SEC');
+    setText('#roster-cycle-label', game.showAwayRoster ? 'HOME -> AWAY - 15 SEC' : selectedGame === 'rocketleague' ? 'PLAYER -> CAR - 7 SEC' : 'PLAYER -> CHARACTER - 7 SEC');
     renderRosterTeam(game, meta, program, 'home');
     rosterAfter(() => showRosterCharacters('home'), 7000);
 

@@ -2,6 +2,7 @@ import type ModuleInstance from './main.js'
 
 type Team = 'home' | 'away'
 type Operation = 'increment' | 'decrement'
+type ProgramOutput = 'scoreboard' | 'roster' | 'map-pool' | 'clean'
 
 export type ActionsSchema = {
 	series_score_adjust: { options: { team: Team; operation: Operation; amount: number } }
@@ -17,6 +18,7 @@ export type ActionsSchema = {
 	set_map_winner: { options: { number: string; team: Team | 'clear' } }
 	reset_maps: { options: Record<string, never> }
 	reset_valorant_veto: { options: Record<string, never> }
+	select_program_output: { options: { output: ProgramOutput } }
 }
 
 const TEAM_CHOICES = [
@@ -30,6 +32,13 @@ const GAME_CHOICES = [
 	{ id: 'rocketleague', label: 'Rocket League' },
 	{ id: 'smash', label: 'Smash Bros. Ultimate' },
 	{ id: 'callofduty', label: 'Call of Duty' },
+]
+
+const PROGRAM_OUTPUT_CHOICES = [
+	{ id: 'scoreboard', label: 'Scoreboard' },
+	{ id: 'roster', label: 'Roster' },
+	{ id: 'map-pool', label: 'Map Pool' },
+	{ id: 'clean', label: 'Clean' },
 ]
 
 export function UpdateActions(self: ModuleInstance): void {
@@ -171,6 +180,13 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'VALORANT: Reset veto selections',
 			options: [],
 			callback: async () => self.sendControlAction({ action: 'veto.reset', game: 'valorant' }),
+		},
+		select_program_output: {
+			name: 'Program output: Select HTML',
+			options: [
+				{ id: 'output', type: 'dropdown', label: 'Output', default: 'scoreboard', choices: PROGRAM_OUTPUT_CHOICES },
+			],
+			callback: async (event) => self.sendControlAction({ action: 'output.select', output: event.options.output }),
 		},
 	})
 }

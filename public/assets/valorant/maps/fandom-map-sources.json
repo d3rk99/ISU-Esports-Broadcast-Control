@@ -1,0 +1,106 @@
+[
+  {
+    "map": "Abyss",
+    "file": "abyss.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/6/61/Loading_Screen_Abyss.png/revision/latest?cb=20240730145619",
+    "sourceFile": "Loading Screen Abyss.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Ascent",
+    "file": "ascent.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/e/e7/Loading_Screen_Ascent.png/revision/latest?cb=20200607180020",
+    "sourceFile": "Loading Screen Ascent.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Bind",
+    "file": "bind.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/2/23/Loading_Screen_Bind.png/revision/latest?cb=20200620202316",
+    "sourceFile": "Loading Screen Bind.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Breeze",
+    "file": "breeze.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/1/10/Loading_Screen_Breeze.png/revision/latest?cb=20260106175937",
+    "sourceFile": "Loading Screen Breeze.png",
+    "width": 2560,
+    "height": 1440
+  },
+  {
+    "map": "Corrode",
+    "file": "corrode.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/6/6f/Loading_Screen_Corrode.png/revision/latest?cb=20250624201813",
+    "sourceFile": "Loading Screen Corrode.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Fracture",
+    "file": "fracture.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/f/fc/Loading_Screen_Fracture.png/revision/latest?cb=20210908143656",
+    "sourceFile": "Loading Screen Fracture.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Haven",
+    "file": "haven.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/7/70/Loading_Screen_Haven.png/revision/latest?cb=20200620202335",
+    "sourceFile": "Loading Screen Haven.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Icebox",
+    "file": "icebox.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/1/13/Loading_Screen_Icebox.png/revision/latest?cb=20250730171440",
+    "sourceFile": "Loading Screen Icebox.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Lotus",
+    "file": "lotus.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/d/d0/Loading_Screen_Lotus.png/revision/latest?cb=20230106163526",
+    "sourceFile": "Loading Screen Lotus.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Pearl",
+    "file": "pearl.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/a/af/Loading_Screen_Pearl.png/revision/latest?cb=20220622132842",
+    "sourceFile": "Loading Screen Pearl.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Range",
+    "file": "range.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/3/37/Loading_Screen_Range.png/revision/latest?cb=20240801141438",
+    "sourceFile": "Loading Screen Range.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Split",
+    "file": "split.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/d/d6/Loading_Screen_Split.png/revision/latest?cb=20230411161807",
+    "sourceFile": "Loading Screen Split.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
+    "map": "Sunset",
+    "file": "sunset.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/5/5c/Loading_Screen_Sunset.png/revision/latest?cb=20230829125442",
+    "sourceFile": "Loading Screen Sunset.png",
+    "width": 1920,
+    "height": 1080
+  }
+]

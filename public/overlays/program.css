@@ -16,16 +16,42 @@ body {
 }
 
 #program-root {
+  position: relative;
   width: 1920px;
   height: 1080px;
   overflow: hidden;
   background: transparent;
+  --program-transition: 1s;
 }
 
 body[data-output="pair"] #program-root {
+  grid-template-columns: 1920px 1920px;
+  width: 3840px;
+}
+
+.program-scene {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  opacity: 1;
+  background: transparent;
+  z-index: 1;
+}
+
+body[data-output="pair"] .program-scene {
   display: grid;
   grid-template-columns: 1920px 1920px;
   width: 3840px;
+}
+
+.program-scene.exiting {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--program-transition) linear;
+  z-index: 2;
 }
 
 .program-frame {
