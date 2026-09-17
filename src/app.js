@@ -294,6 +294,12 @@ function renderValorantOcrPanel(game) {
   const status = live.status || 'disabled';
   const simulatorRunning = status === 'simulating';
   const snapshot = valorantOcrSnapshot;
+  const sourceFields = ocr.source === 'remote' ? `
+    <label class="field"><span>RECEIVER PORT</span><input type="number" min="1" max="65535" data-vo-prop="bridgePort" value="${Number(ocr.bridgePort) || 3175}"><small>Universal bridge listener</small></label>
+    <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-vo-prop="bridgeToken" value="${escapeHtml(ocr.bridgeToken || '')}" placeholder="Generate a private key"><button data-action="generate-valorant-bridge-key">GENERATE</button><small>Graphics PC: ${escapeHtml(networkAddresses.join(' / ') || 'address unavailable')}</small></label>` : `
+    <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vo-prop="windowName" list="valorant-window-list" value="${escapeHtml(ocr.windowName)}"><datalist id="valorant-window-list">${valorantWindowChoices.map((window) => `<option value="${escapeHtml(window.name)}"></option>`).join('')}</datalist></label>
+    <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
+    <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>`;
   return `
     <article class="panel valorant-ocr-panel">
       <header class="vo-heading">
@@ -302,16 +308,16 @@ function renderValorantOcrPanel(game) {
       </header>
       <div class="vo-settings-grid">
         <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="enabled" ${ocr.enabled ? 'checked' : ''}><i></i><span><b>OCR CAPTURE</b><small>${ocr.enabled ? 'Enabled for VALORANT' : 'Disabled'}</small></span></label>
-        <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vo-prop="windowName" list="valorant-window-list" value="${escapeHtml(ocr.windowName)}"><datalist id="valorant-window-list">${valorantWindowChoices.map((window) => `<option value="${escapeHtml(window.name)}"></option>`).join('')}</datalist></label>
-        <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
-        <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
+        <label class="field"><span>DATA SOURCE</span><select data-vo-prop="source"><option value="local" ${ocr.source !== 'remote' ? 'selected' : ''}>This PC / direct</option><option value="remote" ${ocr.source === 'remote' ? 'selected' : ''}>Universal Game Bridge</option></select></label>
+        ${sourceFields}
       </div>
-      <div class="vo-toolbar">
+      <div class="vo-toolbar ${ocr.source === 'remote' ? 'remote' : ''}">
+        ${ocr.source === 'remote' ? '<span>Capture, ROI calibration, and test feed controls are available in the bridge app on the VALORANT PC.</span>' : `
         <button class="secondary-button" data-action="detect-valorant-window">FIND WINDOW</button>
         <button class="secondary-button" data-action="capture-valorant-frame">CAPTURE DEBUG FRAME</button>
         <button class="secondary-button" data-action="clear-valorant-ocr">CLEAR LOCKS</button>
         <button class="secondary-button ${simulatorRunning ? 'danger' : ''}" data-action="${simulatorRunning ? 'stop-valorant-simulator' : 'start-valorant-simulator'}">${simulatorRunning ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
-        <label class="vo-debug-toggle"><input type="checkbox" data-vo-prop="debugRois" ${ocr.debugRois ? 'checked' : ''}><span>SHOW ROI BOXES</span></label>
+        <label class="vo-debug-toggle"><input type="checkbox" data-vo-prop="debugRois" ${ocr.debugRois ? 'checked' : ''}><span>SHOW ROI BOXES</span></label>`}
       </div>
       <div class="vo-live-grid">
         ${VALORANT_OCR_FIELD_IDS.map((fieldId) => {
@@ -789,7 +795,7 @@ async function syncValorantOcr() {
     live: undefined,
     savedEnabled: ocr.enabled,
     enabled: state.selectedGame === 'valorant' && ocr.enabled,
-    source: 'local'
+    source: ocr.source
   });
   if (result?.status) {
     ocr.live = { ...ocr.live, ...result.status, status: result.status.state || ocr.live.status };
@@ -1251,6 +1257,12 @@ root.addEventListener('click', async (event) => {
   if (button.dataset.action === 'stop-valorant-simulator') {
     await window.isuDesktop?.stopValorantOcrSimulator();
     toast('VALORANT OCR test feed stopped');
+    return;
+  }
+  if (button.dataset.action === 'generate-valorant-bridge-key') {
+    commit(() => { state.games.valorant.valorantOcr.bridgeToken = crypto.randomUUID().replaceAll('-', ''); }, 'Private VALORANT bridge key generated');
+    await syncValorantOcr();
+    render();
     return;
   }
   const actions = {

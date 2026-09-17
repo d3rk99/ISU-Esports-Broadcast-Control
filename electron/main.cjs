@@ -27,7 +27,7 @@ const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
 ];
 const VALORANT_OCR_SETTINGS_FIELDS = [
-  'enabled', 'source', 'windowName', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'debugRois', 'roiOverrides'
+  'enabled', 'source', 'windowName', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();

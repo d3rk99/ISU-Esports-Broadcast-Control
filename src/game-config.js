@@ -514,6 +514,8 @@ export function createGameState(gameKey) {
       language: 'eng',
       scoreboardMode: 'manual',
       debugRois: true,
+      bridgePort: 3175,
+      bridgeToken: '',
       roiOverrides: {},
       live: {
         status: 'disabled',

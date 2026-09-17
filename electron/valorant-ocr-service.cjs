@@ -1,5 +1,6 @@
 const { DEFAULT_PROFILE_ID, FIELD_IDS, getValorantOcrProfile, listValorantOcrProfiles } = require('./valorant-ocr-profiles.cjs');
 const { ValorantOcrState } = require('./valorant-ocr-state.cjs');
+const { WebSocketServer } = require('ws');
 
 const DEFAULTS = Object.freeze({
   enabled: false,
@@ -10,8 +11,15 @@ const DEFAULTS = Object.freeze({
   language: 'eng',
   scoreboardMode: 'manual',
   debugRois: true,
+  bridgePort: 3175,
+  bridgeToken: '',
   roiOverrides: {}
 });
+
+function safePort(value, fallback = DEFAULTS.bridgePort) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 && parsed < 65536 ? parsed : fallback;
+}
 
 function normalizeSettings(settings = {}) {
   const captureFps = Number(settings.captureFps);
@@ -20,13 +28,15 @@ function normalizeSettings(settings = {}) {
     ...DEFAULTS,
     ...settings,
     enabled: Boolean(settings.enabled),
-    source: settings.source === 'simulator' ? 'simulator' : 'local',
+    source: ['remote', 'simulator'].includes(settings.source) ? settings.source : 'local',
     windowName: String(settings.windowName || DEFAULTS.windowName).trim() || DEFAULTS.windowName,
     captureFps: Number.isFinite(captureFps) ? Math.max(1, Math.min(15, Math.round(captureFps))) : DEFAULTS.captureFps,
     profileId: profile.id,
     language: 'eng',
     scoreboardMode: ['manual', 'swapped'].includes(settings.scoreboardMode) ? settings.scoreboardMode : 'manual',
     debugRois: settings.debugRois !== false,
+    bridgePort: safePort(settings.bridgePort),
+    bridgeToken: String(settings.bridgeToken || '').trim(),
     roiOverrides: Object.fromEntries(FIELD_IDS.map((id) => [id, { ...profile.fields[id].roi }]))
   };
 }
@@ -43,6 +53,11 @@ class ValorantOcrService {
     this.loopTimer = null;
     this.watchdogTimer = null;
     this.simulatorTimer = null;
+    this.server = null;
+    this.bridgeClients = new Set();
+    this.remoteState = null;
+    this.remoteSequence = 0;
+    this.lastRemoteAt = 0;
     this.busy = false;
     this.generation = 0;
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
@@ -55,7 +70,9 @@ class ValorantOcrService {
 
   makeStatus(state, message, extra = {}) {
     const now = this.now();
-    const snapshot = this.validator.snapshot(now);
+    const snapshot = this.settings.source === 'remote'
+      ? this.remoteSnapshot(now)
+      : this.validator.snapshot(now);
     const lastTrustedAt = Math.max(0, ...FIELD_IDS.map((id) => snapshot.fields[id].updatedAt || 0));
     return {
       state,
@@ -76,6 +93,9 @@ class ValorantOcrService {
       frameAgeMs: this.latestFrame ? now - this.latestFrame.capturedAt : null,
       lastTrustedAt: lastTrustedAt || null,
       trustedAgeMs: lastTrustedAt ? now - lastTrustedAt : null,
+      bridgeClients: this.bridgeClients.size,
+      lastPacketAt: this.lastRemoteAt || null,
+      dataAgeMs: this.lastRemoteAt ? now - this.lastRemoteAt : null,
       updatedAt: now,
       ...extra
     };
@@ -88,9 +108,32 @@ class ValorantOcrService {
   }
 
   emitState(now = this.now()) {
+    if (this.settings.source === 'remote') {
+      const state = this.remoteSnapshot(now);
+      this.onState(state);
+      return state;
+    }
     const snapshot = this.validator.snapshot(now);
     const state = this.normalizedState(snapshot, now);
     this.onState(state);
+    return state;
+  }
+
+  remoteSnapshot(now = this.now()) {
+    if (!this.remoteState) {
+      const state = this.normalizedState(new ValorantOcrState().snapshot(now), now);
+      state.connected = false;
+      state.capture = { width: 1920, height: 1080, fps: 0, lastFrameAt: null, windowName: this.settings.windowName };
+      return state;
+    }
+    const state = JSON.parse(JSON.stringify(this.remoteState));
+    const networkStale = !this.lastRemoteAt || now - this.lastRemoteAt > 1500;
+    state.connected = !networkStale && this.bridgeClients.size > 0;
+    state.receivedAt = this.lastRemoteAt || null;
+    state.networkAgeMs = this.lastRemoteAt ? now - this.lastRemoteAt : null;
+    if (networkStale && state.fields) {
+      for (const field of Object.values(state.fields)) field.stale = true;
+    }
     return state;
   }
 
@@ -134,6 +177,11 @@ class ValorantOcrService {
       this.startSimulator();
       return this.status;
     }
+    if (this.settings.source === 'remote') {
+      this.emitStatus('starting', 'Starting VALORANT bridge receiver');
+      this.startReceiver();
+      return this.status;
+    }
     if (!this.capture || !this.ocr) return this.emitStatus('error', 'OCR capture service is unavailable');
     this.emitStatus('starting', wasEnabled ? 'Restarting VALORANT OCR' : 'Starting VALORANT OCR');
     this.schedule(0);
@@ -149,6 +197,12 @@ class ValorantOcrService {
     this.watchdogTimer = null;
     this.simulatorTimer = null;
     this.busy = false;
+    for (const client of this.bridgeClients) client.close();
+    this.bridgeClients.clear();
+    if (this.server) {
+      this.server.close();
+      this.server = null;
+    }
   }
 
   stop() {
@@ -228,13 +282,22 @@ class ValorantOcrService {
     clearInterval(this.watchdogTimer);
     this.watchdogTimer = setInterval(() => {
       const snapshot = this.emitState();
-      if (this.status.state === 'reading' && FIELD_IDS.every((id) => snapshot.fields[id].stale)) {
+      if (this.settings.source === 'remote' && this.lastRemoteAt && this.now() - this.lastRemoteAt > 1500) {
+        this.emitStatus('stale', 'Game PC data is stale; retaining the last trusted values', { transport: 'bridge' });
+      } else if (this.status.state === 'reading' && FIELD_IDS.every((id) => snapshot.fields[id].stale)) {
         this.emitStatus('stale', 'OCR data is stale; retaining the last trusted values');
       } else this.emitStatus();
     }, 500);
   }
 
   clearState() {
+    if (this.settings.source === 'remote') {
+      this.remoteState = null;
+      this.remoteSequence = 0;
+      this.lastRemoteAt = 0;
+      this.emitStatus('listening', 'Remote state cleared; waiting for Game PC', { transport: 'bridge' });
+      return this.emitState();
+    }
     const snapshot = this.validator.clear(this.now());
     this.onState(this.normalizedState(snapshot));
     this.emitStatus(this.settings.enabled ? 'calibrating' : 'disabled', this.settings.enabled ? 'OCR state cleared; waiting for a stable read' : 'VALORANT OCR is off');
@@ -242,16 +305,58 @@ class ValorantOcrService {
   }
 
   async listWindows() {
+    if (this.settings.source === 'remote') return [];
     if (!this.capture) return [];
     return this.capture.listWindows();
   }
 
   async captureSnapshot() {
+    if (this.settings.source === 'remote') throw new Error('Capture debug frames on the Game PC bridge');
     if (!this.capture) throw new Error('Capture service is unavailable');
     const frame = await this.capture.capture(this.settings.windowName);
     this.latestFrame = frame;
     const profile = getValorantOcrProfile(this.settings.profileId, this.settings.roiOverrides);
     return { ...this.capture.snapshot(frame, profile.fields), profile };
+  }
+
+  startReceiver() {
+    if (!this.settings.bridgeToken) return this.emitStatus('error', 'Create a bridge key before starting remote mode');
+    try {
+      this.server = new WebSocketServer({ host: '0.0.0.0', port: this.settings.bridgePort });
+    } catch (error) {
+      return this.emitStatus('error', error.message, { transport: 'bridge' });
+    }
+    this.server.on('listening', () => this.emitStatus('listening', `Waiting for Game PC on port ${this.settings.bridgePort}`, { transport: 'bridge' }));
+    this.server.on('error', (error) => this.emitStatus('error', `Bridge receiver error: ${error.message}`, { transport: 'bridge' }));
+    this.server.on('connection', (client, request) => {
+      const requestUrl = new URL(request.url, `ws://${request.headers.host || 'localhost'}`);
+      if (requestUrl.searchParams.get('token') !== this.settings.bridgeToken) {
+        client.close(1008, 'Invalid bridge key');
+        return;
+      }
+      this.bridgeClients.add(client);
+      this.emitStatus('connected', 'Universal Game Bridge connected; waiting for VALORANT data', { transport: 'bridge' });
+      client.on('message', (raw) => {
+        try {
+          const packet = JSON.parse(raw.toString());
+          if (packet.game !== 'valorant' || !['game-state', 'valorant-state'].includes(packet.type)) return;
+          const sequence = Number(packet.sequence) || 0;
+          if (sequence && sequence <= this.remoteSequence) return;
+          if (sequence) this.remoteSequence = sequence;
+          if (!packet.payload || typeof packet.payload !== 'object') return;
+          this.remoteState = packet.payload;
+          this.lastRemoteAt = this.now();
+          this.onState(this.remoteSnapshot(this.lastRemoteAt));
+          this.emitStatus('reading', 'Receiving validated VALORANT OCR from Game PC', { transport: 'bridge' });
+        } catch {}
+      });
+      client.on('close', () => {
+        this.bridgeClients.delete(client);
+        this.emitStatus('listening', `Game PC disconnected; waiting on port ${this.settings.bridgePort}`, { transport: 'bridge' });
+      });
+      client.on('error', () => {});
+      client.send(JSON.stringify({ type: 'welcome', game: 'valorant', version: 1 }));
+    });
   }
 
   startSimulator() {

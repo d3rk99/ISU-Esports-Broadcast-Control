@@ -1,9 +1,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { WebSocket } = require('ws');
+const net = require('node:net');
 const { ValorantOcrService, normalizeSettings } = require('../electron/valorant-ocr-service.cjs');
 
 function fakeFrame(now = Date.now()) {
   return { sourceName: 'VALORANT', capturedAt: now, width: 1920, height: 1080, image: {} };
+}
+
+function reservePort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      server.close((error) => error ? reject(error) : resolve(port));
+    });
+  });
 }
 
 test('OCR settings constrain capture rate and ROI geometry', () => {
@@ -62,4 +75,41 @@ test('simulator immediately emits stable test data', (t) => {
   assert.equal(service.status.state, 'simulating');
   assert.equal(states.at(-1).fields.timer.value, 100);
   assert.equal(states.at(-1).fields.homeScore.value, 0);
+});
+
+test('remote receiver accepts current universal bridge state and rejects old sequences', async (t) => {
+  const port = await reservePort();
+  const states = [];
+  let listening;
+  const ready = new Promise((resolve) => { listening = resolve; });
+  const service = new ValorantOcrService({
+    onState: (state) => states.push(state),
+    onStatus: (status) => { if (status.state === 'listening') listening(); }
+  });
+  t.after(() => service.stop());
+  service.configure({ enabled: true, source: 'remote', bridgePort: port, bridgeToken: 'valorant-test-key' });
+  await ready;
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/game-bridge?game=valorant&token=valorant-test-key`);
+  t.after(() => socket.close());
+  await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
+  const state = {
+    source: 'valorant-ocr', connected: true,
+    capture: { width: 1920, height: 1080, fps: 8 },
+    match: { timerSeconds: 73, timerDisplay: '1:13' },
+    teams: { home: { score: 3 }, away: { score: 2 } },
+    fields: {
+      homeScore: { value: 3, updatedAt: Date.now(), stale: false },
+      timer: { value: 73, updatedAt: Date.now(), stale: false },
+      awayScore: { value: 2, updatedAt: Date.now(), stale: false }
+    },
+    metrics: { observations: 20, accepted: 18, rejected: 2 }
+  };
+  socket.send(JSON.stringify({ type: 'game-state', game: 'valorant', version: 1, sequence: 2, payload: state }));
+  socket.send(JSON.stringify({ type: 'game-state', game: 'valorant', version: 1, sequence: 1, payload: { ...state, teams: { home: { score: 0 }, away: { score: 0 } } } }));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(states.at(-1).teams.home.score, 3);
+  assert.equal(states.at(-1).match.timerSeconds, 73);
+  assert.equal(service.status.state, 'reading');
+  service.clearState();
+  assert.equal(states.at(-1).teams.home.score, null);
 });

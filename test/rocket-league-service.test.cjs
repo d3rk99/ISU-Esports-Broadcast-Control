@@ -62,8 +62,10 @@ test('remote receiver accepts the matching bridge key', async () => {
   const socket = new WebSocket('ws://127.0.0.1:43175/rocket-league?token=test-key');
   await new Promise((resolve, reject) => { socket.once('open', resolve); socket.once('error', reject); });
   socket.send(JSON.stringify({ type: 'telemetry', event: { Event: 'ClockUpdatedSeconds', Data: { TimeSeconds: 88 } } }));
+  socket.send(JSON.stringify({ type: 'game-telemetry', game: 'rocketleague', sequence: 2, payload: { Event: 'ClockUpdatedSeconds', Data: { TimeSeconds: 87 } } }));
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(events[0].Data.TimeSeconds, 88);
+  assert.equal(events[1].Data.TimeSeconds, 87);
   socket.close();
   service.stop();
 });

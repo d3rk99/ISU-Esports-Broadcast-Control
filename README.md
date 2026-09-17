@@ -99,9 +99,22 @@ WebPort=49124
 Restart Rocket League after changing the file. In Broadcast Control, select **Rocket League → Match Control**, enable **Live Data**, and choose one of these modes:
 
 - **This PC / direct:** Broadcast Control and Rocket League are on the same computer.
-- **Game PC bridge:** Broadcast Control is on the Graphics PC. Generate a private bridge key, then run the separate ISU Rocket League Bridge executable on the Game PC with the Graphics PC's displayed IPv4 address and matching key.
+- **Game PC bridge:** Broadcast Control is on the Graphics PC. Generate a private bridge key, then run the ISU Esports Game Bridge on the Game PC, choose Rocket League, and enter the Graphics PC's displayed IPv4 address and matching key.
 
 Player boost is supplied by Rocket League while the game client is spectating. The test-feed button verifies scoring, clocks, players, boost meters, and OBS updates without a live match.
+
+## Universal Game Bridge and VALORANT OCR
+
+The same **ISU Esports Game Bridge** executable supports both Rocket League and VALORANT. Select the active game adapter before starting the bridge.
+
+For VALORANT on a separate Game PC:
+
+1. Run VALORANT at 1920 × 1080 in borderless windowed mode.
+2. In Broadcast Control on the Graphics PC, select **VALORANT → Match Control**, set **Data Source** to **Universal Game Bridge**, generate a bridge key, and enable OCR capture.
+3. On the Game PC, select **VALORANT OCR** in the bridge, enter the Graphics PC address, port, and matching key.
+4. Use **Find Window** and **Capture Debug Frame** to verify the three OCR regions, then start the bridge.
+
+Capture, OCR, temporal validation, ROI calibration, and the test feed run on the VALORANT PC. Only compact normalized state is sent to Broadcast Control. Rocket League continues to use its Stats API adapter in the same executable.
 
 ## OBS browser sources
 
@@ -143,7 +156,7 @@ Artifacts are generated in `release/`:
 
 - Installable NSIS setup executable
 - Standalone portable executable
-- `release/bridge/ISU Rocket League Bridge-Portable-...exe` for the Rocket League Game PC
+- `release/bridge/ISU Esports Game Bridge-Portable-...exe` for Rocket League or VALORANT Game PCs
 
 ## Project structure
 
