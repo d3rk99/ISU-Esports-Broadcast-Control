@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, dialog, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, screen, shell } = require('electron');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -6,6 +6,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { CompanionApiService, normalizeCompanionSettings } = require('./companion-api-service.cjs');
 const { RocketLeagueService } = require('./rocket-league-service.cjs');
+const { ValorantWindowCapture } = require('./valorant-capture.cjs');
+const { TesseractOcrEngine } = require('./valorant-ocr-engine.cjs');
+const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 
 const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
@@ -15,12 +18,16 @@ let broadcastState = {};
 const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
+let valorantOcrService;
 let companionApiService;
 let companionRequestId = 0;
 let controllerWindow = null;
 const pendingCompanionActions = new Map();
 const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
+];
+const VALORANT_OCR_SETTINGS_FIELDS = [
+  'enabled', 'source', 'windowName', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'debugRois', 'roiOverrides'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -336,6 +343,34 @@ function saveRocketLeagueConnection(settings = {}) {
   fs.writeFileSync(rocketLeagueSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
 }
 
+function valorantOcrSettingsPath() {
+  return path.join(app.getPath('userData'), 'valorant-ocr-settings.json');
+}
+
+function sanitizeValorantOcrSettings(saved) {
+  if (!saved || typeof saved !== 'object') return null;
+  return Object.fromEntries(VALORANT_OCR_SETTINGS_FIELDS
+    .filter((field) => Object.hasOwn(saved, field))
+    .map((field) => [field, saved[field]]));
+}
+
+function readValorantOcrSettings() {
+  try {
+    return sanitizeValorantOcrSettings(JSON.parse(fs.readFileSync(valorantOcrSettingsPath(), 'utf8')));
+  } catch {}
+  return null;
+}
+
+function saveValorantOcrSettings(settings = {}) {
+  const saved = Object.fromEntries(VALORANT_OCR_SETTINGS_FIELDS
+    .filter((field) => Object.hasOwn(settings, field))
+    .map((field) => [field, field === 'enabled' && Object.hasOwn(settings, 'savedEnabled')
+      ? Boolean(settings.savedEnabled)
+      : settings[field]]));
+  fs.writeFileSync(valorantOcrSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
+  return saved;
+}
+
 function startOverlayServer() {
   const staticRoot = isDev
     ? path.join(__dirname, '..', 'public')
@@ -465,6 +500,20 @@ function registerIpc() {
     rocketLeagueService.stopSimulator();
     return rocketLeagueService.status;
   });
+  ipcMain.on('valorant-ocr:get-settings-sync', (event) => {
+    event.returnValue = readValorantOcrSettings();
+  });
+  ipcMain.handle('valorant-ocr:configure', (_event, settings = {}) => {
+    const saved = saveValorantOcrSettings(settings);
+    const status = valorantOcrService.configure(settings);
+    return { settings: saved, status };
+  });
+  ipcMain.handle('valorant-ocr:get-info', () => valorantOcrService.getInfo());
+  ipcMain.handle('valorant-ocr:list-windows', () => valorantOcrService.listWindows());
+  ipcMain.handle('valorant-ocr:capture-snapshot', () => valorantOcrService.captureSnapshot());
+  ipcMain.handle('valorant-ocr:clear', () => valorantOcrService.clearState());
+  ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
+  ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const imageType = details.type === 'teamLogo' ? 'team logo' : details.type === 'characterImage' ? 'character' : 'player';
@@ -593,6 +642,16 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('rocket-league:status', status);
     }
   });
+  valorantOcrService = new ValorantOcrService({
+    capture: new ValorantWindowCapture({ desktopCapturer, nativeImage }),
+    ocr: new TesseractOcrEngine(),
+    onState: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:state', state);
+    },
+    onStatus: (status) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:status', status);
+    }
+  });
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
   try {
@@ -615,6 +674,7 @@ app.on('second-instance', () => {
 
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
+  valorantOcrService?.shutdown();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();
 });

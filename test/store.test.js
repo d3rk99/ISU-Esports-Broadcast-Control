@@ -40,6 +40,18 @@ test('saved state can be restored', () => {
   assert.ok(storage.getItem(STORAGE_KEY));
 });
 
+test('saved VALORANT OCR settings survive while live telemetry is cleared', () => {
+  const saved = createInitialState();
+  saved.games.valorant.valorantOcr.enabled = true;
+  saved.games.valorant.valorantOcr.captureFps = 12;
+  saved.games.valorant.valorantOcr.live.fields.homeScore.value = 9;
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  const ocr = loadState(storage).games.valorant.valorantOcr;
+  assert.equal(ocr.enabled, true);
+  assert.equal(ocr.captureFps, 12);
+  assert.equal(ocr.live.fields.homeScore.value, null);
+});
+
 test('saved empty rosters are backfilled with default slots', () => {
   const saved = createInitialState();
   saved.games.rocketleague.rosters.varsity = [];

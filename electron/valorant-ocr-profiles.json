@@ -1,0 +1,29 @@
+{
+  "1920x1080-en-5v5": {
+    "label": "1920×1080 · English · 5v5 Observer",
+    "frame": { "width": 1920, "height": 1080 },
+    "fields": {
+      "homeScore": {
+        "label": "Home score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 808, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      },
+      "timer": {
+        "label": "Round timer",
+        "kind": "timer",
+        "cadenceMs": 200,
+        "roi": { "x": 900, "y": 18, "w": 120, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789:" }
+      },
+      "awayScore": {
+        "label": "Away score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 1020, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import './styles.css';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
+import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
 let state = loadState();
@@ -13,6 +14,14 @@ if (savedRocketLeagueConnection && typeof savedRocketLeagueConnection === 'objec
     ...savedRocketLeagueConnection
   };
 }
+const savedValorantOcrSettings = window.isuDesktop?.savedValorantOcrSettings;
+if (savedValorantOcrSettings && typeof savedValorantOcrSettings === 'object') {
+  state.games.valorant.valorantOcr = {
+    ...state.games.valorant.valorantOcr,
+    ...savedValorantOcrSettings,
+    live: state.games.valorant.valorantOcr.live
+  };
+}
 let history = [];
 let saveTimer;
 let livePublishTimer;
@@ -20,6 +29,9 @@ let liveRenderTimer;
 let lastUserScrollAt = 0;
 let networkAddresses = [];
 let outputDisplays = [];
+let valorantOcrSnapshot = null;
+let valorantWindowChoices = [];
+let valorantOcrRenderTimer;
 let outputDisplaySettings = {
   fillDisplayId: '',
   keyDisplayId: '',
@@ -228,6 +240,7 @@ function renderControl(config) {
         ${renderTeamControl(game.teams[1], 1, config, game)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
+      ${state.selectedGame === 'valorant' ? renderValorantOcrPanel(game) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
           <div class="panel-title"><span class="section-number">02</span><div><h2>Match details</h2><p>Information shared across graphics</p></div></div>
@@ -262,6 +275,68 @@ function formatDuration(seconds) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainder = String(safeSeconds % 60).padStart(2, '0');
   return `${minutes}:${remainder}`;
+}
+
+function valorantOcrFieldLabel(fieldId) {
+  return { homeScore: 'HOME SCORE', timer: 'ROUND TIMER', awayScore: 'AWAY SCORE' }[fieldId] || fieldId;
+}
+
+function renderValorantOcrPanel(game) {
+  const ocr = game.valorantOcr;
+  const live = ocr.live || {};
+  const fields = live.fields || {};
+  const profile = getValorantOcrProfile(ocr.profileId || DEFAULT_VALORANT_OCR_PROFILE_ID);
+  const roiFields = VALORANT_OCR_FIELD_IDS.map((fieldId) => ({
+    id: fieldId,
+    ...profile.fields[fieldId],
+    roi: { ...profile.fields[fieldId].roi, ...(ocr.roiOverrides?.[fieldId] || {}) }
+  }));
+  const status = live.status || 'disabled';
+  const simulatorRunning = status === 'simulating';
+  const snapshot = valorantOcrSnapshot;
+  return `
+    <article class="panel valorant-ocr-panel">
+      <header class="vo-heading">
+        <div><span>VALORANT OCR EXPERIMENT</span><h2>OCR Lab</h2><p>Capture and normalized telemetry only &middot; overlays remain disconnected</p></div>
+        <div class="vo-status ${escapeHtml(status)}"><i></i><span>${escapeHtml(status.replaceAll('-', ' ').toUpperCase())}</span><small>${escapeHtml(live.message || 'Waiting for service')}</small></div>
+      </header>
+      <div class="vo-settings-grid">
+        <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="enabled" ${ocr.enabled ? 'checked' : ''}><i></i><span><b>OCR CAPTURE</b><small>${ocr.enabled ? 'Enabled for VALORANT' : 'Disabled'}</small></span></label>
+        <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vo-prop="windowName" list="valorant-window-list" value="${escapeHtml(ocr.windowName)}"><datalist id="valorant-window-list">${valorantWindowChoices.map((window) => `<option value="${escapeHtml(window.name)}"></option>`).join('')}</datalist></label>
+        <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
+        <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
+      </div>
+      <div class="vo-toolbar">
+        <button class="secondary-button" data-action="detect-valorant-window">FIND WINDOW</button>
+        <button class="secondary-button" data-action="capture-valorant-frame">CAPTURE DEBUG FRAME</button>
+        <button class="secondary-button" data-action="clear-valorant-ocr">CLEAR LOCKS</button>
+        <button class="secondary-button ${simulatorRunning ? 'danger' : ''}" data-action="${simulatorRunning ? 'stop-valorant-simulator' : 'start-valorant-simulator'}">${simulatorRunning ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
+        <label class="vo-debug-toggle"><input type="checkbox" data-vo-prop="debugRois" ${ocr.debugRois ? 'checked' : ''}><span>SHOW ROI BOXES</span></label>
+      </div>
+      <div class="vo-live-grid">
+        ${VALORANT_OCR_FIELD_IDS.map((fieldId) => {
+          const field = fields[fieldId] || {};
+          const confidence = Math.round((Number(field.confidence) || 0) * 100);
+          return `<section class="vo-reading ${field.stale ? 'stale' : ''}"><span>${valorantOcrFieldLabel(fieldId)}</span><strong>${escapeHtml(field.displayValue ?? '--')}</strong><div><b>${confidence}%</b><em>${field.stale ? 'STALE' : field.accepted ? 'ACCEPTED' : 'HELD'}</em></div><code>RAW ${escapeHtml(field.rawText || 'no OCR text')}</code><small>NORM ${escapeHtml(field.normalized || '--')} &middot; ${escapeHtml(field.reason || 'waiting')}</small></section>`;
+        }).join('')}
+      </div>
+      <div class="vo-metrics">
+        <span>CAPTURE <b>${Number(live.captureFps || 0).toFixed(1)} FPS</b></span>
+        <span>SOURCE <b>${live.captureWidth || live.capture?.width || '-'} &times; ${live.captureHeight || live.capture?.height || '-'}</b></span>
+        <span>OCR <b>${Number(live.scansPerSecond || 0).toFixed(1)}/S &middot; ${live.scans || live.metrics?.observations || 0} TOTAL</b></span>
+        <span>LATENCY <b>${live.avgOcrLatencyMs ?? '-'} MS</b></span>
+        <span>VALIDATION <b>${live.accepted ?? live.metrics?.accepted ?? 0} OK / ${live.rejected ?? live.metrics?.rejected ?? 0} HELD</b></span>
+        <span>FRAME AGE <b>${live.frameAgeMs === null || live.frameAgeMs === undefined ? '-' : Math.round(live.frameAgeMs)} MS</b></span>
+      </div>
+      <details class="vo-roi-editor">
+        <summary>ROI PROFILE COORDINATES <small>1920 &times; 1080 source pixels</small></summary>
+        <div>${roiFields.map((field) => `<section><h3>${escapeHtml(field.label)}</h3>${['x', 'y', 'w', 'h'].map((axis) => `<label><span>${axis.toUpperCase()}</span><input type="number" min="${axis === 'x' || axis === 'y' ? 0 : 1}" data-vo-roi="${field.id}" data-vo-axis="${axis}" value="${field.roi[axis]}"></label>`).join('')}</section>`).join('')}</div>
+      </details>
+      ${snapshot ? `<div class="vo-debug-stage">
+        <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${ocr.debugRois ? roiFields.map((field) => `<i style="left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span></i>`).join('') : ''}</div>
+        <div class="vo-crops">${roiFields.map((field) => `<section><span>${escapeHtml(field.label)}</span>${snapshot.crops?.[field.id] ? `<img src="${escapeHtml(snapshot.crops[field.id].processedDataUrl)}" alt="${escapeHtml(field.label)} OCR crop">` : '<em>Not captured</em>'}</section>`).join('')}</div>
+      </div>` : '<p class="vo-debug-empty">Capture a debug frame to inspect the full 1920 &times; 1080 source and processed OCR crops.</p>'}
+    </article>`;
 }
 
 function updateRocketLeagueOvertime(live, overtime, seconds) {
@@ -706,6 +781,38 @@ function syncRocketLeagueConnection() {
   });
 }
 
+async function syncValorantOcr() {
+  const ocr = state.games.valorant.valorantOcr;
+  if (!window.isuDesktop?.configureValorantOcr) return;
+  const result = await window.isuDesktop.configureValorantOcr({
+    ...ocr,
+    live: undefined,
+    savedEnabled: ocr.enabled,
+    enabled: state.selectedGame === 'valorant' && ocr.enabled,
+    source: 'local'
+  });
+  if (result?.status) {
+    ocr.live = { ...ocr.live, ...result.status, status: result.status.state || ocr.live.status };
+  }
+}
+
+function scheduleValorantOcrUpdate() {
+  if (!livePublishTimer) {
+    livePublishTimer = window.setTimeout(() => {
+      livePublishTimer = null;
+      window.isuDesktop?.publishState(state);
+    }, 100);
+  }
+  if (state.selectedGame !== 'valorant' || state.activeView !== 'control' || valorantOcrRenderTimer) return;
+  valorantOcrRenderTimer = window.setTimeout(() => {
+    valorantOcrRenderTimer = null;
+    const activeElement = document.activeElement;
+    const editing = root.contains(activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement?.tagName);
+    const activelyScrolling = performance.now() - lastUserScrollAt < 500;
+    if (!editing && !activelyScrolling) render();
+  }, 240);
+}
+
 function scheduleLiveUpdate() {
   if (!livePublishTimer) {
     livePublishTimer = window.setTimeout(() => {
@@ -911,6 +1018,23 @@ window.isuDesktop?.onRocketLeagueStatus((status) => {
 
 window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 
+window.isuDesktop?.onValorantOcrState((snapshot) => {
+  const ocr = state.games.valorant.valorantOcr;
+  ocr.live = {
+    ...ocr.live,
+    ...snapshot,
+    fields: snapshot?.fields || ocr.live.fields,
+    metrics: snapshot?.metrics || ocr.live.metrics
+  };
+  scheduleValorantOcrUpdate();
+});
+
+window.isuDesktop?.onValorantOcrStatus((status) => {
+  const ocr = state.games.valorant.valorantOcr;
+  ocr.live = { ...ocr.live, ...status, status: status.state || ocr.live.status };
+  scheduleValorantOcrUpdate();
+});
+
 async function executeCompanionAction(request = {}) {
   const nextState = deepClone(state);
   const result = applyCompanionAction(nextState, request);
@@ -918,7 +1042,10 @@ async function executeCompanionAction(request = {}) {
   if (history.length > 30) history.shift();
   state = nextState;
   persistState();
-  if (result.selectedGameChanged) syncRocketLeagueConnection();
+  if (result.selectedGameChanged) {
+    syncRocketLeagueConnection();
+    syncValorantOcr();
+  }
   if (result.outputChanged) await window.isuDesktop?.setProgramOutput({ name: state.activeOutputOverlay });
   render();
   return result;
@@ -1085,6 +1212,47 @@ root.addEventListener('click', async (event) => {
     toast('Test feed stopped');
     return;
   }
+  if (button.dataset.action === 'detect-valorant-window') {
+    try {
+      valorantWindowChoices = await window.isuDesktop?.listValorantWindows() || [];
+      const match = valorantWindowChoices.find((window) => window.name.toLowerCase() === 'valorant')
+        || valorantWindowChoices.find((window) => window.name.toLowerCase().includes('valorant'));
+      if (match) {
+        commit(() => { state.games.valorant.valorantOcr.windowName = match.name; }, 'VALORANT window selected');
+        await syncValorantOcr();
+        toast(`Found ${match.name}`);
+      } else toast('No VALORANT window found');
+    } catch (error) {
+      toast(error?.message || 'Window scan failed');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'capture-valorant-frame') {
+    try {
+      valorantOcrSnapshot = await window.isuDesktop?.captureValorantOcrSnapshot();
+      toast('Debug frame captured');
+    } catch (error) {
+      toast(error?.message || 'Could not capture VALORANT');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'clear-valorant-ocr') {
+    await window.isuDesktop?.clearValorantOcrState();
+    toast('OCR locks and history cleared');
+    return;
+  }
+  if (button.dataset.action === 'start-valorant-simulator') {
+    await window.isuDesktop?.startValorantOcrSimulator();
+    toast('VALORANT OCR test feed started');
+    return;
+  }
+  if (button.dataset.action === 'stop-valorant-simulator') {
+    await window.isuDesktop?.stopValorantOcrSimulator();
+    toast('VALORANT OCR test feed stopped');
+    return;
+  }
   const actions = {
     'toggle-live': () => commit(() => { game.match.live = !game.match.live; }, game.match.live ? 'Overlay taken off air' : 'Overlay is live'),
     'score-plus': () => commit(() => { game.teams[index].score = Math.min(seriesTarget(game, config), game.teams[index].score + 1); }),
@@ -1141,12 +1309,13 @@ root.addEventListener('click', async (event) => {
   render();
 });
 
-root.addEventListener('change', (event) => {
+root.addEventListener('change', async (event) => {
   const target = event.target;
   if (target.id === 'game-select') {
     state.selectedGame = target.value;
     persistState();
     syncRocketLeagueConnection();
+    syncValorantOcr();
     render();
     return;
   }
@@ -1191,6 +1360,32 @@ root.addEventListener('change', (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
+    render();
+    return;
+  }
+  if (target.dataset.voProp) {
+    const prop = target.dataset.voProp;
+    commit(() => {
+      const ocr = state.games.valorant.valorantOcr;
+      ocr[prop] = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
+      if (prop === 'captureFps') ocr.captureFps = Math.max(1, Math.min(15, Math.round(ocr.captureFps || 8)));
+      if (prop === 'profileId' && !VALORANT_OCR_PROFILE_CHOICES.some((choice) => choice.id === ocr.profileId)) ocr.profileId = DEFAULT_VALORANT_OCR_PROFILE_ID;
+    }, 'VALORANT OCR settings saved');
+    await syncValorantOcr();
+    render();
+    return;
+  }
+  if (target.dataset.voRoi) {
+    const fieldId = target.dataset.voRoi;
+    const axis = target.dataset.voAxis;
+    commit(() => {
+      const ocr = state.games.valorant.valorantOcr;
+      ocr.roiOverrides ||= {};
+      const base = getValorantOcrProfile(ocr.profileId).fields[fieldId].roi;
+      ocr.roiOverrides[fieldId] = { ...base, ...(ocr.roiOverrides[fieldId] || {}), [axis]: Math.max(axis === 'x' || axis === 'y' ? 0 : 1, Math.round(Number(target.value) || base[axis])) };
+    }, 'OCR region updated');
+    valorantOcrSnapshot = null;
+    await syncValorantOcr();
     render();
     return;
   }
@@ -1258,6 +1453,13 @@ function initialize() {
   persistState();
   render();
   syncRocketLeagueConnection();
+  syncValorantOcr();
+  window.isuDesktop?.getValorantOcrInfo().then((info) => {
+    const ocr = state.games.valorant.valorantOcr;
+    if (info?.state) ocr.live = { ...ocr.live, ...info.state, fields: info.state.fields || ocr.live.fields, metrics: info.state.metrics || ocr.live.metrics };
+    if (info?.status) ocr.live = { ...ocr.live, ...info.status, status: info.status.state || ocr.live.status };
+    if (state.selectedGame === 'valorant' && state.activeView === 'control') render();
+  });
   window.isuDesktop?.getCompanionStatus().then((status) => {
     companionStatus = status || companionStatus;
     if (state.activeView === 'settings') render();
