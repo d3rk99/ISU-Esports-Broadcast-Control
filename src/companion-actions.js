@@ -21,6 +21,7 @@ function wholeNumber(value, label, { min = 0, max = Number.MAX_SAFE_INTEGER, fal
 export function swapGameTeams(game) {
   game.teams.reverse();
   [game.rosters, game.awayRosters] = [game.awayRosters, game.rosters];
+  game.rosterFirstSide = game.rosterFirstSide === 'away' ? 'home' : 'away';
   game.mapRows.forEach((row) => {
     row.score.reverse();
     if (row.winner !== null) row.winner = row.winner === 0 ? 1 : 0;
@@ -194,5 +195,5 @@ export function applyCompanionAction(state, request = {}) {
   };
   if (!mutators[action]) throw actionError(`Unknown action: ${action}`, 404);
   mutators[action]();
-  return { message: `${action} applied to ${config.name}`, selectedGameChanged: false };
+  return { message: `${action} applied to ${config.name}`, selectedGameChanged: false, gameKey, teamsSwapped: action === 'teams.swap' };
 }

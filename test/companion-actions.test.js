@@ -38,6 +38,20 @@ test('Companion can select the active program output', () => {
   assert.throws(() => applyCompanionAction(state, { action: 'output.select', output: 'lower-third' }), /scoreboard, roster, map-pool, or clean/);
 });
 
+test('team swap preserves the selected first roster team', () => {
+  const state = createInitialState();
+  const game = state.games.overwatch;
+  game.rosters.varsity[0].handle = 'ISU PLAYER';
+  game.awayRosters.varsity[0].handle = 'OPP PLAYER';
+  assert.equal(game.rosterFirstSide, 'home');
+
+  applyCompanionAction(state, { action: 'teams.swap' });
+
+  assert.equal(game.teams[1].shortName, 'ISU');
+  assert.equal(game.rosterFirstSide, 'away');
+  assert.equal(game.awayRosters.varsity[0].handle, 'ISU PLAYER');
+});
+
 test('map winner and reset actions keep series score in sync', () => {
   const state = createInitialState();
   applyCompanionAction(state, { action: 'map.winner.set', number: 1, team: 'home' });

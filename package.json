@@ -1,6 +1,6 @@
 {
   "name": "isu-esports-broadcast-control",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Idaho State Esports scorekeeping and broadcast graphics control center",
   "type": "module",
   "main": "electron/main.cjs",

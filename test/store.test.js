@@ -27,6 +27,7 @@ test('game state creates the expected default roster size', () => {
   assert.equal(createGameState('smash').mapRows.length, 3);
   assert.equal(createGameState('valorant').veto.picks.length, 3);
   assert.equal(createGameState('valorant').rosters.varsity[0].playerImage, '');
+  assert.equal(createGameState('valorant').rosterFirstSide, 'home');
   assert.equal(createGameState('valorant').showAwayRoster, false);
   assert.ok(createGameState('smash').characterArt);
 });
@@ -38,6 +39,18 @@ test('saved state can be restored', () => {
   saveState(state, storage);
   assert.equal(loadState(storage).games.valorant.teams[0].score, 2);
   assert.ok(storage.getItem(STORAGE_KEY));
+});
+
+test('legacy saved state chooses Idaho State as the first roster team', () => {
+  const saved = createInitialState();
+  delete saved.games.valorant.rosterFirstSide;
+  saved.games.valorant.teams.reverse();
+  [saved.games.valorant.rosters, saved.games.valorant.awayRosters] = [
+    saved.games.valorant.awayRosters,
+    saved.games.valorant.rosters
+  ];
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(saved) });
+  assert.equal(loadState(storage).games.valorant.rosterFirstSide, 'away');
 });
 
 test('saved empty rosters are backfilled with default slots', () => {

@@ -521,6 +521,9 @@ function renderMapRow(row, index, config, game) {
 
 function renderRosters(config) {
   const game = current();
+  const rosterFirstSide = game.rosterFirstSide === 'away' ? 'away' : 'home';
+  const rosterFirstIndex = rosterFirstSide === 'away' ? 1 : 0;
+  const rosterSecondIndex = rosterFirstIndex === 0 ? 1 : 0;
   const collection = activeRosterCollection(game);
   const roster = collection[state.activeRoster];
   const teamIndex = state.activeRosterSide === 'away' ? 1 : 0;
@@ -532,9 +535,10 @@ function renderRosters(config) {
     <div class="roster-sidebar">
       <div class="team-side-tabs">
         <button class="${state.activeRosterSide === 'home' ? 'active' : ''}" data-roster-side="home"><span>HOME</span><strong>${escapeHtml(game.teams[0].name)}</strong></button>
-        ${game.showAwayRoster ? `<button class="${state.activeRosterSide === 'away' ? 'active' : ''}" data-roster-side="away"><span>AWAY</span><strong>${escapeHtml(game.teams[1].name)}</strong></button>` : ''}
+        ${game.showAwayRoster || rosterFirstSide === 'away' ? `<button class="${state.activeRosterSide === 'away' ? 'active' : ''}" data-roster-side="away"><span>AWAY</span><strong>${escapeHtml(game.teams[1].name)}</strong></button>` : ''}
       </div>
-      <label class="away-roster-toggle"><div><strong>Include away-team roster</strong><small>${game.showAwayRoster ? 'Overlay cycles Home &rarr; Away' : 'Overlay shows Home only'}</small></div><input type="checkbox" data-away-roster-toggle ${game.showAwayRoster ? 'checked' : ''}><i></i></label>
+      <label class="field roster-order-control"><span>FIRST TEAM SHOWN</span><select data-roster-first-side><option value="home" ${rosterFirstSide === 'home' ? 'selected' : ''}>HOME &middot; ${escapeHtml(game.teams[0].name)}</option><option value="away" ${rosterFirstSide === 'away' ? 'selected' : ''}>AWAY &middot; ${escapeHtml(game.teams[1].name)}</option></select><small>Selection follows the team when sides are swapped.</small></label>
+      <label class="away-roster-toggle"><div><strong>Include second-team roster</strong><small>${game.showAwayRoster ? `Overlay cycles ${escapeHtml(game.teams[rosterFirstIndex].shortName)} &rarr; ${escapeHtml(game.teams[rosterSecondIndex].shortName)}` : `Overlay shows ${escapeHtml(game.teams[rosterFirstIndex].shortName)} only`}</small></div><input type="checkbox" data-away-roster-toggle ${game.showAwayRoster ? 'checked' : ''}><i></i></label>
     </div>
     <div class="roster-tabs">
       <button class="${state.activeRoster === 'varsity' ? 'active' : ''}" data-roster="varsity"><span>V</span><div><strong>Varsity</strong><small>${collection.varsity.filter((p) => p.handle || p.name).length} players entered</small></div></button>
@@ -914,6 +918,9 @@ window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 async function executeCompanionAction(request = {}) {
   const nextState = deepClone(state);
   const result = applyCompanionAction(nextState, request);
+  if (result.teamsSwapped && result.gameKey === nextState.selectedGame) {
+    nextState.activeRosterSide = nextState.activeRosterSide === 'away' ? 'home' : 'away';
+  }
   history.push(deepClone(state));
   if (history.length > 30) history.shift();
   state = nextState;
@@ -1091,7 +1098,10 @@ root.addEventListener('click', async (event) => {
     'score-minus': () => commit(() => { game.teams[index].score = Math.max(0, game.teams[index].score - 1); }),
     'detail-plus': () => commit(() => { game.teams[index].detailScore += 1; }),
     'detail-minus': () => commit(() => { game.teams[index].detailScore = Math.max(0, game.teams[index].detailScore - 1); }),
-    'swap-teams': () => commit(() => swapGameTeams(game), 'Team sides swapped'),
+    'swap-teams': () => commit(() => {
+      swapGameTeams(game);
+      state.activeRosterSide = state.activeRosterSide === 'away' ? 'home' : 'away';
+    }, 'Team sides swapped'),
     'reset-scores': () => commit(() => {
       game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; });
       if (state.selectedGame === 'valorant' || state.selectedGame === 'rocketleague') clearSeriesMapResults(game, state.selectedGame);
@@ -1209,11 +1219,19 @@ root.addEventListener('change', (event) => {
       if (target.dataset.prop === 'logoImage') team.logoImageName = target.value ? 'Custom URL' : '';
     });
   }
+  if (target.dataset.rosterFirstSide !== undefined) {
+    commit(() => {
+      current().rosterFirstSide = target.value === 'away' ? 'away' : 'home';
+      state.activeRosterSide = current().rosterFirstSide;
+    }, `${current().teams[target.value === 'away' ? 1 : 0].name} will show first on the roster overlay`);
+    render();
+    return;
+  }
   if (target.dataset.awayRosterToggle !== undefined) {
     commit(() => {
       current().showAwayRoster = target.checked;
-      if (!target.checked) state.activeRosterSide = 'home';
-    }, target.checked ? 'Away roster enabled' : 'Home-only roster enabled');
+      if (!target.checked) state.activeRosterSide = current().rosterFirstSide === 'away' ? 'away' : 'home';
+    }, target.checked ? 'Second roster enabled' : 'First-team-only roster enabled');
   }
   if (target.dataset.mapIndex !== undefined) {
     const rowIndex = Number(target.dataset.mapIndex);

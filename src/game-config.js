@@ -458,6 +458,7 @@ export function createGameState(gameKey) {
       varsity: Array.from({ length: config.rosterSize }, (_, index) => createPlayer(config, index, false)),
       jv: Array.from({ length: config.rosterSize }, (_, index) => createPlayer(config, index, false))
     },
+    rosterFirstSide: 'home',
     showAwayRoster: false,
     characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : {},
     mapArt: gameKey === 'overwatch'

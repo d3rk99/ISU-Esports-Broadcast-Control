@@ -43,6 +43,7 @@
         veto: { bans: ['BREEZE', 'ICEBOX', 'PEARL', 'SUNSET'], picks: [{ map: 'ASCENT', attackers: 0 }, { map: 'BIND', attackers: 1 }, { map: 'HAVEN', attackers: 0 }] },
         rosters: { varsity: [], jv: [] },
         awayRosters: { varsity: [], jv: [] },
+        rosterFirstSide: 'home',
         showAwayRoster: false,
         characterArt: {}
       }
@@ -610,6 +611,7 @@
       selectedGame,
       program,
       showAwayRoster: game.showAwayRoster,
+      rosterFirstSide: game.rosterFirstSide,
       teams: (game.teams || []).map((team) => ({
         name: team.name,
         color: team.color,
@@ -637,10 +639,16 @@
     lastRosterSignatureByRoot.set(renderRoot, rosterSignature);
     clearRosterTimers();
     const stage = $('.roster-stage');
+    const firstSide = game.rosterFirstSide === 'away' ? 'away' : 'home';
+    const secondSide = firstSide === 'home' ? 'away' : 'home';
+    const firstTeamIndex = firstSide === 'away' ? 1 : 0;
+    const secondTeamIndex = firstTeamIndex === 0 ? 1 : 0;
+    const firstTeamLabel = game.teams?.[firstTeamIndex]?.shortName || firstSide.toUpperCase();
+    const secondTeamLabel = game.teams?.[secondTeamIndex]?.shortName || secondSide.toUpperCase();
     stage.classList.remove('team-slide-out', 'team-slide-in');
-    setText('#roster-cycle-label', game.showAwayRoster ? 'HOME -> AWAY - 15 SEC' : selectedGame === 'rocketleague' ? 'PLAYER -> CAR - 7 SEC' : 'PLAYER -> CHARACTER - 7 SEC');
-    renderRosterTeam(game, meta, program, 'home');
-    rosterAfter(() => showRosterCharacters('home'), 7000);
+    setText('#roster-cycle-label', game.showAwayRoster ? `${firstTeamLabel} -> ${secondTeamLabel} - 15 SEC` : selectedGame === 'rocketleague' ? 'PLAYER -> CAR - 7 SEC' : 'PLAYER -> CHARACTER - 7 SEC');
+    renderRosterTeam(game, meta, program, firstSide);
+    rosterAfter(() => showRosterCharacters(firstSide), 7000);
 
     if (game.showAwayRoster) {
       rosterAfter(() => {
@@ -649,12 +657,12 @@
         setText('#roster-phase-label', 'CHANGING SIDES');
       }, 14500);
       rosterAfter(() => {
-        renderRosterTeam(game, meta, program, 'away');
+        renderRosterTeam(game, meta, program, secondSide);
         stage.classList.remove('team-slide-out');
         stage.classList.add('team-slide-in');
       }, 15350);
       rosterAfter(() => stage.classList.remove('team-slide-in'), 16300);
-      rosterAfter(() => showRosterCharacters('away'), 22350);
+      rosterAfter(() => showRosterCharacters(secondSide), 22350);
     }
   }
 

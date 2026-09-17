@@ -12,6 +12,7 @@ export function loadState(storage = window.localStorage) {
         parsed.games[game] = fallback.games[game];
         continue;
       }
+      const savedRosterFirstSide = parsed.games[game].rosterFirstSide;
       parsed.games[game] = { ...fallback.games[game], ...parsed.games[game] };
       const config = GAME_CONFIGS[game];
       const savedSeriesLength = Number(parsed.games[game].seriesLength) || config.defaultSeriesLength || fallback.games[game].seriesLength;
@@ -34,6 +35,14 @@ export function loadState(storage = window.localStorage) {
         ...team,
         ...(parsed.games[game].teams?.[index] || {})
       }));
+      if (savedRosterFirstSide === 'home' || savedRosterFirstSide === 'away') {
+        parsed.games[game].rosterFirstSide = savedRosterFirstSide;
+      } else {
+        const isuTeamIndex = parsed.games[game].teams.findIndex((team) => (
+          /(^|\s)ISU($|\s)/i.test(team.shortName || '') || /IDAHO STATE/i.test(team.name || '')
+        ));
+        parsed.games[game].rosterFirstSide = isuTeamIndex === 1 ? 'away' : 'home';
+      }
       for (const collection of ['rosters', 'awayRosters']) {
         parsed.games[game][collection] ||= fallback.games[game][collection];
         for (const rosterType of ['varsity', 'jv']) {
