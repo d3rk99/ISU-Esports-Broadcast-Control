@@ -527,13 +527,12 @@ body[data-game="rocketleague"] .rl-boost-board {
   text-align: right;
 }
 .rl-boost-player[data-rl-color="blue"] { --rl-player-color: var(--rl-blue); }
-.rl-boost-player[data-rl-color="orange"] {
-  --rl-player-color: var(--rl-orange);
-  grid-template-columns: minmax(130px, 1fr) 34px 126px var(--rl-badge-slot);
-}
+.rl-boost-player[data-rl-color="orange"] { --rl-player-color: var(--rl-orange); }
 .rl-boost-player strong {
   align-self: center;
+  min-width: 0;
   overflow: hidden;
+  color: #f8fbff;
   font-size: 17px;
   font-weight: 1000;
   font-style: italic;
@@ -558,7 +557,7 @@ body[data-game="rocketleague"] .rl-boost-board {
   background: linear-gradient(90deg, var(--rl-player-color), #f4d44c);
   transition: width .08s linear;
 }
-.rl-boost-player[data-rl-color="orange"] > span {
+#rl-away-players .rl-boost-player > span {
   display: flex;
   justify-content: flex-end;
 }
@@ -578,15 +577,7 @@ body[data-game="rocketleague"] .rl-boost-board {
 }
 #rl-away-players .rl-boost-player > span { grid-column: 2; grid-row: 1; }
 #rl-away-players .rl-boost-icons { grid-column: 1; grid-row: 1; justify-content: flex-start; }
-#rl-away-players .rl-boost-player strong { grid-column: 4; grid-row: 1; }
-.rl-boost-player[data-rl-color="orange"] strong { grid-column: 1; grid-row: 1; text-align: left; }
-.rl-boost-player[data-rl-color="orange"] b { grid-column: 2; grid-row: 1; text-align: right; }
-.rl-boost-player[data-rl-color="orange"] > span { grid-column: 3; grid-row: 1; }
-.rl-boost-player[data-rl-color="orange"] .rl-boost-icons { grid-column: 4; grid-row: 1; justify-content: flex-start; }
-#rl-away-players .rl-boost-player[data-rl-color="orange"] strong { grid-column: 1; }
-#rl-away-players .rl-boost-player[data-rl-color="orange"] b { grid-column: 2; text-align: right; }
-#rl-away-players .rl-boost-player[data-rl-color="orange"] > span { grid-column: 3; }
-#rl-away-players .rl-boost-player[data-rl-color="orange"] .rl-boost-icons { grid-column: 4; justify-content: flex-start; }
+#rl-away-players .rl-boost-player strong { grid-column: 4; grid-row: 1; text-align: right; }
 .rl-boost-icons {
   display: flex;
   align-items: center;
