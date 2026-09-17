@@ -136,6 +136,22 @@ test('Rocket League next-match saves the live arena to map pool', () => {
   assert.equal(state.games.rocketleague.mapRows[0].overtimeSeconds, 73);
 });
 
+test('Rocket League score reset clears saved game winners', () => {
+  const state = createInitialState();
+  state.selectedGame = 'rocketleague';
+  const game = state.games.rocketleague;
+  game.mapRows[0].winner = 1;
+  game.mapRows[0].score = ['1', '2'];
+  game.mapRows[0].status = 'complete';
+  game.teams[1].score = 1;
+  applyCompanionAction(state, { action: 'scores.reset' });
+  assert.equal(game.teams[0].score, 0);
+  assert.equal(game.teams[1].score, 0);
+  assert.equal(game.mapRows[0].winner, null);
+  assert.deepEqual(game.mapRows[0].score, ['', '']);
+  assert.equal(game.mapRows[0].status, 'ready');
+});
+
 test('invalid Companion actions fail without valid-looking results', () => {
   const state = createInitialState();
   assert.throws(() => applyCompanionAction(state, { action: 'score.increment', team: 'visitor' }), /home or away/);

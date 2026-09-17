@@ -20,6 +20,13 @@
     smash: { name: 'SMASH BROS. ULTIMATE', code: 'SSBU', accent: '#e03b32', score: 'SET SCORE' },
     callofduty: { name: 'CALL OF DUTY', code: 'COD', accent: '#8dd936', score: 'MAP SCORE' }
   };
+  const ROCKET_LEAGUE_BADGE_ICONS = {
+    goals: '../assets/rocket league/points/Goal_points_icon.png',
+    assists: '../assets/rocket league/points/Assist_points_icon.png',
+    saves: '../assets/rocket league/points/Save_points_icon.png',
+    shots: '../assets/rocket league/points/Shot_on_Goal_points_icon.png',
+    demos: '../assets/rocket league/points/Demolition_points_icon.png'
+  };
 
   const FALLBACK = {
     selectedGame: 'overwatch',
@@ -47,6 +54,7 @@
   const $ = (selector, root = activeRenderRoot || document) => root.querySelector(selector);
   const $$ = (selector, root = activeRenderRoot || document) => [...root.querySelectorAll(selector)];
   const lastMapPoolSignatureByRoot = new WeakMap();
+  const rocketLeagueScorecardSequences = new WeakMap();
   const setText = (selector, value, root = activeRenderRoot || document) => {
     const element = $(selector, root);
     if (element) element.textContent = String(value ?? '');
@@ -99,34 +107,179 @@
     return known[value] || String(value).replace(/_P$/i, '').replaceAll('_', ' ').toUpperCase();
   }
 
+  function rocketLeagueSeriesLength(game) {
+    const allowed = [3, 5, 7];
+    const requested = Number(game.seriesLength) || 7;
+    return allowed.includes(requested) ? requested : 7;
+  }
+
+  function rocketLeagueSeriesTarget(game) {
+    return Math.ceil(rocketLeagueSeriesLength(game) / 2);
+  }
+
+  function renderSeriesDots(selector, wins, count) {
+    const container = $(selector);
+    if (!container) return;
+    const safeWins = Math.max(0, Math.min(count, Number(wins) || 0));
+    container.replaceChildren();
+    for (let index = 0; index < count; index += 1) {
+      const dot = document.createElement('i');
+      dot.className = index < safeWins ? 'filled' : '';
+      container.append(dot);
+    }
+  }
+
+  function replayRocketLeagueScorecard(card) {
+    const current = rocketLeagueScorecardSequences.get(card) || { id: 0, started: false };
+    const sequence = { id: current.id + 1, started: true };
+    const overlayRoot = card.closest('[data-overlay]');
+    overlayRoot?.classList.remove('rl-boost-ready');
+    rocketLeagueScorecardSequences.set(card, sequence);
+    card.className = 'rl-scorecard is-hidden';
+    card.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (rocketLeagueScorecardSequences.get(card)?.id !== sequence.id) return;
+        card.className = 'rl-scorecard is-core';
+        window.setTimeout(() => {
+          if (rocketLeagueScorecardSequences.get(card)?.id !== sequence.id) return;
+          card.className = 'rl-scorecard is-expanded';
+          window.setTimeout(() => {
+            if (rocketLeagueScorecardSequences.get(card)?.id !== sequence.id) return;
+            card.className = 'rl-scorecard is-compact';
+            window.setTimeout(() => {
+              if (rocketLeagueScorecardSequences.get(card)?.id !== sequence.id) return;
+              overlayRoot?.classList.add('rl-boost-ready');
+            }, 650);
+          }, 7900);
+        }, 950);
+      });
+    });
+  }
+
+  function hideRocketLeagueScorecard(card) {
+    const current = rocketLeagueScorecardSequences.get(card) || { id: 0 };
+    card.closest('[data-overlay]')?.classList.remove('rl-boost-ready');
+    rocketLeagueScorecardSequences.set(card, { id: current.id + 1, started: false });
+    card.className = 'rl-scorecard is-hidden';
+  }
+
+  function renderRocketLeagueScorecard(selectedGame, game, teams, activeMap) {
+    const card = $('#rl-scorecard');
+    if (!card) return;
+    if (selectedGame !== 'rocketleague') {
+      hideRocketLeagueScorecard(card);
+      return;
+    }
+    const live = game.rocketLeague?.live || {};
+    const seriesLength = rocketLeagueSeriesLength(game);
+    const dotCount = rocketLeagueSeriesTarget(game);
+    const clockSeconds = live.timeSeconds === null || live.timeSeconds === undefined ? 300 : live.timeSeconds;
+    const clock = live.overtime ? `OT ${formatDuration(clockSeconds)}` : formatDuration(clockSeconds);
+    const footerParts = [game.match?.event, game.match?.round].filter(Boolean);
+    const blueTeam = Number(game.rocketLeague?.blueTeam) || 0;
+
+    card.dataset.homeRlColor = blueTeam === 0 ? 'blue' : 'orange';
+    card.dataset.awayRlColor = blueTeam === 1 ? 'blue' : 'orange';
+    setText('#rl-home-name', teams[0]?.name || 'HOME');
+    setText('#rl-away-name', teams[1]?.name || 'AWAY');
+    renderLogo('#rl-home-logo', teams[0]);
+    renderLogo('#rl-away-logo', teams[1]);
+    setText('#rl-home-goals', teams[0]?.detailScore ?? activeMap?.score?.[0] ?? 0);
+    setText('#rl-away-goals', teams[1]?.detailScore ?? activeMap?.score?.[1] ?? 0);
+    setText('#rl-clock', clock);
+    setText('#rl-game-label', `GAME ${(game.activeMap || 0) + 1} / Best of ${seriesLength}`);
+    setText('#rl-card-footer', footerParts.join(' - ') || 'COLLEGIATE ESPORTS');
+    renderSeriesDots('#rl-home-series', teams[0]?.score, dotCount);
+    renderSeriesDots('#rl-away-series', teams[1]?.score, dotCount);
+
+    const sequence = rocketLeagueScorecardSequences.get(card);
+    if (!sequence?.started) replayRocketLeagueScorecard(card);
+  }
+
   function renderRocketLeaguePlayers(game, selectedGame) {
     const board = $('#rl-boost-board');
     if (!board) return;
     const live = game.rocketLeague?.live;
     const players = live?.players || [];
     board.hidden = selectedGame !== 'rocketleague' || !players.length;
-    if (board.hidden) return;
+    if (board.hidden) {
+      const radial = $('#rl-spectated-boost');
+      if (radial) radial.hidden = true;
+      const replayIndicator = $('#rl-replay-indicator');
+      if (replayIndicator) replayIndicator.hidden = true;
+      return;
+    }
     const blueTeam = Number(game.rocketLeague?.blueTeam) || 0;
     const destinationFor = (teamNum) => Number(teamNum) === 0 ? blueTeam : 1 - blueTeam;
+    const now = Date.now();
+    const recentEvents = Array.isArray(live?.recentEvents) ? live.recentEvents : [];
     [0, 1].forEach((teamIndex) => {
       const container = teamIndex === 0 ? $('#rl-home-players') : $('#rl-away-players');
       container.replaceChildren();
-      players.filter((player) => destinationFor(player.teamNum) === teamIndex).slice(0, 4).forEach((player) => {
+      players.filter((player) => destinationFor(player.teamNum) === teamIndex).slice(0, 3).forEach((player) => {
         const boost = player.boost === null || player.boost === undefined ? null : Math.max(0, Math.min(100, Number(player.boost)));
+        const playerId = player.id || `${player.teamNum}|${player.shortcut}|${player.name}`;
         const card = document.createElement('div');
         card.className = `rl-boost-player${player.spectated ? ' spectated' : ''}${player.demolished ? ' demolished' : ''}`;
+        card.dataset.rlColor = Number(player.teamNum) === 0 ? 'blue' : 'orange';
         const name = document.createElement('strong');
         name.textContent = player.name || 'PLAYER';
+        const icons = document.createElement('div');
+        icons.className = 'rl-boost-icons';
+        const badge = recentEvents.find((event) => (
+          (event.playerId && event.playerId === playerId) ||
+          (!event.playerId && event.playerName && event.playerName === player.name)
+        ));
+        if (badge && Number(badge.removeAt) > now) {
+          card.classList.add('has-badge');
+          if (Number(badge.expiresAt) <= now) card.classList.add('badge-expiring');
+          const icon = document.createElement('em');
+          const age = Math.max(0, now - (Number(badge.createdAt) || now));
+          const fadeIn = Math.min(1, age / 180);
+          const fadeOut = Number(badge.expiresAt) <= now
+            ? Math.max(0, (Number(badge.removeAt) - now) / Math.max(1, Number(badge.removeAt) - Number(badge.expiresAt)))
+            : 1;
+          const visibility = Math.min(fadeIn, fadeOut);
+          const returnInset = 44 * (1 - fadeOut);
+          card.style.setProperty('--rl-card-inset', `${returnInset.toFixed(2)}px`);
+          card.style.setProperty('--rl-badge-slot', `${(48 * fadeOut).toFixed(2)}px`);
+          icon.className = `rl-stat-icon rl-stat-${badge.key}`;
+          icon.style.setProperty('--rl-badge-opacity', String(visibility));
+          icon.style.setProperty('--rl-badge-scale', String(0.68 + (visibility * 0.32)));
+          icon.title = `${badge.title}${badge.count > 1 ? ` x${badge.count}` : ''}`;
+          const iconUrl = ROCKET_LEAGUE_BADGE_ICONS[badge.key];
+          if (iconUrl) {
+            icon.classList.add('has-image');
+            icon.style.setProperty('--rl-badge-image', `url("${iconUrl}")`);
+          } else {
+            icon.textContent = badge.label;
+          }
+          if (badge.count > 1) icon.dataset.count = String(badge.count);
+          icons.append(icon);
+        }
         const meter = document.createElement('span');
         const fill = document.createElement('i');
         fill.style.width = `${boost ?? 0}%`;
         meter.append(fill);
         const amount = document.createElement('b');
         amount.textContent = boost === null ? '—' : String(Math.round(boost));
-        card.append(name, meter, amount);
+        card.append(name, icons, meter, amount);
         container.append(card);
       });
     });
+    const radial = $('#rl-spectated-boost');
+    const replayIndicator = $('#rl-replay-indicator');
+    const replayActive = selectedGame === 'rocketleague' && Boolean(live?.replay);
+    if (radial) {
+      const spectated = players.find((player) => player.spectated);
+      const boost = spectated?.boost === null || spectated?.boost === undefined ? 0 : Math.max(0, Math.min(100, Number(spectated.boost)));
+      radial.hidden = selectedGame !== 'rocketleague' || !spectated || replayActive;
+      radial.dataset.rlColor = spectated ? (Number(spectated.teamNum) === 0 ? 'blue' : 'orange') : '';
+      radial.style.setProperty('--rl-spectated-boost', `${boost || 0}%`);
+      setText('#rl-spectated-boost-value', Math.round(boost));
+    }
+    if (replayIndicator) replayIndicator.hidden = !replayActive;
   }
 
   function renderScoreboard(state) {
@@ -158,6 +311,7 @@
     root.style.setProperty('--home-secondary', teams[0]?.secondaryColorEnabled ? teams[0].secondaryColor : teams[0]?.color || '#f47920');
     root.style.setProperty('--away-secondary', teams[1]?.secondaryColorEnabled ? teams[1].secondaryColor : teams[1]?.color || '#5e6673');
     root.classList.toggle('is-live', Boolean(game.match?.live));
+    renderRocketLeagueScorecard(selectedGame, game, teams, activeMap);
     renderRocketLeaguePlayers(game, selectedGame);
   }
 
@@ -230,8 +384,10 @@
     container.style.setProperty('--map-count', Math.max(1, Math.min(7, rows.length)));
     const teams = game.teams || FALLBACK.games.overwatch.teams;
     rows.forEach((row, index) => {
+      const isActive = index === game.activeMap;
+      const isRocketLeagueActive = selectedGame === 'rocketleague' && isActive && row.winner === null;
       const card = document.createElement('article');
-      card.className = `generic-map-card${index === game.activeMap ? ' active' : ''}${row.winner !== null ? ' complete' : ''}`;
+      card.className = `generic-map-card${isActive ? ' active' : ''}${row.winner !== null ? ' complete' : ''}${isRocketLeagueActive ? ' in-progress' : ''}`;
       const artwork = game.mapArt?.[row.map] || {};
       const image = document.createElement('img');
       image.className = 'generic-map-image';
@@ -246,7 +402,40 @@
       const mode = document.createElement('small');
       mode.textContent = row.mode || '';
       const score = document.createElement('p');
-      score.textContent = row.score?.some(Boolean) ? `${row.score[0] || '0'} - ${row.score[1] || '0'}` : row.winner !== null ? `${teams[row.winner]?.shortName || ''} WINS` : 'UPCOMING';
+      const scoreLine = document.createElement('span');
+      scoreLine.className = 'map-score-line';
+      let winnerBadge = null;
+      const shownScore = isRocketLeagueActive
+        ? [teams[0]?.detailScore ?? 0, teams[1]?.detailScore ?? 0]
+        : row.score;
+      if (shownScore?.some((value) => value !== '' && value !== null && value !== undefined)) {
+        scoreLine.textContent = `${shownScore[0] || '0'} - ${shownScore[1] || '0'}`;
+      } else if (row.winner !== null) {
+        scoreLine.textContent = '';
+      } else {
+        scoreLine.textContent = isActive ? 'IN PROGRESS' : 'UPCOMING';
+      }
+      score.append(scoreLine);
+      if (row.winner !== null) {
+        const winner = teams[row.winner] || {};
+        winnerBadge = document.createElement('span');
+        winnerBadge.className = 'map-winner-badge';
+        const logoUrl = safeImageUrl(winner.logoImage, '');
+        if (logoUrl) {
+          const logo = document.createElement('img');
+          logo.src = logoUrl;
+          logo.alt = `${winner.shortName || 'Winner'} logo`;
+          winnerBadge.append(logo);
+        } else {
+          winnerBadge.textContent = winner.shortName || 'WIN';
+        }
+      }
+      if (isRocketLeagueActive) {
+        const status = document.createElement('span');
+        status.className = 'map-progress-label';
+        status.textContent = 'IN PROGRESS';
+        score.append(status);
+      }
       if (row.overtime) {
         const overtime = document.createElement('span');
         overtime.className = 'map-overtime';
@@ -255,9 +444,28 @@
         overtime.append(label, document.createTextNode(` ${formatDuration(row.overtimeSeconds)}`));
         score.append(overtime);
       }
-      card.append(image, number, map, mode, score);
+      card.append(image);
+      if (winnerBadge) card.append(winnerBadge);
+      card.append(number, map, mode, score);
       container.append(card);
     });
+  }
+
+  function renderMapGameIcon(selectedGame, meta) {
+    const target = $('#map-game-code');
+    if (!target) return;
+    if (target.dataset.iconGame === selectedGame) return;
+    target.dataset.iconGame = selectedGame;
+    target.classList.toggle('has-image', selectedGame === 'rocketleague');
+    target.replaceChildren();
+    if (selectedGame === 'rocketleague') {
+      const image = document.createElement('img');
+      image.src = '../assets/rocket league/rocket-league-shield.svg';
+      image.alt = 'Rocket League';
+      target.append(image);
+      return;
+    }
+    target.textContent = meta.code;
   }
 
   function renderMapPool(state) {
@@ -265,7 +473,7 @@
     const { selectedGame, game, meta } = getActive(state);
     applyTheme(selectedGame, meta);
     const teams = game.teams || FALLBACK.games.overwatch.teams;
-    setText('#map-game-code', meta.code);
+    renderMapGameIcon(selectedGame, meta);
     setText('#map-game-name', meta.name);
     setText('#map-event', game.match?.event);
     setText('#map-series', `${teams[0]?.shortName || 'HOME'} ${teams[0]?.score || 0} — ${teams[1]?.score || 0} ${teams[1]?.shortName || 'AWAY'}`);

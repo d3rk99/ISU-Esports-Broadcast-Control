@@ -155,6 +155,16 @@ test('saved map rows migrate to current configured row counts', () => {
   assert.equal(migrated.games.rocketleague.mapRows.length, 7);
 });
 
+test('saved Rocket League format only allows best of three, five, or seven', () => {
+  const legacy = createInitialState();
+  legacy.games.rocketleague.seriesLength = 1;
+  legacy.games.rocketleague.match.format = 'Best of 1';
+  const storage = memoryStorage({ [STORAGE_KEY]: JSON.stringify(legacy) });
+  const rocketLeague = loadState(storage).games.rocketleague;
+  assert.equal(rocketLeague.seriesLength, 7);
+  assert.equal(rocketLeague.match.format, 'Best of 7');
+});
+
 test('saved Rocket League session telemetry is cleared on app launch', () => {
   const saved = createInitialState();
   saved.games.rocketleague.rocketLeague.live = {

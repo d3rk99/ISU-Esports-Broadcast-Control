@@ -359,7 +359,7 @@ export const GAME_CONFIGS = {
     name: 'Rocket League', shortName: 'RL', accent: '#2d8cff', maxScore: 4,
     scoreLabel: 'Series score', rosterSize: 3,
     characterLabel: 'Car / preset',
-    formatOptions: [1, 3, 5, 7],
+    formatOptions: [3, 5, 7],
     defaultSeriesLength: 7,
     modes: ['Game 1', 'Game 2', 'Game 3', 'Game 4', 'Game 5', 'Game 6', 'Game 7'],
     maps: ROCKET_LEAGUE_SOCCAR_ARENAS,
@@ -497,9 +497,12 @@ export function createGameState(gameKey) {
         timeSeconds: 300,
         overtime: false,
         overtimeSeconds: 0,
+        replay: false,
         arena: '',
         spectatedPlayer: '',
-        players: []
+        players: [],
+        recentEvents: [],
+        playerStats: {}
       }
     } : null
   };

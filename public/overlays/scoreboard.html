@@ -3,36 +3,65 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ISU Esports — Scoreboard</title>
+    <title>ISU Esports - Scoreboard</title>
     <link rel="stylesheet" href="./overlay.css" />
   </head>
   <body class="obs-canvas scoreboard-page">
     <main id="scoreboard" class="scoreboard" data-overlay="scoreboard">
-      <div class="scoreboard-kicker">
-        <span id="score-event">COLLEGIATE ESPORTS</span>
-        <strong id="score-round">REGULAR SEASON</strong>
-        <span id="score-format">BEST OF 5</span>
+      <div class="scoreboard-generic">
+        <div class="scoreboard-kicker">
+          <span id="score-event">COLLEGIATE ESPORTS</span>
+          <strong id="score-round">REGULAR SEASON</strong>
+          <span id="score-format">BEST OF 5</span>
+        </div>
+        <div class="scoreboard-body">
+          <section class="score-team score-team--home">
+            <div class="score-logo" id="home-logo">ISU</div>
+            <div class="score-team-copy"><span>HOME</span><strong id="home-name">IDAHO STATE</strong><small id="home-detail">0</small></div>
+          </section>
+          <section class="score-core">
+            <small id="score-label">SET SCORE</small>
+            <div><strong id="home-score">0</strong><i>-</i><strong id="away-score">0</strong></div>
+            <span id="game-code">PREVIEW</span>
+          </section>
+          <section class="score-team score-team--away">
+            <div class="score-team-copy"><span>AWAY</span><strong id="away-name">OPPONENT</strong><small id="away-detail">0</small></div>
+            <div class="score-logo" id="away-logo">OPP</div>
+          </section>
+        </div>
+        <div class="score-mapline"><span id="map-number">MAP 1</span><i></i><strong id="map-name">BATTLEFIELD</strong><i></i><em id="map-mode">GAME 1</em></div>
       </div>
-      <div class="scoreboard-body">
-        <section class="score-team score-team--home">
-          <div class="score-logo" id="home-logo">ISU</div>
-          <div class="score-team-copy"><span>HOME</span><strong id="home-name">IDAHO STATE</strong><small id="home-detail">0</small></div>
-        </section>
-        <section class="score-core">
-          <small id="score-label">SET SCORE</small>
-          <div><strong id="home-score">0</strong><i>—</i><strong id="away-score">0</strong></div>
-          <span id="game-code">PREVIEW</span>
-        </section>
-        <section class="score-team score-team--away">
-          <div class="score-team-copy"><span>AWAY</span><strong id="away-name">OPPONENT</strong><small id="away-detail">0</small></div>
-          <div class="score-logo" id="away-logo">OPP</div>
-        </section>
-      </div>
-      <div class="score-mapline"><span id="map-number">MAP 1</span><i></i><strong id="map-name">BATTLEFIELD</strong><i></i><em id="map-mode">GAME 1</em></div>
+
+      <section id="rl-scorecard" class="rl-scorecard is-hidden" aria-label="Rocket League scorecard">
+        <div class="rl-card-panel rl-card-logo rl-card-home-logo" id="rl-home-logo">ISU</div>
+        <div class="rl-card-panel rl-card-name rl-card-home-name"><span>HOME</span><strong id="rl-home-name">IDAHO STATE</strong></div>
+        <div class="rl-card-panel rl-card-score rl-card-home-score"><strong id="rl-home-goals">0</strong></div>
+        <div class="rl-card-panel rl-card-core">
+          <strong id="rl-clock">5:00</strong>
+          <div class="rl-series-line">
+            <span class="rl-series-dots" id="rl-home-series"></span>
+            <em id="rl-game-label">GAME 1 / Best of 5</em>
+            <span class="rl-series-dots" id="rl-away-series"></span>
+          </div>
+        </div>
+        <div class="rl-card-panel rl-card-score rl-card-away-score"><strong id="rl-away-goals">0</strong></div>
+        <div class="rl-card-panel rl-card-name rl-card-away-name"><span>AWAY</span><strong id="rl-away-name">OPPONENT</strong></div>
+        <div class="rl-card-panel rl-card-logo rl-card-away-logo" id="rl-away-logo">OPP</div>
+        <footer class="rl-card-footer" id="rl-card-footer">COLLEGIATE ESPORTS - REGULAR SEASON</footer>
+      </section>
+
       <div class="rl-boost-board" id="rl-boost-board" hidden>
         <section id="rl-home-players"></section>
         <div class="rl-boost-title"><span>LIVE</span><strong>PLAYER BOOST</strong></div>
         <section id="rl-away-players"></section>
+      </div>
+      <div class="rl-spectated-boost" id="rl-spectated-boost" hidden>
+        <span id="rl-spectated-boost-fill"></span>
+        <strong id="rl-spectated-boost-value">0</strong>
+      </div>
+      <div class="rl-replay-indicator" id="rl-replay-indicator" hidden>
+        <i></i>
+        <strong>Replay</strong>
       </div>
     </main>
     <script src="./overlay.js" defer></script>

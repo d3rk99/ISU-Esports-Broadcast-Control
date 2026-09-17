@@ -14,7 +14,10 @@ export function loadState(storage = window.localStorage) {
       }
       parsed.games[game] = { ...fallback.games[game], ...parsed.games[game] };
       const config = GAME_CONFIGS[game];
-      parsed.games[game].seriesLength = Number(parsed.games[game].seriesLength) || config.defaultSeriesLength || fallback.games[game].seriesLength;
+      const savedSeriesLength = Number(parsed.games[game].seriesLength) || config.defaultSeriesLength || fallback.games[game].seriesLength;
+      parsed.games[game].seriesLength = config.formatOptions?.length && !config.formatOptions.includes(savedSeriesLength)
+        ? config.defaultSeriesLength || fallback.games[game].seriesLength
+        : savedSeriesLength;
       parsed.games[game].match = {
         ...fallback.games[game].match,
         ...(parsed.games[game].match || {}),

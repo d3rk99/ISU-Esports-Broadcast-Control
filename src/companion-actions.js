@@ -36,7 +36,7 @@ function resetDetailScores(game, gameKey) {
 function resetAllScores(game, gameKey) {
   resetDetailScores(game, gameKey);
   game.teams.forEach((team) => { team.score = 0; });
-  if (gameKey === 'valorant') resetMapResults(game, gameKey);
+  if (gameKey === 'valorant' || gameKey === 'rocketleague') resetMapResults(game, gameKey);
 }
 
 function seriesLength(game) {

@@ -33,6 +33,15 @@ let companionSettings = {
 };
 let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
+const ROCKET_LEAGUE_EVENT_BADGE_MS = 5500;
+const ROCKET_LEAGUE_EVENT_FADE_MS = 850;
+const ROCKET_LEAGUE_STAT_EVENTS = [
+  { key: 'goals', label: 'G', title: 'Goal', priority: 5 },
+  { key: 'assists', label: 'A', title: 'Assist', priority: 4 },
+  { key: 'saves', label: 'V', title: 'Save', priority: 3 },
+  { key: 'shots', label: 'S', title: 'Shot', priority: 2 },
+  { key: 'demos', label: 'D', title: 'Demo', priority: 1 }
+];
 
 const ICONS = {
   control: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg>',
@@ -225,7 +234,7 @@ function renderControl(config) {
           <div class="field-grid">
             ${field('Event / league', 'match.event', game.match.event)}
             ${field('Round / stage', 'match.round', game.match.round)}
-            ${field('Series format', 'match.format', game.match.format)}
+            ${state.selectedGame === 'rocketleague' && config.formatOptions ? formatSelect(config, game, 'field format-select') : field('Series format', 'match.format', game.match.format)}
             <label class="field"><span>Active map</span><select data-field="activeMap">
               ${visibleMapRows(game, config).map((row, index) => `<option value="${index}" ${index === game.activeMap ? 'selected' : ''}>${index + 1} &mdash; ${escapeHtml(row.map || 'TBD')}</option>`).join('')}
             </select></label>
@@ -366,6 +375,11 @@ function field(label, path, value) {
   return `<label class="field"><span>${label}</span><input data-field="${path}" value="${escapeHtml(value)}" maxlength="60"></label>`;
 }
 
+function formatSelect(config, game, className = 'format-select', label = 'Series format') {
+  const target = seriesTarget(game, config);
+  return `<label class="${className}"><span>${label}</span><select data-format-length>${config.formatOptions.map((length) => `<option value="${length}" ${seriesLength(game, config) === length ? 'selected' : ''}>Best of ${length}</option>`).join('')}</select><small>First to ${target}</small></label>`;
+}
+
 function seriesLength(game, config = GAME_CONFIGS[state.selectedGame]) {
   const allowed = config.formatOptions || [];
   const fallback = config.defaultSeriesLength || game.mapRows.length;
@@ -385,6 +399,18 @@ function syncFormat(game, length) {
   game.seriesLength = Number(length);
   game.match.format = `Best of ${game.seriesLength}`;
   game.activeMap = Math.min(game.activeMap, visibleMapRows(game).length - 1);
+  if (state.selectedGame === 'rocketleague') {
+    game.activeMap = 0;
+    game.mapRows.forEach((row, index) => {
+      row.winner = null;
+      row.score = ['', ''];
+      row.overtime = false;
+      row.overtimeSeconds = 0;
+      row.status = index === 0 ? 'ready' : 'upcoming';
+    });
+    game.teams.forEach((team) => { team.score = 0; });
+    return;
+  }
   game.mapRows.forEach((row, index) => {
     if (index >= game.seriesLength) row.status = 'upcoming';
     else if (row.winner !== null) row.status = 'complete';
@@ -410,11 +436,36 @@ function clearValorantMapResults(game) {
   game.activeMap = 0;
 }
 
+function clearSeriesMapResults(game, gameKey) {
+  game.mapRows.forEach((row, index) => {
+    row.score = ['', ''];
+    row.winner = null;
+    row.overtime = false;
+    row.overtimeSeconds = 0;
+    if (gameKey === 'overwatch') {
+      row.map = '';
+      row.mode = '';
+    }
+    row.status = index === 0 ? 'ready' : 'upcoming';
+  });
+  if (gameKey === 'valorant') {
+    game.veto?.picks?.forEach((pick) => {
+      pick.score = ['', ''];
+      pick.winner = null;
+    });
+  }
+  game.activeMap = 0;
+}
+
 function renderMaps(config) {
   const game = current();
   const rows = visibleMapRows(game, config);
   const target = seriesTarget(game, config);
-  const formatControls = config.formatOptions ? `<label class="format-select"><span>FORMAT</span><select data-format-length>${config.formatOptions.map((length) => `<option value="${length}" ${seriesLength(game, config) === length ? 'selected' : ''}>Best of ${length}</option>`).join('')}</select><small>First to ${target}</small></label>` : `<div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>`;
+  const formatControls = state.selectedGame === 'rocketleague'
+    ? `<div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>`
+    : config.formatOptions
+      ? formatSelect(config, game, 'format-select', 'FORMAT')
+      : `<div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>`;
   return `<section class="view-stack">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Series map order</h2><p>${escapeHtml(game.match.format)} &middot; select, score, and advance maps</p></div></div>
       <button class="secondary-button" data-action="clear-maps">Clear results</button>
@@ -687,10 +738,17 @@ function applyRocketLeagueScores(game) {
   });
 }
 
+function rocketLeaguePlayerId(player) {
+  const primaryId = String(player.PrimaryId || '').trim();
+  const genericBotId = !primaryId || primaryId === 'Unknown|0|0';
+  if (!genericBotId) return primaryId;
+  return `${Number(player.TeamNum) || 0}|${player.Shortcut ?? ''}|${player.Name || 'Unknown Player'}`;
+}
+
 function normalizeLivePlayers(data, rl) {
   const target = data.Game?.Target?.Name || '';
   return (data.Players || []).map((player) => ({
-    id: player.PrimaryId || `${player.TeamNum}|${player.Shortcut}|${player.Name}`,
+    id: rocketLeaguePlayerId(player),
     name: player.Name || 'Unknown Player',
     teamNum: Number(player.TeamNum) || 0,
     shortcut: player.Shortcut,
@@ -706,6 +764,59 @@ function normalizeLivePlayers(data, rl) {
   })).sort((a, b) => mapRocketLeagueTeam(a.teamNum, rl) - mapRocketLeagueTeam(b.teamNum, rl));
 }
 
+function rocketLeaguePlayerStatSnapshot(player) {
+  return ROCKET_LEAGUE_STAT_EVENTS.reduce((snapshot, event) => {
+    snapshot[event.key] = Math.max(0, Number(player[event.key]) || 0);
+    return snapshot;
+  }, {});
+}
+
+function updateRocketLeagueRecentEvents(live, players) {
+  const now = Date.now();
+  const previousStats = live.playerStats && typeof live.playerStats === 'object' ? live.playerStats : {};
+  const nextStats = {};
+  let recentEvents = Array.isArray(live.recentEvents)
+    ? live.recentEvents.filter((event) => Number(event.removeAt) > now)
+    : [];
+
+  players.forEach((player) => {
+    const playerId = player.id || `${player.teamNum}|${player.shortcut}|${player.name}`;
+    const currentStats = rocketLeaguePlayerStatSnapshot(player);
+    const hasOldStats = Object.prototype.hasOwnProperty.call(previousStats, playerId);
+    const oldStats = previousStats[playerId] || {};
+    const changes = ROCKET_LEAGUE_STAT_EVENTS
+      .map((event) => ({
+        ...event,
+        value: currentStats[event.key],
+        previousValue: Math.max(0, Number(oldStats[event.key]) || 0)
+      }))
+      .filter((event) => hasOldStats && event.value > event.previousValue)
+      .sort((a, b) => b.priority - a.priority);
+
+    if (changes.length) {
+      const event = changes[0];
+      recentEvents = recentEvents.filter((recent) => recent.playerId !== playerId);
+      recentEvents.push({
+        id: `${playerId}-${event.key}-${now}`,
+        playerId,
+        playerName: player.name,
+        key: event.key,
+        label: event.label,
+        title: event.title,
+        count: event.value - event.previousValue,
+        createdAt: now,
+        expiresAt: now + ROCKET_LEAGUE_EVENT_BADGE_MS,
+        removeAt: now + ROCKET_LEAGUE_EVENT_BADGE_MS + ROCKET_LEAGUE_EVENT_FADE_MS
+      });
+    }
+
+    nextStats[playerId] = currentStats;
+  });
+
+  live.playerStats = nextStats;
+  live.recentEvents = recentEvents.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+}
+
 function handleRocketLeagueEvent(envelope) {
   const game = state.games.rocketleague;
   const rl = game.rocketLeague;
@@ -719,13 +830,17 @@ function handleRocketLeagueEvent(envelope) {
       updateRocketLeagueOvertime(rl.live, gameData.bOvertime === undefined ? rl.live.overtime : gameData.bOvertime, timeSeconds);
     }
     rl.live.arena = rocketLeagueArenaName(gameData.Arena || rl.live.arena);
+    rl.live.replay = Boolean(gameData.bReplay);
     rl.live.spectatedPlayer = gameData.Target?.Name || '';
     rl.live.teamScores = (gameData.Teams || []).reduce((scores, team) => {
       scores[Number(team.TeamNum)] = Number(team.Score) || 0;
       return scores;
     }, rl.live.teamScores || [0, 0]);
     applyRocketLeagueScores(game);
-    if (rl.syncPlayers) rl.live.players = normalizeLivePlayers(data, rl);
+    if (rl.syncPlayers) {
+      rl.live.players = normalizeLivePlayers(data, rl);
+      updateRocketLeagueRecentEvents(rl.live, rl.live.players);
+    }
     scheduleLiveUpdate();
     return;
   }
@@ -743,6 +858,8 @@ function handleRocketLeagueEvent(envelope) {
     rl.live.overtime = false;
     rl.live.overtimeSeconds = 0;
     rl.live.players = [];
+    rl.live.recentEvents = [];
+    rl.live.playerStats = {};
     rl.live.teamScores = [0, 0];
     if (rl.syncGoals) game.teams.forEach((team) => { team.detailScore = 0; });
     scheduleLiveUpdate();
@@ -977,7 +1094,7 @@ root.addEventListener('click', async (event) => {
     'swap-teams': () => commit(() => swapGameTeams(game), 'Team sides swapped'),
     'reset-scores': () => commit(() => {
       game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; });
-      if (state.selectedGame === 'valorant') clearValorantMapResults(game);
+      if (state.selectedGame === 'valorant' || state.selectedGame === 'rocketleague') clearSeriesMapResults(game, state.selectedGame);
     }, 'Scores reset'),
     'next-match': () => {
       const nextIndex = (game.activeMap + 1) % visibleMapRows(game, config).length;
@@ -991,25 +1108,8 @@ root.addEventListener('click', async (event) => {
       game.teams.forEach((team, teamIndex) => { team.score = visibleMapRows(game, config).filter((row) => row.winner === teamIndex).length; });
     }, 'Map result saved'),
     'clear-maps': () => commit(() => {
-      game.mapRows.forEach((row, i) => {
-        row.winner = null;
-        row.score = ['', ''];
-        row.overtime = false;
-        row.overtimeSeconds = 0;
-        if (state.selectedGame === 'overwatch') {
-          row.map = '';
-          row.mode = '';
-        }
-        row.status = i === 0 ? 'ready' : 'upcoming';
-      });
+      clearSeriesMapResults(game, state.selectedGame);
       game.teams.forEach((team) => { team.score = 0; });
-      if (state.selectedGame === 'valorant') {
-        game.veto?.picks?.forEach((pick) => {
-          pick.score = ['', ''];
-          pick.winner = null;
-        });
-      }
-      game.activeMap = 0;
     }, 'Map results cleared'),
     'reset-veto': () => commit(() => {
       game.veto.bans = game.veto.bans.map(() => '');
