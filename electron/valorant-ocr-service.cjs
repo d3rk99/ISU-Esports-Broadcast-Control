@@ -1,11 +1,12 @@
 const { DEFAULT_PROFILE_ID, FIELD_IDS, getValorantOcrProfile, listValorantOcrProfiles } = require('./valorant-ocr-profiles.cjs');
-const { ValorantOcrState } = require('./valorant-ocr-state.cjs');
+const { ValorantOcrState, parseScore, parseTimer } = require('./valorant-ocr-state.cjs');
 const { WebSocketServer } = require('ws');
 
 const DEFAULTS = Object.freeze({
   enabled: false,
   source: 'local',
   windowName: 'VALORANT',
+  captureBackend: 'auto',
   captureFps: 8,
   profileId: DEFAULT_PROFILE_ID,
   language: 'eng',
@@ -31,6 +32,7 @@ function normalizeSettings(settings = {}) {
     enabled: Boolean(settings.enabled),
     source: ['remote', 'simulator'].includes(settings.source) ? settings.source : 'local',
     windowName: String(settings.windowName || DEFAULTS.windowName).trim() || DEFAULTS.windowName,
+    captureBackend: ['native', 'electron'].includes(settings.captureBackend) ? settings.captureBackend : 'auto',
     captureFps: Number.isFinite(captureFps) ? Math.max(1, Math.min(15, Math.round(captureFps))) : DEFAULTS.captureFps,
     profileId: profile.id,
     language: 'eng',
@@ -43,6 +45,38 @@ function normalizeSettings(settings = {}) {
   };
 }
 
+function chooseOcrConsensus(results = [], kind = 'timer') {
+  const parser = kind === 'timer' ? parseTimer : parseScore;
+  const candidates = results.map((result) => ({ result, parsed: parser(result?.text) })).filter((candidate) => candidate.parsed.valid);
+  if (!candidates.length) {
+    const fallback = [...results].sort((left, right) => Number(right?.confidence || 0) - Number(left?.confidence || 0))[0] || { text: '', confidence: 0 };
+    return { ...fallback, confidence: Math.min(0.55, Number(fallback.confidence) || 0), consensus: 0, variants: results.length };
+  }
+  const groups = new Map();
+  for (const candidate of candidates) {
+    const key = String(candidate.parsed.value);
+    const group = groups.get(key) || [];
+    group.push(candidate);
+    groups.set(key, group);
+  }
+  const ranked = [...groups.values()].sort((left, right) => right.length - left.length
+    || Math.max(...right.map((item) => item.result.confidence || 0)) - Math.max(...left.map((item) => item.result.confidence || 0)));
+  const winners = ranked[0];
+  const best = [...winners].sort((left, right) => Number(right.result.confidence || 0) - Number(left.result.confidence || 0))[0];
+  const agreed = winners.length >= 2;
+  const confidence = agreed
+    ? winners.reduce((sum, item) => sum + Number(item.result.confidence || 0), 0) / winners.length
+    : Math.min(0.55, Number(best.result.confidence) || 0);
+  return {
+    ...best.result,
+    text: best.parsed.normalized,
+    confidence,
+    latencyMs: results.reduce((sum, result) => sum + (Number(result?.latencyMs) || 0), 0),
+    consensus: winners.length,
+    variants: results.length
+  };
+}
+
 class ValorantOcrService {
   constructor({ capture = null, ocr = null, onState = () => {}, onStatus = () => {}, now = () => Date.now() } = {}) {
     this.capture = capture;
@@ -52,7 +86,8 @@ class ValorantOcrService {
     this.now = now;
     this.settings = { ...DEFAULTS };
     this.validator = new ValorantOcrState();
-    this.loopTimer = null;
+    this.captureTimer = null;
+    this.ocrTimer = null;
     this.watchdogTimer = null;
     this.simulatorTimer = null;
     this.server = null;
@@ -60,9 +95,11 @@ class ValorantOcrService {
     this.remoteState = null;
     this.remoteSequence = 0;
     this.lastRemoteAt = 0;
-    this.busy = false;
+    this.captureBusy = false;
+    this.ocrBusy = false;
     this.generation = 0;
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
+    this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.latestFrame = null;
     this.frameTimestamps = [];
     this.scanTimestamps = [];
@@ -87,6 +124,7 @@ class ValorantOcrService {
       source: this.settings.source,
       profileId: this.settings.profileId,
       windowName: this.settings.windowName,
+      captureBackend: this.latestFrame?.backend || this.settings.captureBackend,
       captureFps: this.frameRate(now),
       captureWidth: this.latestFrame?.width || null,
       captureHeight: this.latestFrame?.height || null,
@@ -161,6 +199,7 @@ class ValorantOcrService {
         fps: this.frameRate(now),
         lastFrameAt: this.latestFrame?.capturedAt || null,
         windowName: this.latestFrame?.sourceName || this.settings.windowName,
+        backend: this.latestFrame?.backend || this.settings.captureBackend,
         failures: this.captureFailures,
         consecutiveFailures: this.consecutiveCaptureFailures,
         recovering: this.consecutiveCaptureFailures > 0,
@@ -181,6 +220,7 @@ class ValorantOcrService {
     this.settings = normalizeSettings(nextSettings);
     this.validator.setRecordedVideoMode(this.settings.recordedVideoMode);
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
+    this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.frameTimestamps = [];
     this.scanTimestamps = [];
     this.latencies = [];
@@ -189,6 +229,7 @@ class ValorantOcrService {
     this.lastCaptureErrorAt = 0;
     this.lastCaptureRecoveredAt = 0;
     if (!this.settings.enabled) {
+      void this.capture?.close?.();
       this.emitState();
       return this.emitStatus('disabled', 'VALORANT OCR is off');
     }
@@ -204,19 +245,21 @@ class ValorantOcrService {
     }
     if (!this.capture || !this.ocr) return this.emitStatus('error', 'OCR capture service is unavailable');
     this.emitStatus('starting', wasEnabled ? 'Restarting VALORANT OCR' : 'Starting VALORANT OCR');
-    this.schedule(0);
+    this.scheduleCapture(0);
+    this.scheduleOcr(0);
     return this.status;
   }
 
   stopLoops() {
     this.generation += 1;
-    clearTimeout(this.loopTimer);
+    clearTimeout(this.captureTimer);
+    clearTimeout(this.ocrTimer);
     clearInterval(this.watchdogTimer);
     clearInterval(this.simulatorTimer);
-    this.loopTimer = null;
+    this.captureTimer = null;
+    this.ocrTimer = null;
     this.watchdogTimer = null;
     this.simulatorTimer = null;
-    this.busy = false;
     for (const client of this.bridgeClients) client.close();
     this.bridgeClients.clear();
     if (this.server) {
@@ -227,63 +270,63 @@ class ValorantOcrService {
 
   stop() {
     this.stopLoops();
+    void this.capture?.close?.();
     this.settings = { ...this.settings, enabled: false };
     return this.emitStatus('disabled', 'VALORANT OCR is off');
   }
 
   async shutdown() {
     this.stop();
+    await this.capture?.close?.();
     await this.ocr?.close?.();
   }
 
-  schedule(delay = Math.round(1000 / this.settings.captureFps)) {
+  scheduleCapture(delay = Math.round(1000 / this.settings.captureFps)) {
     const generation = this.generation;
-    clearTimeout(this.loopTimer);
-    this.loopTimer = setTimeout(async () => {
+    clearTimeout(this.captureTimer);
+    this.captureTimer = setTimeout(async () => {
       if (generation !== this.generation || !this.settings.enabled || this.settings.source !== 'local') return;
-      await this.tick();
-      if (generation === this.generation && this.settings.enabled) this.schedule();
+      await this.captureTick();
+      if (generation === this.generation && this.settings.enabled) this.scheduleCapture();
     }, delay);
   }
 
-  async tick() {
-    if (this.busy) return;
-    this.busy = true;
+  scheduleOcr(delay = 20) {
+    const generation = this.generation;
+    clearTimeout(this.ocrTimer);
+    this.ocrTimer = setTimeout(async () => {
+      if (generation !== this.generation || !this.settings.enabled || this.settings.source !== 'local') return;
+      await this.ocrTick();
+      if (generation === this.generation && this.settings.enabled) this.scheduleOcr();
+    }, delay);
+  }
+
+  async captureTick() {
+    if (this.captureBusy) return false;
+    this.captureBusy = true;
+    const generation = this.generation;
     const now = this.now();
     try {
-      const frame = await this.capture.capture(this.settings.windowName);
+      const frame = await this.capture.capture(this.settings.windowName, {
+        backend: this.settings.captureBackend,
+        captureFps: this.settings.captureFps
+      });
+      if (generation !== this.generation) return false;
       if (this.consecutiveCaptureFailures > 0) this.lastCaptureRecoveredAt = now;
       this.consecutiveCaptureFailures = 0;
+      const isNewFrame = !this.latestFrame || frame.capturedAt !== this.latestFrame.capturedAt;
       this.latestFrame = frame;
-      this.frameTimestamps.push(frame.capturedAt || now);
-      this.frameTimestamps = this.frameTimestamps.filter((value) => now - value <= 2000);
-      const profile = getValorantOcrProfile(this.settings.profileId, this.settings.roiOverrides);
-      const dueFields = FIELD_IDS.filter((id) => now - this.lastScannedAt[id] >= profile.fields[id].cadenceMs);
-      for (const fieldId of dueFields) {
-        const field = profile.fields[fieldId];
-        const crop = this.capture.crop(frame, field.roi, field.preprocess);
-        const result = await this.ocr.recognize(crop.image, { ...field.preprocess, kind: field.kind });
-        const observedAt = this.now();
-        this.lastScannedAt[fieldId] = observedAt;
-        this.scanTimestamps.push(observedAt);
-        this.scanTimestamps = this.scanTimestamps.filter((value) => observedAt - value <= 2000);
-        if (Number.isFinite(result.latencyMs)) {
-          this.latencies.push(result.latencyMs);
-          if (this.latencies.length > 30) this.latencies.shift();
-        }
-        this.validator.observe(fieldId, { ...result, source: 'ocr' }, observedAt);
+      if (isNewFrame) {
+        this.frameTimestamps.push(frame.capturedAt || now);
+        this.frameTimestamps = this.frameTimestamps.filter((value) => now - value <= 2000);
       }
-      this.emitState();
-      const snapshot = this.validator.snapshot(this.now());
-      const trustedCount = FIELD_IDS.filter((id) => snapshot.fields[id].value !== null).length;
-      this.emitStatus(trustedCount === FIELD_IDS.length ? 'reading' : 'calibrating', trustedCount === FIELD_IDS.length
-        ? 'Reading VALORANT scoreboard'
-        : `Capture active; locked ${trustedCount} of ${FIELD_IDS.length} fields`, { sourceName: frame.sourceName });
+      return isNewFrame;
     } catch (error) {
+      if (generation !== this.generation) return false;
       this.captureFailures += 1;
       this.consecutiveCaptureFailures += 1;
       this.lastCaptureErrorAt = this.now();
-      const transient = ['CAPTURE_EMPTY', 'WINDOW_NOT_FOUND'].includes(error?.code);
+      const transient = ['CAPTURE_EMPTY', 'WINDOW_NOT_FOUND', 'NATIVE_CAPTURE_TIMEOUT', 'NATIVE_CAPTURE_CLOSED'].includes(error?.code);
       const retainingFrame = transient && Boolean(this.latestFrame);
       let state;
       let message;
@@ -300,9 +343,77 @@ class ValorantOcrService {
         usingLastGoodFrame: retainingFrame,
         retrying: transient
       });
+      return false;
     } finally {
-      this.busy = false;
+      this.captureBusy = false;
     }
+  }
+
+  async recognizeField(frame, fieldId, field) {
+    const base = { ...field.preprocess };
+    delete base.variants;
+    const variants = Array.isArray(field.preprocess.variants) && field.preprocess.variants.length
+      ? field.preprocess.variants
+      : [{}];
+    const results = [];
+    for (const variant of variants) {
+      const recipe = { ...base, ...variant };
+      const crop = this.capture.crop(frame, field.roi, recipe);
+      results.push(await this.ocr.recognize(crop.image, { ...recipe, kind: field.kind, fieldId }));
+    }
+    return variants.length > 1 ? chooseOcrConsensus(results, field.kind) : results[0];
+  }
+
+  async ocrTick() {
+    if (this.ocrBusy || !this.latestFrame || this.consecutiveCaptureFailures > 0) return false;
+    const generation = this.generation;
+    const frame = this.latestFrame;
+    const now = this.now();
+    const profile = getValorantOcrProfile(this.settings.profileId, this.settings.roiOverrides);
+    const dueFields = FIELD_IDS.filter((id) => now - this.lastScannedAt[id] >= profile.fields[id].cadenceMs
+      && frame.capturedAt !== this.lastScannedFrameAt[id]);
+    if (!dueFields.length) return false;
+    this.ocrBusy = true;
+    try {
+      const results = await Promise.all(dueFields.map(async (fieldId) => ({
+        fieldId,
+        result: await this.recognizeField(frame, fieldId, profile.fields[fieldId])
+      })));
+      if (generation !== this.generation) return false;
+      for (const { fieldId, result } of results) {
+        const observedAt = this.now();
+        this.lastScannedAt[fieldId] = observedAt;
+        this.lastScannedFrameAt[fieldId] = frame.capturedAt;
+        this.scanTimestamps.push(observedAt);
+        this.scanTimestamps = this.scanTimestamps.filter((value) => observedAt - value <= 2000);
+        if (Number.isFinite(result.latencyMs)) {
+          this.latencies.push(result.latencyMs);
+          if (this.latencies.length > 30) this.latencies.shift();
+        }
+        this.validator.observe(fieldId, { ...result, source: 'ocr' }, observedAt);
+      }
+      this.emitState();
+      const snapshot = this.validator.snapshot(this.now());
+      const trustedCount = FIELD_IDS.filter((id) => snapshot.fields[id].value !== null).length;
+      this.emitStatus(trustedCount === FIELD_IDS.length ? 'reading' : 'calibrating', trustedCount === FIELD_IDS.length
+        ? 'Reading VALORANT scoreboard'
+        : `Capture active; locked ${trustedCount} of ${FIELD_IDS.length} fields`, {
+        sourceName: frame.sourceName,
+        captureBackend: frame.backend || this.settings.captureBackend
+      });
+      return true;
+    } catch (error) {
+      if (generation !== this.generation) return false;
+      this.emitStatus('degraded', `OCR recognition failed: ${error?.message || error}`, { errorCode: error?.code || 'OCR_ERROR' });
+      return false;
+    } finally {
+      this.ocrBusy = false;
+    }
+  }
+
+  async tick() {
+    await this.captureTick();
+    return this.ocrTick();
   }
 
   frameRate(now = this.now()) {
@@ -441,4 +552,4 @@ class ValorantOcrService {
   }
 }
 
-module.exports = { DEFAULTS, ValorantOcrService, normalizeSettings };
+module.exports = { DEFAULTS, ValorantOcrService, chooseOcrConsensus, normalizeSettings };

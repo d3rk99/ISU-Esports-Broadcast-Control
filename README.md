@@ -116,7 +116,9 @@ For VALORANT on a separate Game PC:
 
 Capture, OCR, temporal validation, ROI calibration, and the test feed run on the VALORANT PC. Only compact normalized state is sent to Broadcast Control. Rocket League continues to use its Stats API adapter in the same executable.
 
-For recorded match testing, enable **Recorded Video Test Mode** in the bridge before starting it. This mode requires repeated readings before accepting a timeline seek or lower score. Leave it disabled for live matches. The bridge retains its last good frame during temporary empty captures and automatically retries the selected window; keep browser or VALORANT windows restored rather than minimized.
+The OCR adapter now prefers native Windows Graphics Capture, which keeps acquiring the selected window when it is behind another window. **Automatic** is the recommended capture engine; it falls back to Electron capture if native capture cannot start. Capture and OCR run on separate schedules, and home score, timer, and away score use independent OCR workers. The timer also compares three preprocessing variants before a full-confidence reading is accepted.
+
+For recorded match testing, enable **Recorded Video Test Mode** in the bridge before starting it. This mode requires repeated readings before accepting a timeline seek or lower score. Leave it disabled for live matches. A captured debug image is a manual frozen snapshot—the age and capture engine are shown above it while OCR continues live. The bridge retains its last trusted state during temporary capture failures and automatically retries the selected window.
 
 ## OBS browser sources
 

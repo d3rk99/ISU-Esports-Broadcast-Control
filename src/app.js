@@ -298,9 +298,10 @@ function renderValorantOcrPanel(game) {
     <label class="field"><span>RECEIVER PORT</span><input type="number" min="1" max="65535" data-vo-prop="bridgePort" value="${Number(ocr.bridgePort) || 3175}"><small>Universal bridge listener</small></label>
     <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-vo-prop="bridgeToken" value="${escapeHtml(ocr.bridgeToken || '')}" placeholder="Generate a private key"><button data-action="generate-valorant-bridge-key">GENERATE</button><small>Graphics PC: ${escapeHtml(networkAddresses.join(' / ') || 'address unavailable')}</small></label>` : `
     <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vo-prop="windowName" list="valorant-window-list" value="${escapeHtml(ocr.windowName)}"><datalist id="valorant-window-list">${valorantWindowChoices.map((window) => `<option value="${escapeHtml(window.name)}"></option>`).join('')}</datalist></label>
+    <label class="field"><span>CAPTURE ENGINE</span><select data-vo-prop="captureBackend"><option value="auto" ${ocr.captureBackend === 'auto' || !ocr.captureBackend ? 'selected' : ''}>Automatic (native preferred)</option><option value="native" ${ocr.captureBackend === 'native' ? 'selected' : ''}>Windows Graphics Capture</option><option value="electron" ${ocr.captureBackend === 'electron' ? 'selected' : ''}>Electron fallback</option></select></label>
     <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
     <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
-    <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Allows confirmed timeline seeks and score corrections</small></span></label>`;
+    <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>`;
   return `
     <article class="panel valorant-ocr-panel">
       <header class="vo-heading">
@@ -329,6 +330,7 @@ function renderValorantOcrPanel(game) {
       </div>
       <div class="vo-metrics">
         <span>CAPTURE <b>${Number(live.captureFps || 0).toFixed(1)} FPS</b></span>
+        <span>ENGINE <b>${escapeHtml(live.capture?.backend || live.captureBackend || ocr.captureBackend || 'auto')}</b></span>
         <span>CAPTURE HEALTH <b>${live.capture?.consecutiveFailures || live.consecutiveCaptureFailures || 0} CURRENT / ${live.capture?.failures || live.captureFailures || 0} TOTAL</b></span>
         <span>SOURCE <b>${live.captureWidth || live.capture?.width || '-'} &times; ${live.captureHeight || live.capture?.height || '-'}</b></span>
         <span>OCR <b>${Number(live.scansPerSecond || 0).toFixed(1)}/S &middot; ${live.scans || live.metrics?.observations || 0} TOTAL</b></span>
@@ -341,6 +343,7 @@ function renderValorantOcrPanel(game) {
         <div>${roiFields.map((field) => `<section><h3>${escapeHtml(field.label)}</h3>${['x', 'y', 'w', 'h'].map((axis) => `<label><span>${axis.toUpperCase()}</span><input type="number" min="${axis === 'x' || axis === 'y' ? 0 : 1}" data-vo-roi="${field.id}" data-vo-axis="${axis}" value="${field.roi[axis]}"></label>`).join('')}</section>`).join('')}</div>
       </details>
       ${snapshot ? `<div class="vo-debug-stage">
+        <p class="vo-debug-empty">MANUAL DEBUG SNAPSHOT &middot; ${Math.max(0, Math.round((Date.now() - Number(snapshot.capturedAt || Date.now())) / 1000))}S OLD &middot; ${escapeHtml(snapshot.backend || 'unknown engine')} &middot; OCR CONTINUES LIVE</p>
         <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${ocr.debugRois ? roiFields.map((field) => `<i style="left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span></i>`).join('') : ''}</div>
         <div class="vo-crops">${roiFields.map((field) => `<section><span>${escapeHtml(field.label)}</span>${snapshot.crops?.[field.id] ? `<img src="${escapeHtml(snapshot.crops[field.id].processedDataUrl)}" alt="${escapeHtml(field.label)} OCR crop">` : '<em>Not captured</em>'}</section>`).join('')}</div>
       </div>` : '<p class="vo-debug-empty">Capture a debug frame to inspect the full 1920 &times; 1080 source and processed OCR crops.</p>'}

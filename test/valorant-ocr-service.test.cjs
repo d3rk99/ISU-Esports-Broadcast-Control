@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { WebSocket } = require('ws');
 const net = require('node:net');
-const { ValorantOcrService, normalizeSettings } = require('../electron/valorant-ocr-service.cjs');
+const { ValorantOcrService, chooseOcrConsensus, normalizeSettings } = require('../electron/valorant-ocr-service.cjs');
 
 function fakeFrame(now = Date.now()) {
   return { sourceName: 'VALORANT', capturedAt: now, width: 1920, height: 1080, image: {} };
@@ -19,10 +19,11 @@ function reservePort() {
   });
 }
 
-test('OCR settings constrain capture rate and ROI geometry', () => {
-  const settings = normalizeSettings({ captureFps: 99, recordedVideoMode: true, roiOverrides: { timer: { x: -10, y: 5, w: 99999, h: 60 } } });
+test('OCR settings constrain capture rate, backend, and ROI geometry', () => {
+  const settings = normalizeSettings({ captureFps: 99, captureBackend: 'native', recordedVideoMode: true, roiOverrides: { timer: { x: -10, y: 5, w: 99999, h: 60 } } });
   assert.equal(settings.captureFps, 15);
   assert.equal(settings.recordedVideoMode, true);
+  assert.equal(settings.captureBackend, 'native');
   assert.equal(settings.roiOverrides.timer.x, 0);
   assert.equal(settings.roiOverrides.timer.w, 1920);
 });
@@ -36,8 +37,8 @@ test('service turns fake OCR readings into normalized state', async (t) => {
     snapshot: () => ({ frameDataUrl: 'data:image/png;base64,test', crops: {} }),
     listWindows: async () => [{ id: 'window:1', name: 'VALORANT' }]
   };
-  const texts = ['2', '1:30', '1', '2', '1:30', '1', '2', '1:30', '1'];
-  const ocr = { recognize: async () => ({ text: texts.shift(), confidence: 0.99, latencyMs: 4 }) };
+  const textByField = { homeScore: '2', timer: '1:30', awayScore: '1' };
+  const ocr = { recognize: async (_image, recipe) => ({ text: textByField[recipe.fieldId], confidence: 0.99, latencyMs: 4 }) };
   const service = new ValorantOcrService({ capture, ocr, onState: (state) => states.push(state), now: () => now });
   t.after(() => service.stop());
   service.settings = normalizeSettings({ enabled: true });
@@ -56,6 +57,59 @@ test('service turns fake OCR readings into normalized state', async (t) => {
   assert.equal(latest.match.timerSeconds, 90);
   assert.equal(service.status.state, 'reading');
   assert.deepEqual(await service.listWindows(), [{ id: 'window:1', name: 'VALORANT' }]);
+});
+
+test('timer preprocessing variants require agreement before returning full confidence', () => {
+  const agreed = chooseOcrConsensus([
+    { text: '1:23', confidence: 0.92, latencyMs: 4 },
+    { text: '123', confidence: 0.88, latencyMs: 5 },
+    { text: '1:28', confidence: 0.97, latencyMs: 6 }
+  ], 'timer');
+  assert.equal(agreed.text, '1:23');
+  assert.equal(agreed.consensus, 2);
+  assert.ok(agreed.confidence > 0.8);
+  assert.equal(agreed.latencyMs, 15);
+
+  const disputed = chooseOcrConsensus([
+    { text: '1:23', confidence: 0.96 },
+    { text: '1:24', confidence: 0.94 },
+    { text: '1:25', confidence: 0.93 }
+  ], 'timer');
+  assert.equal(disputed.consensus, 1);
+  assert.equal(disputed.confidence, 0.55);
+});
+
+test('capture continues while a slower OCR pass is still running', async (t) => {
+  let now = 1000;
+  let captures = 0;
+  let releaseHome;
+  const homeGate = new Promise((resolve) => { releaseHome = resolve; });
+  const capture = {
+    capture: async () => fakeFrame(++now),
+    crop: () => ({ image: Buffer.from('test') })
+  };
+  const ocr = {
+    recognize: async (_image, recipe) => {
+      if (recipe.fieldId === 'homeScore') await homeGate;
+      return { text: recipe.fieldId === 'timer' ? '1:20' : '0', confidence: 0.99, latencyMs: 2 };
+    }
+  };
+  const service = new ValorantOcrService({
+    capture: { ...capture, capture: async (...args) => { captures += 1; return capture.capture(...args); } },
+    ocr,
+    now: () => now
+  });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true });
+  await service.captureTick();
+  const recognition = service.ocrTick();
+  await new Promise((resolve) => setImmediate(resolve));
+  await service.captureTick();
+  assert.equal(captures, 2);
+  assert.equal(service.ocrBusy, true);
+  releaseHome();
+  await recognition;
+  assert.equal(service.ocrBusy, false);
 });
 
 test('temporary empty captures retain the last good frame and recover automatically', async (t) => {

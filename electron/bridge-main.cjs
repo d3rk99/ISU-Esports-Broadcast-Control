@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { UniversalGameBridge } = require('./game-bridge.cjs');
 const { ValorantWindowCapture } = require('./valorant-capture.cjs');
+const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
 const { TesseractOcrEngine } = require('./valorant-ocr-engine.cjs');
 
 const appDataPath = app.getPath('appData');
@@ -55,7 +56,10 @@ function createWindow() {
 
 app.whenReady().then(() => {
   forwarder = new UniversalGameBridge({
-    capture: new ValorantWindowCapture({ desktopCapturer, nativeImage }),
+    capture: new HybridValorantWindowCapture({
+      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
+      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
+    }),
     ocr: new TesseractOcrEngine(),
     onStatus: (status) => mainWindow?.webContents.send('bridge:status', status),
     onOcrState: (state) => mainWindow?.webContents.send('bridge:ocr-state', state)

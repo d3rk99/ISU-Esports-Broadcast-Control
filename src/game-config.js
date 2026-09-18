@@ -509,6 +509,7 @@ export function createGameState(gameKey) {
       enabled: false,
       source: 'local',
       windowName: 'VALORANT',
+      captureBackend: 'auto',
       captureFps: 8,
       profileId: '1920x1080-en-5v5',
       language: 'eng',

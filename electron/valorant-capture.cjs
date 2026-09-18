@@ -117,6 +117,7 @@ class ValorantWindowCapture {
       sourceWidth: size.width,
       sourceHeight: size.height,
       normalized,
+      backend: 'electron-desktop-capturer',
       capturedAt: Date.now()
     };
   }
@@ -137,6 +138,7 @@ class ValorantWindowCapture {
     return {
       capturedAt: frame.capturedAt,
       sourceName: frame.sourceName,
+      backend: frame.backend || 'electron-desktop-capturer',
       width: frame.width,
       height: frame.height,
       sourceWidth: frame.sourceWidth || frame.width,
@@ -149,6 +151,8 @@ class ValorantWindowCapture {
       }]))
     };
   }
+
+  async close() {}
 }
 
 module.exports = { ValorantWindowCapture, otsuThreshold, preprocessNativeImage };

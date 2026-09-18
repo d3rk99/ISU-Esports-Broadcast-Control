@@ -7,6 +7,7 @@ const path = require('node:path');
 const { CompanionApiService, normalizeCompanionSettings } = require('./companion-api-service.cjs');
 const { RocketLeagueService } = require('./rocket-league-service.cjs');
 const { ValorantWindowCapture } = require('./valorant-capture.cjs');
+const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
 const { TesseractOcrEngine } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 
@@ -27,7 +28,7 @@ const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
 ];
 const VALORANT_OCR_SETTINGS_FIELDS = [
-  'enabled', 'source', 'windowName', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides'
+  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -643,7 +644,10 @@ app.whenReady().then(async () => {
     }
   });
   valorantOcrService = new ValorantOcrService({
-    capture: new ValorantWindowCapture({ desktopCapturer, nativeImage }),
+    capture: new HybridValorantWindowCapture({
+      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
+      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
+    }),
     ocr: new TesseractOcrEngine(),
     onState: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:state', state);

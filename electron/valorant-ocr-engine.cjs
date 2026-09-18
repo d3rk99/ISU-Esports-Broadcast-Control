@@ -9,15 +9,15 @@ function unpackedPath(value) {
 class TesseractOcrEngine {
   constructor({ createWorkerImpl = createWorker } = {}) {
     this.createWorkerImpl = createWorkerImpl;
-    this.workerPromise = null;
+    this.workerPromises = new Map();
   }
 
-  async getWorker() {
-    if (!this.workerPromise) {
+  async getWorker(key = 'default') {
+    if (!this.workerPromises.has(key)) {
       const langPath = unpackedPath(englishData.langPath);
       const workerPath = unpackedPath(require.resolve('tesseract.js/src/worker-script/node/index.js'));
       const corePath = unpackedPath(path.dirname(require.resolve('tesseract.js-core/package.json')));
-      this.workerPromise = this.createWorkerImpl(englishData.code || 'eng', OEM.LSTM_ONLY, {
+      const workerPromise = this.createWorkerImpl(englishData.code || 'eng', OEM.LSTM_ONLY, {
         langPath,
         workerPath,
         corePath,
@@ -25,16 +25,17 @@ class TesseractOcrEngine {
         gzip: englishData.gzip !== false,
         logger: () => {}
       }).catch((error) => {
-        this.workerPromise = null;
+        this.workerPromises.delete(key);
         throw error;
       });
+      this.workerPromises.set(key, workerPromise);
     }
-    return this.workerPromise;
+    return this.workerPromises.get(key);
   }
 
-  async recognize(image, { allowedChars = '0123456789:', kind = 'score' } = {}) {
+  async recognize(image, { allowedChars = '0123456789:', kind = 'score', fieldId = 'default' } = {}) {
     const startedAt = Date.now();
-    const worker = await this.getWorker();
+    const worker = await this.getWorker(fieldId);
     await worker.setParameters({
       tessedit_char_whitelist: allowedChars,
       tessedit_pageseg_mode: PSM.SINGLE_LINE,
@@ -51,10 +52,11 @@ class TesseractOcrEngine {
   }
 
   async close() {
-    if (!this.workerPromise) return;
-    const workerPromise = this.workerPromise;
-    this.workerPromise = null;
-    try { (await workerPromise).terminate(); } catch {}
+    const workerPromises = [...this.workerPromises.values()];
+    this.workerPromises.clear();
+    await Promise.all(workerPromises.map(async (workerPromise) => {
+      try { await (await workerPromise).terminate(); } catch {}
+    }));
   }
 }
 

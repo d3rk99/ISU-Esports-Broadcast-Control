@@ -15,7 +15,18 @@
         "kind": "timer",
         "cadenceMs": 200,
         "roi": { "x": 900, "y": 18, "w": 120, "h": 64 },
-        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789:" }
+        "preprocess": {
+          "scale": 3,
+          "grayscale": true,
+          "threshold": "otsu",
+          "invert": "auto",
+          "allowedChars": "0123456789:",
+          "variants": [
+            { "threshold": "otsu", "invert": "auto" },
+            { "threshold": 110, "invert": "auto" },
+            { "threshold": 165, "invert": "auto" }
+          ]
+        }
       },
       "awayScore": {
         "label": "Away score",
