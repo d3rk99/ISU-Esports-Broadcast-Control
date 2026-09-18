@@ -436,6 +436,7 @@ input:focus, select:focus { border-color: var(--orange); }
 .rl-player footer em { color: #777780; font-size: 7px; font-style: normal; text-align: right; }
 
 .valorant-ocr-panel { overflow: hidden; border-top: 2px solid #ff4655; }
+.valorant-ocr-panel.has-debug-snapshot { width: min(calc(100vw - 328px), 1760px); max-width: none; margin-left: 50%; transform: translateX(-50%); }
 .vo-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 78px; padding: 15px 18px; border-bottom: 1px solid #303036; background: linear-gradient(90deg, rgba(255,70,85,.11), transparent 55%); }
 .vo-heading > div:first-child > span { color: #ff5d69; font-size: 7px; font-weight: 900; letter-spacing: .14em; }
 .vo-heading h2 { margin: 5px 0 3px; font-size: 14px; }
@@ -477,15 +478,18 @@ input:focus, select:focus { border-color: var(--orange); }
 .vo-roi-editor h3 { grid-column: 1 / -1; margin: 0 0 3px; color: #aaaab1; font-size: 8px; }
 .vo-roi-editor label span { display: block; margin-bottom: 4px; color: #64646c; font-size: 6px; font-weight: 900; }
 .vo-roi-editor input { width: 100%; height: 27px; padding: 0 5px; border: 1px solid #34343a; color: #d6d6da; background: #0d0d0f; font-size: 8px; }
-.vo-debug-stage { display: grid; grid-template-columns: minmax(0, 3fr) minmax(190px, 1fr); gap: 10px; padding: 14px 17px 17px; }
-.vo-frame { position: relative; overflow: hidden; border: 1px solid #393940; background: #08080a; aspect-ratio: 16 / 9; }
-.vo-frame > img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.vo-frame > i { position: absolute; border: 2px solid #ff4655; background: rgba(255,70,85,.12); box-shadow: 0 0 0 1px #08080a; }
-.vo-frame > i span { position: absolute; left: -2px; bottom: 100%; padding: 3px 5px; color: #fff; background: #ff4655; font-size: 6px; font-style: normal; font-weight: 900; white-space: nowrap; }
-.vo-crops { display: grid; grid-template-rows: repeat(3, 1fr); gap: 7px; }
+.vo-debug-stage { display: grid; grid-template-columns: minmax(0, 1fr) 240px; align-items: start; gap: 10px; padding: 14px 17px 17px; }
+.vo-debug-stage > .vo-debug-empty { grid-column: 1 / -1; padding: 0 0 3px; text-align: left; }
+.vo-frame { position: relative; overflow: hidden; border: 1px solid #393940; background: #08080a; aspect-ratio: 16 / 9; touch-action: none; user-select: none; }
+.vo-frame > img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.vo-frame > .vo-roi-box { position: absolute; border: 2px solid var(--roi-color, #ff4655); background: color-mix(in srgb, var(--roi-color, #ff4655) 15%, transparent); box-shadow: 0 0 0 1px #08080a, 0 0 16px color-mix(in srgb, var(--roi-color, #ff4655) 55%, transparent); cursor: move; }
+.vo-frame > .vo-roi-box.active { box-shadow: 0 0 0 1px #fff, 0 0 24px var(--roi-color, #ff4655); }
+.vo-frame > .vo-roi-box span { position: absolute; left: 3px; top: -18px; padding: 3px 5px; color: #fff; background: #060608; font-size: 6px; font-style: normal; font-weight: 900; letter-spacing: .08em; white-space: nowrap; }
+.vo-frame > .vo-roi-box b { position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; border: 2px solid #060608; background: var(--roi-color, #ff4655); box-shadow: 0 0 0 1px white; cursor: nwse-resize; }
+.vo-crops { display: grid; grid-template-rows: repeat(3, auto); align-content: start; gap: 7px; }
 .vo-crops section { display: grid; grid-template-rows: auto 1fr; min-height: 0; padding: 8px; border: 1px solid #34343a; background: #101012; }
 .vo-crops span { margin-bottom: 5px; color: #777780; font-size: 6px; font-weight: 900; }
-.vo-crops img { width: 100%; min-height: 34px; height: 100%; object-fit: contain; background: white; image-rendering: pixelated; }
+.vo-crops img { width: 100%; height: 72px; object-fit: contain; background: white; image-rendering: pixelated; }
 .vo-crops em { display: grid; place-items: center; color: #5f5f67; font-size: 7px; font-style: normal; }
 .vo-debug-empty { margin: 0; padding: 15px 17px 17px; color: #686870; font-size: 8px; text-align: center; }
 
@@ -503,6 +507,7 @@ input:focus, select:focus { border-color: var(--orange); }
   .vo-settings-grid { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
   .companion-fields { grid-template-columns: 1fr 150px; }
   .companion-key-field { grid-column: 1 / -1; }
+  .valorant-ocr-panel.has-debug-snapshot { width: 100%; margin-left: 0; transform: none; }
 }
 
 @media (max-height: 790px) {

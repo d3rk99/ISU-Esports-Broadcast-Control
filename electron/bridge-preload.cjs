@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('isuBridge', {
   getConfig: () => ipcRenderer.invoke('bridge:get-config'),
   getStatus: () => ipcRenderer.invoke('bridge:get-status'),
   start: (config) => ipcRenderer.invoke('bridge:start', config),
+  updateConfig: (config) => ipcRenderer.invoke('bridge:update-config', config),
   stop: () => ipcRenderer.invoke('bridge:stop'),
   listWindows: () => ipcRenderer.invoke('bridge:list-windows'),
   captureSnapshot: () => ipcRenderer.invoke('bridge:capture-snapshot'),

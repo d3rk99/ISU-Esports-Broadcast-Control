@@ -36,5 +36,62 @@
         "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
       }
     }
+  },
+  "1920x1080-en-observer3-scoreboard": {
+    "label": "1920x1080 - Observer 3 Data Screen",
+    "frame": { "width": 1920, "height": 1080 },
+    "mode": "observer3-scoreboard",
+    "fields": {
+      "homeScore": {
+        "label": "Home score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 808, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      },
+      "timer": {
+        "label": "Round timer",
+        "kind": "timer",
+        "cadenceMs": 200,
+        "roi": { "x": 900, "y": 18, "w": 120, "h": 64 },
+        "preprocess": {
+          "scale": 3,
+          "grayscale": true,
+          "threshold": "otsu",
+          "invert": "auto",
+          "allowedChars": "0123456789:",
+          "variants": [
+            { "threshold": "otsu", "invert": "auto" },
+            { "threshold": 110, "invert": "auto" },
+            { "threshold": 165, "invert": "auto" }
+          ]
+        }
+      },
+      "awayScore": {
+        "label": "Away score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 1020, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      }
+    },
+    "scoreboardTable": {
+      "description": "Observer 3 is expected to keep the in-game scoreboard open continuously. These regions are a starting schema for the next scanner pass.",
+      "teams": [
+        { "id": "home", "label": "Home scoreboard rows", "rows": 5, "origin": { "x": 700, "y": 410 }, "rowHeight": 43 },
+        { "id": "away", "label": "Away scoreboard rows", "rows": 5, "origin": { "x": 700, "y": 690 }, "rowHeight": 43 }
+      ],
+      "columns": {
+        "agentIcon": { "label": "Agent icon", "x": 0, "w": 42, "kind": "icon" },
+        "playerName": { "label": "Player name", "x": 70, "w": 230, "kind": "text", "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-[]" },
+        "ultimate": { "label": "Ultimate charge", "x": 315, "w": 68, "kind": "text", "allowedChars": "0123456789/" },
+        "kills": { "label": "Kills", "x": 420, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "deaths": { "label": "Deaths", "x": 470, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "assists": { "label": "Assists", "x": 520, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "loadoutIcon": { "label": "Loadout icon", "x": 590, "w": 130, "kind": "icon" },
+        "credits": { "label": "Credits", "x": 805, "w": 92, "kind": "currency", "allowedChars": "0123456789," },
+        "ping": { "label": "Ping", "x": 940, "w": 46, "kind": "score", "allowedChars": "0123456789" }
+      }
+    }
   }
 }

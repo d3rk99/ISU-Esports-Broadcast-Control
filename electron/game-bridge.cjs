@@ -77,6 +77,18 @@ class UniversalGameBridge {
     return this.getStatus();
   }
 
+  updateConfig(settings = {}) {
+    const previous = this.settings;
+    this.settings = normalizeBridgeSettings(settings);
+    if (!previous || !previous.graphicsHost || !previous.bridgeToken) return this.getStatus();
+    if (previous.game !== this.settings.game || previous.graphicsHost !== this.settings.graphicsHost || previous.bridgePort !== this.settings.bridgePort || previous.bridgeToken !== this.settings.bridgeToken) {
+      return this.start(this.settings);
+    }
+    if (this.settings.game === 'valorant') this.valorant.configure(this.settings.valorant);
+    else this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
+    return this.getStatus();
+  }
+
   stop() {
     this.generation += 1;
     clearTimeout(this.remoteRetry);

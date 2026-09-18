@@ -4,12 +4,19 @@ const path = require('node:path');
 const { UniversalGameBridge } = require('./game-bridge.cjs');
 const { ValorantWindowCapture } = require('./valorant-capture.cjs');
 const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
-const { TesseractOcrEngine } = require('./valorant-ocr-engine.cjs');
+const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 
 const appDataPath = app.getPath('appData');
 app.setName('ISU Esports Game Bridge');
 app.setPath('userData', path.join(appDataPath, 'ISU Esports Game Bridge'));
 app.setAppUserModelId('edu.isu.esports.gamebridge');
+process.on('uncaughtException', (error) => {
+  if (isRecoverableWorkerPipeError(error)) {
+    console.warn('[valorant-ocr] Ignored recoverable OCR worker pipe error:', error?.message || error);
+    return;
+  }
+  throw error;
+});
 
 let mainWindow;
 let forwarder;
@@ -69,6 +76,10 @@ app.whenReady().then(() => {
   ipcMain.handle('bridge:start', (_event, config) => {
     saveConfig(config);
     return forwarder.start(config);
+  });
+  ipcMain.handle('bridge:update-config', (_event, config) => {
+    saveConfig(config);
+    return forwarder.updateConfig(config);
   });
   ipcMain.handle('bridge:stop', () => {
     forwarder.stop();

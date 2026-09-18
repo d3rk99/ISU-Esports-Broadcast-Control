@@ -8,7 +8,7 @@ const { CompanionApiService, normalizeCompanionSettings } = require('./companion
 const { RocketLeagueService } = require('./rocket-league-service.cjs');
 const { ValorantWindowCapture } = require('./valorant-capture.cjs');
 const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
-const { TesseractOcrEngine } = require('./valorant-ocr-engine.cjs');
+const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 
 const isDev = !app.isPackaged;
@@ -31,6 +31,13 @@ const VALORANT_OCR_SETTINGS_FIELDS = [
   'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
+process.on('uncaughtException', (error) => {
+  if (isRecoverableWorkerPipeError(error)) {
+    console.warn('[valorant-ocr] Ignored recoverable OCR worker pipe error:', error?.message || error);
+    return;
+  }
+  throw error;
+});
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 

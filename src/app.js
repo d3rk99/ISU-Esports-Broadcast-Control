@@ -32,6 +32,7 @@ let outputDisplays = [];
 let valorantOcrSnapshot = null;
 let valorantWindowChoices = [];
 let valorantOcrRenderTimer;
+let valorantRoiDrag = null;
 let outputDisplaySettings = {
   fillDisplayId: '',
   keyDisplayId: '',
@@ -281,6 +282,127 @@ function valorantOcrFieldLabel(fieldId) {
   return { homeScore: 'HOME SCORE', timer: 'ROUND TIMER', awayScore: 'AWAY SCORE' }[fieldId] || fieldId;
 }
 
+function valorantOcrFieldColor(fieldId) {
+  return { homeScore: '#2d8cff', timer: '#f5d24a', awayScore: '#ff4655' }[fieldId] || '#ff4655';
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function setValorantRoiInputs(fieldId, roi) {
+  const next = {
+    x: clampNumber(Math.round(roi.x), 0, 1919),
+    y: clampNumber(Math.round(roi.y), 0, 1079),
+    w: clampNumber(Math.round(roi.w), 1, 1920),
+    h: clampNumber(Math.round(roi.h), 1, 1080)
+  };
+  next.w = Math.min(next.w, 1920 - next.x);
+  next.h = Math.min(next.h, 1080 - next.y);
+  for (const axis of ['x', 'y', 'w', 'h']) {
+    const input = root.querySelector(`[data-vo-roi="${fieldId}"][data-vo-axis="${axis}"]`);
+    if (input) input.value = next[axis];
+  }
+  return next;
+}
+
+function valorantRoiFromInputs(fieldId) {
+  const profile = getValorantOcrProfile(state.games.valorant.valorantOcr.profileId).fields[fieldId].roi;
+  return Object.fromEntries(['x', 'y', 'w', 'h'].map((axis) => {
+    const input = root.querySelector(`[data-vo-roi="${fieldId}"][data-vo-axis="${axis}"]`);
+    return [axis, Number(input?.value ?? profile[axis]) || profile[axis]];
+  }));
+}
+
+function positionValorantRoiBox(fieldId) {
+  const box = root.querySelector(`[data-vo-roi-box="${fieldId}"]`);
+  if (!box) return;
+  const roi = setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId));
+  box.style.left = `${roi.x / 19.2}%`;
+  box.style.top = `${roi.y / 10.8}%`;
+  box.style.width = `${roi.w / 19.2}%`;
+  box.style.height = `${roi.h / 10.8}%`;
+}
+
+function valorantSourcePoint(event) {
+  const img = root.querySelector('.vo-frame img');
+  const rect = (img || root.querySelector('.vo-frame')).getBoundingClientRect();
+  return {
+    x: clampNumber(((event.clientX - rect.left) / rect.width) * 1920, 0, 1920),
+    y: clampNumber(((event.clientY - rect.top) / rect.height) * 1080, 0, 1080)
+  };
+}
+
+async function saveValorantRoiFromInputs(fieldId) {
+  const roi = setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId));
+  commit(() => {
+    const ocr = state.games.valorant.valorantOcr;
+    ocr.roiOverrides ||= {};
+    const base = getValorantOcrProfile(ocr.profileId).fields[fieldId].roi;
+    ocr.roiOverrides[fieldId] = { ...base, ...roi };
+  }, 'OCR region updated');
+  await syncValorantOcr();
+}
+
+async function saveAllValorantRoisFromInputs() {
+  const nextRois = Object.fromEntries(VALORANT_OCR_FIELD_IDS.map((fieldId) => [
+    fieldId,
+    setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId))
+  ]));
+  commit(() => {
+    const ocr = state.games.valorant.valorantOcr;
+    const profile = getValorantOcrProfile(ocr.profileId);
+    ocr.roiOverrides = Object.fromEntries(VALORANT_OCR_FIELD_IDS.map((fieldId) => [
+      fieldId,
+      { ...profile.fields[fieldId].roi, ...nextRois[fieldId] }
+    ]));
+  }, 'OCR boxes saved');
+  await syncValorantOcr();
+}
+
+function beginValorantRoiDrag(event) {
+  const box = event.target.closest('[data-vo-roi-box]');
+  if (!box || !root.contains(box)) return;
+  event.preventDefault();
+  const fieldId = box.dataset.voRoiBox;
+  valorantRoiDrag = {
+    fieldId,
+    pointerId: event.pointerId,
+    mode: event.target.closest('[data-vo-roi-resize]') ? 'resize' : 'move',
+    start: valorantSourcePoint(event),
+    roi: setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId))
+  };
+  box.classList.add('active');
+  box.setPointerCapture?.(event.pointerId);
+}
+
+function moveValorantRoiDrag(event) {
+  if (!valorantRoiDrag || event.pointerId !== valorantRoiDrag.pointerId) return;
+  const point = valorantSourcePoint(event);
+  const dx = point.x - valorantRoiDrag.start.x;
+  const dy = point.y - valorantRoiDrag.start.y;
+  const roi = { ...valorantRoiDrag.roi };
+  if (valorantRoiDrag.mode === 'resize') {
+    roi.w += dx;
+    roi.h += dy;
+  } else {
+    roi.x += dx;
+    roi.y += dy;
+  }
+  setValorantRoiInputs(valorantRoiDrag.fieldId, roi);
+  positionValorantRoiBox(valorantRoiDrag.fieldId);
+  event.preventDefault();
+}
+
+async function endValorantRoiDrag(event) {
+  if (!valorantRoiDrag || event.pointerId !== valorantRoiDrag.pointerId) return;
+  const fieldId = valorantRoiDrag.fieldId;
+  valorantRoiDrag = null;
+  root.querySelector(`[data-vo-roi-box="${fieldId}"]`)?.classList.remove('active');
+  await saveValorantRoiFromInputs(fieldId);
+  render();
+}
+
 function renderValorantOcrPanel(game) {
   const ocr = game.valorantOcr;
   const live = ocr.live || {};
@@ -303,7 +425,7 @@ function renderValorantOcrPanel(game) {
     <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
     <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>`;
   return `
-    <article class="panel valorant-ocr-panel">
+    <article class="panel valorant-ocr-panel ${snapshot ? 'has-debug-snapshot' : ''}">
       <header class="vo-heading">
         <div><span>VALORANT OCR EXPERIMENT</span><h2>OCR Lab</h2><p>Capture and normalized telemetry only &middot; overlays remain disconnected</p></div>
         <div class="vo-status ${escapeHtml(status)}"><i></i><span>${escapeHtml(status.replaceAll('-', ' ').toUpperCase())}</span><small>${escapeHtml(live.message || 'Waiting for service')}</small></div>
@@ -316,6 +438,7 @@ function renderValorantOcrPanel(game) {
       <div class="vo-toolbar ${ocr.source === 'remote' ? 'remote' : ''}">
         ${ocr.source === 'remote' ? '<span>Capture, ROI calibration, and test feed controls are available in the bridge app on the VALORANT PC.</span>' : `
         <button class="secondary-button" data-action="detect-valorant-window">FIND WINDOW</button>
+        <button class="secondary-button" data-action="save-valorant-rois">SAVE BOXES</button>
         <button class="secondary-button" data-action="capture-valorant-frame">CAPTURE DEBUG FRAME</button>
         <button class="secondary-button" data-action="clear-valorant-ocr">CLEAR LOCKS</button>
         <button class="secondary-button ${simulatorRunning ? 'danger' : ''}" data-action="${simulatorRunning ? 'stop-valorant-simulator' : 'start-valorant-simulator'}">${simulatorRunning ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
@@ -344,7 +467,7 @@ function renderValorantOcrPanel(game) {
       </details>
       ${snapshot ? `<div class="vo-debug-stage">
         <p class="vo-debug-empty">MANUAL DEBUG SNAPSHOT &middot; ${Math.max(0, Math.round((Date.now() - Number(snapshot.capturedAt || Date.now())) / 1000))}S OLD &middot; ${escapeHtml(snapshot.backend || 'unknown engine')} &middot; OCR CONTINUES LIVE</p>
-        <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${ocr.debugRois ? roiFields.map((field) => `<i style="left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span></i>`).join('') : ''}</div>
+        <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${ocr.debugRois ? roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('') : ''}</div>
         <div class="vo-crops">${roiFields.map((field) => `<section><span>${escapeHtml(field.label)}</span>${snapshot.crops?.[field.id] ? `<img src="${escapeHtml(snapshot.crops[field.id].processedDataUrl)}" alt="${escapeHtml(field.label)} OCR crop">` : '<em>Not captured</em>'}</section>`).join('')}</div>
       </div>` : '<p class="vo-debug-empty">Capture a debug frame to inspect the full 1920 &times; 1080 source and processed OCR crops.</p>'}
     </article>`;
@@ -1241,10 +1364,21 @@ root.addEventListener('click', async (event) => {
   }
   if (button.dataset.action === 'capture-valorant-frame') {
     try {
+      await saveAllValorantRoisFromInputs();
       valorantOcrSnapshot = await window.isuDesktop?.captureValorantOcrSnapshot();
       toast('Debug frame captured');
     } catch (error) {
       toast(error?.message || 'Could not capture VALORANT');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'save-valorant-rois') {
+    try {
+      await saveAllValorantRoisFromInputs();
+      toast('OCR boxes saved');
+    } catch (error) {
+      toast(error?.message || 'Could not save OCR boxes');
     }
     render();
     return;
@@ -1326,6 +1460,16 @@ root.addEventListener('click', async (event) => {
   render();
 });
 
+root.addEventListener('pointerdown', beginValorantRoiDrag);
+root.addEventListener('pointermove', moveValorantRoiDrag);
+root.addEventListener('pointerup', endValorantRoiDrag);
+root.addEventListener('pointercancel', endValorantRoiDrag);
+
+root.addEventListener('input', (event) => {
+  const target = event.target;
+  if (target.dataset.voRoi) positionValorantRoiBox(target.dataset.voRoi);
+});
+
 root.addEventListener('change', async (event) => {
   const target = event.target;
   if (target.id === 'game-select') {
@@ -1401,7 +1545,6 @@ root.addEventListener('change', async (event) => {
       const base = getValorantOcrProfile(ocr.profileId).fields[fieldId].roi;
       ocr.roiOverrides[fieldId] = { ...base, ...(ocr.roiOverrides[fieldId] || {}), [axis]: Math.max(axis === 'x' || axis === 'y' ? 0 : 1, Math.round(Number(target.value) || base[axis])) };
     }, 'OCR region updated');
-    valorantOcrSnapshot = null;
     await syncValorantOcr();
     render();
     return;
