@@ -52,11 +52,12 @@ function preprocessNativeImage(nativeImageApi, image, options = {}) {
 }
 
 class ValorantWindowCapture {
-  constructor({ desktopCapturer, nativeImage, expectedWidth = 1920, expectedHeight = 1080 } = {}) {
+  constructor({ desktopCapturer, nativeImage, expectedWidth = 1920, expectedHeight = 1080, sizeTolerancePixels = 2 } = {}) {
     this.desktopCapturer = desktopCapturer;
     this.nativeImage = nativeImage;
     this.expectedWidth = expectedWidth;
     this.expectedHeight = expectedHeight;
+    this.sizeTolerancePixels = Math.max(0, Number(sizeTolerancePixels) || 0);
   }
 
   async listWindows() {
@@ -83,13 +84,35 @@ class ValorantWindowCapture {
       throw error;
     }
     const size = source.thumbnail.getSize();
-    if (size.width !== this.expectedWidth || size.height !== this.expectedHeight) {
-      const error = new Error(`VALORANT capture is ${size.width}×${size.height}; set the game to 1920×1080`);
+    const widthDifference = Math.abs(size.width - this.expectedWidth);
+    const heightDifference = Math.abs(size.height - this.expectedHeight);
+    if (widthDifference > this.sizeTolerancePixels || heightDifference > this.sizeTolerancePixels) {
+      const error = new Error(`VALORANT capture is ${size.width}×${size.height}; use 1920×1080 or a source within ${this.sizeTolerancePixels} pixels`);
       error.code = 'CAPTURE_SIZE';
-      error.details = { width: size.width, height: size.height };
+      error.details = {
+        width: size.width,
+        height: size.height,
+        expectedWidth: this.expectedWidth,
+        expectedHeight: this.expectedHeight,
+        tolerance: this.sizeTolerancePixels
+      };
       throw error;
     }
-    return { sourceId: source.id, sourceName: source.name, image: source.thumbnail, width: size.width, height: size.height, capturedAt: Date.now() };
+    const normalized = widthDifference !== 0 || heightDifference !== 0;
+    const image = normalized
+      ? source.thumbnail.resize({ width: this.expectedWidth, height: this.expectedHeight, quality: 'best' })
+      : source.thumbnail;
+    return {
+      sourceId: source.id,
+      sourceName: source.name,
+      image,
+      width: this.expectedWidth,
+      height: this.expectedHeight,
+      sourceWidth: size.width,
+      sourceHeight: size.height,
+      normalized,
+      capturedAt: Date.now()
+    };
   }
 
   crop(frame, roi, preprocess = {}) {
@@ -110,6 +133,9 @@ class ValorantWindowCapture {
       sourceName: frame.sourceName,
       width: frame.width,
       height: frame.height,
+      sourceWidth: frame.sourceWidth || frame.width,
+      sourceHeight: frame.sourceHeight || frame.height,
+      normalized: Boolean(frame.normalized),
       frameDataUrl: frame.image.toDataURL(),
       crops: Object.fromEntries(Object.entries(crops).map(([id, crop]) => [id, {
         rawDataUrl: crop.rawDataUrl,
