@@ -84,6 +84,12 @@ class ValorantWindowCapture {
       throw error;
     }
     const size = source.thumbnail.getSize();
+    if (size.width === 0 || size.height === 0) {
+      const error = new Error(`The selected “${source.name}” window returned an empty frame; keep it restored while capture retries`);
+      error.code = 'CAPTURE_EMPTY';
+      error.details = { width: size.width, height: size.height, sourceId: source.id, sourceName: source.name };
+      throw error;
+    }
     const widthDifference = Math.abs(size.width - this.expectedWidth);
     const heightDifference = Math.abs(size.height - this.expectedHeight);
     if (widthDifference > this.sizeTolerancePixels || heightDifference > this.sizeTolerancePixels) {

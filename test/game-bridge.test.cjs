@@ -19,13 +19,14 @@ test('universal bridge settings preserve isolated game adapters', () => {
   const settings = normalizeBridgeSettings({
     game: 'valorant', graphicsHost: ' 192.168.1.50 ', bridgePort: 3175, bridgeToken: 'key',
     rocketLeague: { tcpPort: 49130 },
-    valorant: { windowName: 'VALORANT-Win64-Shipping', captureFps: 12 }
+    valorant: { windowName: 'VALORANT-Win64-Shipping', captureFps: 12, recordedVideoMode: true }
   });
   assert.equal(settings.game, 'valorant');
   assert.equal(settings.graphicsHost, '192.168.1.50');
   assert.equal(settings.rocketLeague.tcpPort, 49130);
   assert.equal(settings.valorant.windowName, 'VALORANT-Win64-Shipping');
   assert.equal(settings.valorant.captureFps, 12);
+  assert.equal(settings.valorant.recordedVideoMode, true);
 });
 
 test('universal bridge envelopes identify game, version, sequence and payload', () => {

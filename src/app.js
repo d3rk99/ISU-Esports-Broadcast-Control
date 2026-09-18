@@ -299,7 +299,8 @@ function renderValorantOcrPanel(game) {
     <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-vo-prop="bridgeToken" value="${escapeHtml(ocr.bridgeToken || '')}" placeholder="Generate a private key"><button data-action="generate-valorant-bridge-key">GENERATE</button><small>Graphics PC: ${escapeHtml(networkAddresses.join(' / ') || 'address unavailable')}</small></label>` : `
     <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vo-prop="windowName" list="valorant-window-list" value="${escapeHtml(ocr.windowName)}"><datalist id="valorant-window-list">${valorantWindowChoices.map((window) => `<option value="${escapeHtml(window.name)}"></option>`).join('')}</datalist></label>
     <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
-    <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>`;
+    <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
+    <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Allows confirmed timeline seeks and score corrections</small></span></label>`;
   return `
     <article class="panel valorant-ocr-panel">
       <header class="vo-heading">
@@ -328,6 +329,7 @@ function renderValorantOcrPanel(game) {
       </div>
       <div class="vo-metrics">
         <span>CAPTURE <b>${Number(live.captureFps || 0).toFixed(1)} FPS</b></span>
+        <span>CAPTURE HEALTH <b>${live.capture?.consecutiveFailures || live.consecutiveCaptureFailures || 0} CURRENT / ${live.capture?.failures || live.captureFailures || 0} TOTAL</b></span>
         <span>SOURCE <b>${live.captureWidth || live.capture?.width || '-'} &times; ${live.captureHeight || live.capture?.height || '-'}</b></span>
         <span>OCR <b>${Number(live.scansPerSecond || 0).toFixed(1)}/S &middot; ${live.scans || live.metrics?.observations || 0} TOTAL</b></span>
         <span>LATENCY <b>${live.avgOcrLatencyMs ?? '-'} MS</b></span>

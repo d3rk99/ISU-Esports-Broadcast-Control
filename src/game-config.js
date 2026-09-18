@@ -513,6 +513,7 @@ export function createGameState(gameKey) {
       profileId: '1920x1080-en-5v5',
       language: 'eng',
       scoreboardMode: 'manual',
+      recordedVideoMode: false,
       debugRois: true,
       bridgePort: 3175,
       bridgeToken: '',

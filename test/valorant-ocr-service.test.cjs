@@ -20,8 +20,9 @@ function reservePort() {
 }
 
 test('OCR settings constrain capture rate and ROI geometry', () => {
-  const settings = normalizeSettings({ captureFps: 99, roiOverrides: { timer: { x: -10, y: 5, w: 99999, h: 60 } } });
+  const settings = normalizeSettings({ captureFps: 99, recordedVideoMode: true, roiOverrides: { timer: { x: -10, y: 5, w: 99999, h: 60 } } });
   assert.equal(settings.captureFps, 15);
+  assert.equal(settings.recordedVideoMode, true);
   assert.equal(settings.roiOverrides.timer.x, 0);
   assert.equal(settings.roiOverrides.timer.w, 1920);
 });
@@ -35,11 +36,15 @@ test('service turns fake OCR readings into normalized state', async (t) => {
     snapshot: () => ({ frameDataUrl: 'data:image/png;base64,test', crops: {} }),
     listWindows: async () => [{ id: 'window:1', name: 'VALORANT' }]
   };
-  const texts = ['2', '1:30', '1'];
+  const texts = ['2', '1:30', '1', '2', '1:30', '1', '2', '1:30', '1'];
   const ocr = { recognize: async () => ({ text: texts.shift(), confidence: 0.99, latencyMs: 4 }) };
   const service = new ValorantOcrService({ capture, ocr, onState: (state) => states.push(state), now: () => now });
   t.after(() => service.stop());
   service.settings = normalizeSettings({ enabled: true });
+  await service.tick();
+  now += 400;
+  await service.tick();
+  now += 400;
   await service.tick();
   const latest = states.at(-1);
   assert.equal(latest.fields.homeScore.value, 2);
@@ -51,6 +56,45 @@ test('service turns fake OCR readings into normalized state', async (t) => {
   assert.equal(latest.match.timerSeconds, 90);
   assert.equal(service.status.state, 'reading');
   assert.deepEqual(await service.listWindows(), [{ id: 'window:1', name: 'VALORANT' }]);
+});
+
+test('temporary empty captures retain the last good frame and recover automatically', async (t) => {
+  let now = 1000;
+  let attempt = 0;
+  const statuses = [];
+  const capture = {
+    capture: async () => {
+      attempt += 1;
+      if (attempt >= 2 && attempt <= 5) throw Object.assign(new Error('Window returned an empty frame'), { code: 'CAPTURE_EMPTY' });
+      return fakeFrame(now);
+    },
+    crop: () => ({ image: Buffer.from('test') })
+  };
+  const ocr = { recognize: async ({}) => ({ text: '0', confidence: 0.99, latencyMs: 1 }) };
+  const service = new ValorantOcrService({ capture, ocr, onStatus: (status) => statuses.push(status), now: () => now });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true });
+  await service.tick();
+  const lastGoodFrame = service.latestFrame;
+  now += 250;
+  await service.tick();
+  assert.equal(service.latestFrame, lastGoodFrame);
+  assert.equal(statuses.at(-1).state, 'recovering');
+  assert.equal(statuses.at(-1).usingLastGoodFrame, true);
+  assert.equal(statuses.at(-1).consecutiveCaptureFailures, 1);
+  for (let index = 0; index < 3; index += 1) {
+    now += 250;
+    await service.tick();
+  }
+  assert.equal(service.status.state, 'degraded');
+  assert.equal(service.latestFrame, lastGoodFrame);
+  assert.equal(service.status.consecutiveCaptureFailures, 4);
+  now += 250;
+  await service.tick();
+  assert.notEqual(service.status.state, 'recovering');
+  assert.equal(service.status.consecutiveCaptureFailures, 0);
+  assert.equal(service.status.captureFailures, 4);
+  assert.equal(service.status.lastCaptureRecoveredAt, now);
 });
 
 test('capture failures provide actionable status', async (t) => {

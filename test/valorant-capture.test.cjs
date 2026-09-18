@@ -50,3 +50,17 @@ test('captures outside the near-1080p tolerance remain rejected', async () => {
     return true;
   });
 });
+
+test('empty window thumbnails are reported as a transient capture failure', async () => {
+  const capture = new ValorantWindowCapture({
+    desktopCapturer: {
+      getSources: async () => [{ id: 'window:1', name: 'YouTube Test', thumbnail: image(0, 0) }]
+    }
+  });
+
+  await assert.rejects(capture.capture('YouTube'), (error) => {
+    assert.equal(error.code, 'CAPTURE_EMPTY');
+    assert.equal(error.details.sourceName, 'YouTube Test');
+    return true;
+  });
+});

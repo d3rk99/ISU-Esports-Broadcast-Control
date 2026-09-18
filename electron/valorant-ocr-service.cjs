@@ -10,6 +10,7 @@ const DEFAULTS = Object.freeze({
   profileId: DEFAULT_PROFILE_ID,
   language: 'eng',
   scoreboardMode: 'manual',
+  recordedVideoMode: false,
   debugRois: true,
   bridgePort: 3175,
   bridgeToken: '',
@@ -34,6 +35,7 @@ function normalizeSettings(settings = {}) {
     profileId: profile.id,
     language: 'eng',
     scoreboardMode: ['manual', 'swapped'].includes(settings.scoreboardMode) ? settings.scoreboardMode : 'manual',
+    recordedVideoMode: Boolean(settings.recordedVideoMode),
     debugRois: settings.debugRois !== false,
     bridgePort: safePort(settings.bridgePort),
     bridgeToken: String(settings.bridgeToken || '').trim(),
@@ -65,6 +67,10 @@ class ValorantOcrService {
     this.frameTimestamps = [];
     this.scanTimestamps = [];
     this.latencies = [];
+    this.captureFailures = 0;
+    this.consecutiveCaptureFailures = 0;
+    this.lastCaptureErrorAt = 0;
+    this.lastCaptureRecoveredAt = 0;
     this.status = this.makeStatus('disabled', 'VALORANT OCR is off');
   }
 
@@ -91,6 +97,11 @@ class ValorantOcrService {
       avgOcrLatencyMs: this.latencies.length ? Math.round(this.latencies.reduce((sum, value) => sum + value, 0) / this.latencies.length) : null,
       lastFrameAt: this.latestFrame?.capturedAt || null,
       frameAgeMs: this.latestFrame ? now - this.latestFrame.capturedAt : null,
+      captureFailures: this.captureFailures,
+      consecutiveCaptureFailures: this.consecutiveCaptureFailures,
+      lastCaptureErrorAt: this.lastCaptureErrorAt || null,
+      lastCaptureRecoveredAt: this.lastCaptureRecoveredAt || null,
+      usingLastGoodFrame: this.consecutiveCaptureFailures > 0 && Boolean(this.latestFrame),
       lastTrustedAt: lastTrustedAt || null,
       trustedAgeMs: lastTrustedAt ? now - lastTrustedAt : null,
       bridgeClients: this.bridgeClients.size,
@@ -143,13 +154,17 @@ class ValorantOcrService {
     const awayScore = snapshot.fields.awayScore;
     return {
       source: 'valorant-ocr',
-      connected: Boolean(this.settings.enabled && (this.settings.source === 'simulator' || this.latestFrame)),
+      connected: Boolean(this.settings.enabled && (this.settings.source === 'simulator' || (this.latestFrame && now - this.latestFrame.capturedAt <= 2500))),
       capture: {
         width: this.latestFrame?.width || 1920,
         height: this.latestFrame?.height || 1080,
         fps: this.frameRate(now),
         lastFrameAt: this.latestFrame?.capturedAt || null,
-        windowName: this.latestFrame?.sourceName || this.settings.windowName
+        windowName: this.latestFrame?.sourceName || this.settings.windowName,
+        failures: this.captureFailures,
+        consecutiveFailures: this.consecutiveCaptureFailures,
+        recovering: this.consecutiveCaptureFailures > 0,
+        usingLastGoodFrame: this.consecutiveCaptureFailures > 0 && Boolean(this.latestFrame)
       },
       match: { timerSeconds: timer.value, timerDisplay: timer.displayValue },
       teams: {
@@ -164,10 +179,15 @@ class ValorantOcrService {
     const wasEnabled = this.settings.enabled;
     this.stopLoops();
     this.settings = normalizeSettings(nextSettings);
+    this.validator.setRecordedVideoMode(this.settings.recordedVideoMode);
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.frameTimestamps = [];
     this.scanTimestamps = [];
     this.latencies = [];
+    this.captureFailures = 0;
+    this.consecutiveCaptureFailures = 0;
+    this.lastCaptureErrorAt = 0;
+    this.lastCaptureRecoveredAt = 0;
     if (!this.settings.enabled) {
       this.emitState();
       return this.emitStatus('disabled', 'VALORANT OCR is off');
@@ -232,6 +252,8 @@ class ValorantOcrService {
     const now = this.now();
     try {
       const frame = await this.capture.capture(this.settings.windowName);
+      if (this.consecutiveCaptureFailures > 0) this.lastCaptureRecoveredAt = now;
+      this.consecutiveCaptureFailures = 0;
       this.latestFrame = frame;
       this.frameTimestamps.push(frame.capturedAt || now);
       this.frameTimestamps = this.frameTimestamps.filter((value) => now - value <= 2000);
@@ -258,8 +280,26 @@ class ValorantOcrService {
         ? 'Reading VALORANT scoreboard'
         : `Capture active; locked ${trustedCount} of ${FIELD_IDS.length} fields`, { sourceName: frame.sourceName });
     } catch (error) {
-      const state = error?.code === 'WINDOW_NOT_FOUND' ? 'searching-window' : error?.code === 'CAPTURE_SIZE' ? 'degraded' : 'error';
-      this.emitStatus(state, error?.message || 'VALORANT OCR capture failed', { errorCode: error?.code || 'OCR_ERROR' });
+      this.captureFailures += 1;
+      this.consecutiveCaptureFailures += 1;
+      this.lastCaptureErrorAt = this.now();
+      const transient = ['CAPTURE_EMPTY', 'WINDOW_NOT_FOUND'].includes(error?.code);
+      const retainingFrame = transient && Boolean(this.latestFrame);
+      let state;
+      let message;
+      if (transient && this.consecutiveCaptureFailures <= 3) {
+        state = this.latestFrame ? 'recovering' : 'searching-window';
+        message = `${error?.message || 'Capture temporarily unavailable'}; retrying automatically (${this.consecutiveCaptureFailures}/3)`;
+      } else {
+        state = error?.code === 'WINDOW_NOT_FOUND' && !this.latestFrame ? 'searching-window' : error?.code === 'CAPTURE_SIZE' || transient ? 'degraded' : 'error';
+        message = error?.message || 'VALORANT OCR capture failed';
+      }
+      this.emitState();
+      this.emitStatus(state, message, {
+        errorCode: error?.code || 'OCR_ERROR',
+        usingLastGoodFrame: retainingFrame,
+        retrying: transient
+      });
     } finally {
       this.busy = false;
     }
@@ -383,6 +423,8 @@ class ValorantOcrService {
       this.emitState();
       this.emitStatus('simulating', 'Deterministic OCR test feed is running');
     };
+    apply();
+    apply();
     apply();
     this.simulatorTimer = setInterval(apply, 250);
     return this.status;

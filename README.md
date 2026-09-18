@@ -116,6 +116,8 @@ For VALORANT on a separate Game PC:
 
 Capture, OCR, temporal validation, ROI calibration, and the test feed run on the VALORANT PC. Only compact normalized state is sent to Broadcast Control. Rocket League continues to use its Stats API adapter in the same executable.
 
+For recorded match testing, enable **Recorded Video Test Mode** in the bridge before starting it. This mode requires repeated readings before accepting a timeline seek or lower score. Leave it disabled for live matches. The bridge retains its last good frame during temporary empty captures and automatically retries the selected window; keep browser or VALORANT windows restored rather than minimized.
+
 ## OBS browser sources
 
 Keep the desktop application running during the broadcast. In OBS, add a Browser Source at **1920 × 1080** using one of these local URLs:

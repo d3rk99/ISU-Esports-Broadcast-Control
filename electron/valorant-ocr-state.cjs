@@ -1,6 +1,14 @@
 const FIELD_IDS = Object.freeze(['homeScore', 'timer', 'awayScore']);
 const SCORE_STALE_MS = 5000;
 const TIMER_STALE_MS = 1250;
+const INITIAL_SCORE_WINDOW = 5;
+const INITIAL_SCORE_CONSENSUS = 3;
+const SCORE_CHANGE_WINDOW = 3;
+const SCORE_CHANGE_CONSENSUS = 2;
+const SCORE_CORRECTION_WINDOW = 10;
+const SCORE_CORRECTION_CONSENSUS = 8;
+const VIDEO_SEEK_WINDOW = 5;
+const VIDEO_SEEK_CONSENSUS = 3;
 
 function clampConfidence(value) {
   const number = Number(value);
@@ -54,6 +62,9 @@ function emptyField(id) {
     observedAt: null,
     accepted: false,
     reason: 'waiting',
+    correctionCandidate: null,
+    correctionProgress: 0,
+    correctionRequired: 0,
     stale: true,
     source: null,
     iteration: 0
@@ -61,18 +72,26 @@ function emptyField(id) {
 }
 
 class ValorantOcrState {
-  constructor({ scoreConfidence = 0.72, timerConfidence = 0.62 } = {}) {
+  constructor({ scoreConfidence = 0.72, timerConfidence = 0.62, correctionConfidence = 0.9, recordedVideoMode = false } = {}) {
     this.scoreConfidence = scoreConfidence;
     this.timerConfidence = timerConfidence;
+    this.correctionConfidence = correctionConfidence;
+    this.recordedVideoMode = Boolean(recordedVideoMode);
     this.fields = Object.fromEntries(FIELD_IDS.map((id) => [id, emptyField(id)]));
     this.pending = Object.fromEntries(FIELD_IDS.map((id) => [id, { value: null, count: 0 }]));
+    this.history = Object.fromEntries(FIELD_IDS.map((id) => [id, []]));
     this.metrics = { observations: 0, accepted: 0, rejected: 0 };
     this.startedAt = Date.now();
+  }
+
+  setRecordedVideoMode(enabled) {
+    this.recordedVideoMode = Boolean(enabled);
   }
 
   clear(now = Date.now()) {
     this.fields = Object.fromEntries(FIELD_IDS.map((id) => [id, emptyField(id)]));
     this.pending = Object.fromEntries(FIELD_IDS.map((id) => [id, { value: null, count: 0 }]));
+    this.history = Object.fromEntries(FIELD_IDS.map((id) => [id, []]));
     this.metrics = { observations: 0, accepted: 0, rejected: 0 };
     this.startedAt = now;
     return this.snapshot(now);
@@ -92,6 +111,9 @@ class ValorantOcrState {
     field.observedAt = now;
     field.source = result.source || 'ocr';
 
+    const minimumConfidence = fieldId === 'timer' ? this.timerConfidence : this.scoreConfidence;
+    if (parsed.valid && confidence >= minimumConfidence) this.remember(fieldId, parsed.value, confidence, now);
+
     let decision;
     if (!parsed.valid) decision = { accepted: false, reason: 'unreadable' };
     else if (fieldId === 'timer') decision = this.validateTimer(field, parsed.value, confidence, now);
@@ -99,6 +121,9 @@ class ValorantOcrState {
 
     field.accepted = decision.accepted;
     field.reason = decision.reason;
+    field.correctionCandidate = decision.correctionCandidate ?? null;
+    field.correctionProgress = decision.correctionProgress ?? 0;
+    field.correctionRequired = decision.correctionRequired ?? 0;
     if (decision.accepted) {
       field.value = parsed.value;
       field.displayValue = fieldId === 'timer'
@@ -106,6 +131,7 @@ class ValorantOcrState {
         : String(parsed.value);
       field.updatedAt = now;
       field.stale = false;
+      if (decision.resetHistory) this.history[fieldId] = [];
       this.metrics.accepted += 1;
     } else {
       this.metrics.rejected += 1;
@@ -115,13 +141,52 @@ class ValorantOcrState {
 
   validateScore(field, value, confidence) {
     if (confidence < this.scoreConfidence) return { accepted: false, reason: 'low-confidence' };
-    if (field.value !== null && value < field.value) return { accepted: false, reason: 'score-decrease' };
-    if (field.value !== null && value > field.value + 1) return { accepted: false, reason: 'score-jump' };
+    if (field.value === null) {
+      const matches = this.consensus(field.id, value, INITIAL_SCORE_WINDOW);
+      if (matches >= INITIAL_SCORE_CONSENSUS) return { accepted: true, reason: 'score-initial-consensus', resetHistory: true };
+      return {
+        accepted: false,
+        reason: `initial-consensus-${matches}/${INITIAL_SCORE_CONSENSUS}`,
+        correctionCandidate: value,
+        correctionProgress: matches,
+        correctionRequired: INITIAL_SCORE_CONSENSUS
+      };
+    }
     if (value === field.value) {
       this.pending[field.id] = { value: null, count: 0 };
       return { accepted: true, reason: 'confirmed-current' };
     }
-    return this.confirmCandidate(field.id, value, confidence >= 0.94, 'score-confirmed');
+    if (value === field.value + 1) {
+      const matches = this.consensus(field.id, value, SCORE_CHANGE_WINDOW);
+      if (matches >= SCORE_CHANGE_CONSENSUS) return { accepted: true, reason: 'score-change-consensus', resetHistory: true };
+      return {
+        accepted: false,
+        reason: `score-change-${matches}/${SCORE_CHANGE_CONSENSUS}`,
+        correctionCandidate: value,
+        correctionProgress: matches,
+        correctionRequired: SCORE_CHANGE_CONSENSUS
+      };
+    }
+
+    const videoMatches = this.consensus(field.id, value, VIDEO_SEEK_WINDOW, this.scoreConfidence);
+    if (this.recordedVideoMode && videoMatches >= VIDEO_SEEK_CONSENSUS) {
+      return { accepted: true, reason: 'recorded-video-seek', resetHistory: true };
+    }
+
+    const correctionMatches = this.consensus(field.id, value, SCORE_CORRECTION_WINDOW, this.correctionConfidence);
+    if (correctionMatches >= SCORE_CORRECTION_CONSENSUS) {
+      return { accepted: true, reason: 'persistent-score-correction', resetHistory: true };
+    }
+    const transition = value < field.value ? 'score-decrease' : 'score-jump';
+    const required = this.recordedVideoMode ? VIDEO_SEEK_CONSENSUS : SCORE_CORRECTION_CONSENSUS;
+    const progress = this.recordedVideoMode ? videoMatches : correctionMatches;
+    return {
+      accepted: false,
+      reason: `${transition}-held-${progress}/${required}`,
+      correctionCandidate: value,
+      correctionProgress: progress,
+      correctionRequired: required
+    };
   }
 
   validateTimer(field, value, confidence, now) {
@@ -132,8 +197,24 @@ class ValorantOcrState {
     const predicted = Math.max(0, field.value - elapsedSeconds);
     const delta = value - predicted;
     if (delta > 2.25) return this.confirmCandidate(field.id, value, false, 'timer-reset');
-    if (delta < -3.25) return { accepted: false, reason: 'timer-jump' };
+    if (delta < -3.25) {
+      if (this.recordedVideoMode) return this.confirmCandidate(field.id, value, false, 'recorded-video-seek');
+      return { accepted: false, reason: 'timer-jump' };
+    }
     return this.confirmCandidate(field.id, value, confidence >= 0.86, 'timer-plausible');
+  }
+
+  remember(fieldId, value, confidence, observedAt) {
+    const history = this.history[fieldId];
+    history.push({ value, confidence, observedAt });
+    if (history.length > SCORE_CORRECTION_WINDOW) history.splice(0, history.length - SCORE_CORRECTION_WINDOW);
+  }
+
+  consensus(fieldId, value, windowSize, minimumConfidence = this.scoreConfidence) {
+    return this.history[fieldId]
+      .slice(-windowSize)
+      .filter((candidate) => candidate.value === value && candidate.confidence >= minimumConfidence)
+      .length;
   }
 
   confirmCandidate(fieldId, value, immediate, acceptedReason) {
