@@ -519,6 +519,8 @@ export function createGameState(gameKey) {
       bridgePort: 3175,
       bridgeToken: '',
       roiOverrides: {},
+      scoreboardTableOverrides: {},
+      observerScanIntervalMs: 25,
       live: {
         status: 'disabled',
         message: 'VALORANT OCR is off',

@@ -28,7 +28,7 @@ const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
 ];
 const VALORANT_OCR_SETTINGS_FIELDS = [
-  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides'
+  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides', 'scoreboardTableOverrides', 'observerScanIntervalMs'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 process.on('uncaughtException', (error) => {
@@ -520,6 +520,7 @@ function registerIpc() {
   ipcMain.handle('valorant-ocr:list-windows', () => valorantOcrService.listWindows());
   ipcMain.handle('valorant-ocr:capture-snapshot', () => valorantOcrService.captureSnapshot());
   ipcMain.handle('valorant-ocr:clear', () => valorantOcrService.clearState());
+  ipcMain.handle('valorant-ocr:set-observer-name', (_event, details = {}) => valorantOcrService.setObserverPlayerName(details));
   ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
   ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {

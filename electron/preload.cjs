@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   listValorantWindows: () => ipcRenderer.invoke('valorant-ocr:list-windows'),
   captureValorantOcrSnapshot: () => ipcRenderer.invoke('valorant-ocr:capture-snapshot'),
   clearValorantOcrState: () => ipcRenderer.invoke('valorant-ocr:clear'),
+  setValorantObserverName: (details) => ipcRenderer.invoke('valorant-ocr:set-observer-name', details),
   startValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:start-simulator'),
   stopValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:stop-simulator'),
   onRocketLeagueEvent: (callback) => {

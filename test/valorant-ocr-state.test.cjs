@@ -81,6 +81,17 @@ test('timer predicts between reads and rejects implausible jumps', () => {
   assert.equal(state.snapshot(2200).fields.timer.value, 88);
 });
 
+test('timer can display spike planted state from color detection', () => {
+  const state = new ValorantOcrState();
+  state.observe('timer', { text: '0:33', confidence: 0.95 }, 1000);
+  state.observe('timer', { text: 'SPIKE PLANTED', state: 'spike-planted', confidence: 0.9, source: 'color-detect' }, 1500);
+  const timer = state.snapshot(1800).fields.timer;
+  assert.equal(timer.value, null);
+  assert.equal(timer.displayValue, 'SPIKE PLANTED');
+  assert.equal(timer.reason, 'spike-planted');
+  assert.equal(timer.stale, false);
+});
+
 test('stale fields retain trusted values and clear resets all locks', () => {
   const state = new ValorantOcrState();
   state.observe('homeScore', { text: '4', confidence: 0.99 }, 800);

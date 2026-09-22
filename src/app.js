@@ -33,6 +33,7 @@ let valorantOcrSnapshot = null;
 let valorantWindowChoices = [];
 let valorantOcrRenderTimer;
 let valorantRoiDrag = null;
+let lastValorantOcrActiveKey = '';
 let outputDisplaySettings = {
   fillDisplayId: '',
   keyDisplayId: '',
@@ -307,7 +308,7 @@ function setValorantRoiInputs(fieldId, roi) {
 }
 
 function valorantRoiFromInputs(fieldId) {
-  const profile = getValorantOcrProfile(state.games.valorant.valorantOcr.profileId).fields[fieldId].roi;
+  const profile = getValorantOcrProfile(state.games.valorant.valorantOcr.profileId, state.games.valorant.valorantOcr.roiOverrides).fields[fieldId].roi;
   return Object.fromEntries(['x', 'y', 'w', 'h'].map((axis) => {
     const input = root.querySelector(`[data-vo-roi="${fieldId}"][data-vo-axis="${axis}"]`);
     return [axis, Number(input?.value ?? profile[axis]) || profile[axis]];
@@ -344,11 +345,182 @@ async function saveValorantRoiFromInputs(fieldId) {
   await syncValorantOcr();
 }
 
+function applyValorantRoiFromInputs(fieldId) {
+  const roi = setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId));
+  const ocr = state.games.valorant.valorantOcr;
+  ocr.roiOverrides ||= {};
+  const base = getValorantOcrProfile(ocr.profileId).fields[fieldId].roi;
+  ocr.roiOverrides[fieldId] = { ...base, ...roi };
+}
+
+function currentValorantOcrProfile() {
+  const ocr = state.games.valorant.valorantOcr;
+  return getValorantOcrProfile(ocr.profileId, {
+    ...(ocr.roiOverrides || {}),
+    scoreboardTable: ocr.scoreboardTableOverrides || {}
+  });
+}
+
+function observerGuideColumns() {
+  return [
+    { id: 'playerName', label: 'NAME', className: 'name', columns: ['playerName'] },
+    { id: 'ultimate', label: 'ULT', className: 'ult', columns: ['ultimate'] },
+    { id: 'kda', label: 'K/D/A', className: 'kda', columns: ['kills', 'deaths', 'assists'] },
+    { id: 'credits', label: 'CREDS', className: 'credits', columns: ['credits'] }
+  ];
+}
+
+function observerGuideIdForColumn(columnId) {
+  if (['kills', 'deaths', 'assists'].includes(columnId)) return 'kda';
+  return columnId;
+}
+
+function valorantTimelineMethodLabel(method) {
+  return ({
+    elimination: 'ELIM',
+    'spike-detonation': 'BOOM',
+    'spike-defuse': 'DEF',
+    unknown: 'UNK'
+  })[method] || '--';
+}
+
+function observerGuideBounds(table, guide) {
+  const columns = (guide.columns || [guide.id]).map((id) => table.columns?.[id]).filter(Boolean);
+  if (!columns.length) return null;
+  const minX = Math.min(...columns.map((column) => Number(column.x) || 0));
+  const maxX = Math.max(...columns.map((column) => (Number(column.x) || 0) + (Number(column.w) || 0)));
+  return { x: minX, w: maxX - minX };
+}
+
+function observerFieldRoi(profile, side, row, guideId) {
+  const table = profile.scoreboardTable;
+  const saved = table?.cells?.[side]?.[row]?.[guideId];
+  if (saved) {
+    return {
+      x: clampNumber(Math.round(Number(saved.x) || 0), 0, 1919),
+      y: clampNumber(Math.round(Number(saved.y) || 0), 0, 1079),
+      w: clampNumber(Math.round(Number(saved.w) || 1), 1, 1920),
+      h: clampNumber(Math.round(Number(saved.h) || 12), 12, 1080)
+    };
+  }
+  const guide = observerGuideColumns().find((item) => item.id === guideId);
+  const team = table?.teams?.find((item) => item.id === side);
+  const bounds = table && guide ? observerGuideBounds(table, guide) : null;
+  if (!team || !bounds) return null;
+  return {
+    x: (Number(team.origin?.x) || 0) + bounds.x,
+    y: (Number(team.origin?.y) || 0) + row * (Number(team.rowHeight) || 40),
+    w: bounds.w,
+    h: Math.max(12, (Number(team.rowHeight) || 40) - 4)
+  };
+}
+
+function observerTimelineRoi(profile, round) {
+  const roi = profile.scoreboardTable?.roundTimeline?.rounds?.[String(round)];
+  if (!roi) return null;
+  return {
+    x: clampNumber(Math.round(Number(roi.x) || 0), 0, 1919),
+    y: clampNumber(Math.round(Number(roi.y) || 0), 0, 1079),
+    w: clampNumber(Math.round(Number(roi.w) || 1), 1, 1920),
+    h: clampNumber(Math.round(Number(roi.h) || 12), 12, 1080)
+  };
+}
+
+function observerRowRoi(profile, side, row) {
+  const table = profile.scoreboardTable;
+  const team = table?.teams?.find((item) => item.id === side);
+  const columns = Object.values(table?.columns || {});
+  if (!team || !columns.length) return null;
+  const minX = Math.min(...columns.map((column) => Number(column.x) || 0));
+  const maxX = Math.max(...columns.map((column) => (Number(column.x) || 0) + (Number(column.w) || 0)));
+  return {
+    x: (Number(team.origin?.x) || 0) + minX,
+    y: (Number(team.origin?.y) || 0) + row * (Number(team.rowHeight) || 40),
+    w: maxX - minX,
+    h: Math.max(12, (Number(team.rowHeight) || 40) - 4)
+  };
+}
+
+function positionValorantObserverBox(side, row, guideId) {
+  const box = root.querySelector(`[data-vo-observer-box="${side}:${row}:${guideId}"]`);
+  if (!box) return;
+  const roi = observerFieldRoi(currentValorantOcrProfile(), side, row, guideId);
+  if (!roi) return;
+  box.style.left = `${roi.x / 19.2}%`;
+  box.style.top = `${roi.y / 10.8}%`;
+  box.style.width = `${roi.w / 19.2}%`;
+  box.style.height = `${roi.h / 10.8}%`;
+}
+
+function applyObserverFieldDragToOverrides(drag, roi) {
+  const ocr = state.games.valorant.valorantOcr;
+  ocr.scoreboardTableOverrides ||= {};
+  ocr.scoreboardTableOverrides.cells ||= {};
+  ocr.scoreboardTableOverrides.cells[drag.side] ||= {};
+  ocr.scoreboardTableOverrides.cells[drag.side][drag.row] ||= {};
+  ocr.scoreboardTableOverrides.cells[drag.side][drag.row][drag.guideId] = {
+    x: clampNumber(Math.round(roi.x), 0, 1919),
+    y: clampNumber(Math.round(roi.y), 0, 1079),
+    w: clampNumber(Math.round(roi.w), 1, 1920 - Math.max(0, Math.round(roi.x))),
+    h: clampNumber(Math.round(roi.h), 12, 1080 - Math.max(0, Math.round(roi.y)))
+  };
+}
+
+function observerRoiFromElement(box) {
+  const frame = box.closest('.vo-frame');
+  if (!frame) return null;
+  return {
+    x: clampNumber(Math.round((parseFloat(box.style.left) || 0) * 19.2), 0, 1919),
+    y: clampNumber(Math.round((parseFloat(box.style.top) || 0) * 10.8), 0, 1079),
+    w: clampNumber(Math.round((parseFloat(box.style.width) || 0) * 19.2), 1, 1920),
+    h: clampNumber(Math.round((parseFloat(box.style.height) || 0) * 10.8), 12, 1080)
+  };
+}
+
+function observerTimelineRoiFromElement(box) {
+  const frame = box.closest('.vo-frame');
+  if (!frame) return null;
+  return {
+    x: clampNumber(Math.round((parseFloat(box.style.left) || 0) * 19.2), 0, 1919),
+    y: clampNumber(Math.round((parseFloat(box.style.top) || 0) * 10.8), 0, 1079),
+    w: clampNumber(Math.round((parseFloat(box.style.width) || 0) * 19.2), 1, 1920),
+    h: clampNumber(Math.round((parseFloat(box.style.height) || 0) * 10.8), 12, 1080)
+  };
+}
+
+function collectObserverRoisFromDebugFrame() {
+  const boxes = [...root.querySelectorAll('[data-vo-observer-box]')];
+  const timelineBoxes = [...root.querySelectorAll('[data-vo-timeline-box]')];
+  if (!boxes.length && !timelineBoxes.length) return null;
+  const cells = {};
+  for (const box of boxes) {
+    const [side, rowValue, guideId] = box.dataset.voObserverBox.split(':');
+    const row = Number(rowValue) || 0;
+    const roi = observerRoiFromElement(box);
+    if (!side || !guideId || !roi) continue;
+    cells[side] ||= {};
+    cells[side][row] ||= {};
+    cells[side][row][guideId] = roi;
+  }
+  const roundTimeline = { rounds: {} };
+  for (const box of timelineBoxes) {
+    const round = Number(box.dataset.voTimelineBox) || 0;
+    const roi = observerTimelineRoiFromElement(box);
+    if (!round || !roi) continue;
+    roundTimeline.rounds[String(round)] = roi;
+  }
+  return {
+    ...(Object.keys(cells).length ? { cells } : {}),
+    ...(Object.keys(roundTimeline.rounds).length ? { roundTimeline } : {})
+  };
+}
+
 async function saveAllValorantRoisFromInputs() {
   const nextRois = Object.fromEntries(VALORANT_OCR_FIELD_IDS.map((fieldId) => [
     fieldId,
     setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId))
   ]));
+  const observerOverrides = collectObserverRoisFromDebugFrame();
   commit(() => {
     const ocr = state.games.valorant.valorantOcr;
     const profile = getValorantOcrProfile(ocr.profileId);
@@ -356,18 +528,70 @@ async function saveAllValorantRoisFromInputs() {
       fieldId,
       { ...profile.fields[fieldId].roi, ...nextRois[fieldId] }
     ]));
+    if (observerOverrides) {
+      ocr.scoreboardTableOverrides = {
+        ...(ocr.scoreboardTableOverrides || {}),
+        ...observerOverrides
+      };
+    }
   }, 'OCR boxes saved');
   await syncValorantOcr();
 }
 
 function beginValorantRoiDrag(event) {
+  if (valorantRoiDrag && event.type !== 'mousedown') return;
+  const timelineBox = event.target.closest('[data-vo-timeline-box]');
+  if (timelineBox && root.contains(timelineBox)) {
+    event.preventDefault();
+    const round = Number(timelineBox.dataset.voTimelineBox) || 0;
+    const roi = observerTimelineRoi(currentValorantOcrProfile(), round);
+    if (!round || !roi) return;
+    valorantRoiDrag = {
+      type: 'timeline-round',
+      round,
+      pointerId: event.pointerId ?? 'mouse',
+      mode: event.target.closest('[data-vo-timeline-resize]') ? 'resize' : 'move',
+      start: valorantSourcePoint(event),
+      roi,
+      currentRoi: roi,
+      node: timelineBox
+    };
+    timelineBox.classList.add('active');
+    timelineBox.setPointerCapture?.(event.pointerId);
+    return;
+  }
+  const observerBox = event.target.closest('[data-vo-observer-box]');
+  if (observerBox && root.contains(observerBox)) {
+    event.preventDefault();
+    const [side, rowValue, guideId] = observerBox.dataset.voObserverBox.split(':');
+    const row = Number(rowValue) || 0;
+    const profile = currentValorantOcrProfile();
+    const roi = observerFieldRoi(profile, side, row, guideId);
+    if (!roi) return;
+    valorantRoiDrag = {
+      type: 'observer-field',
+      side,
+      row,
+      guideId,
+      pointerId: event.pointerId ?? 'mouse',
+      mode: event.target.closest('[data-vo-observer-resize]') ? 'resize' : 'move',
+      start: valorantSourcePoint(event),
+      roi,
+      currentRoi: roi,
+      node: observerBox
+    };
+    observerBox.classList.add('active');
+    observerBox.setPointerCapture?.(event.pointerId);
+    return;
+  }
   const box = event.target.closest('[data-vo-roi-box]');
   if (!box || !root.contains(box)) return;
   event.preventDefault();
   const fieldId = box.dataset.voRoiBox;
   valorantRoiDrag = {
+    type: 'field',
     fieldId,
-    pointerId: event.pointerId,
+    pointerId: event.pointerId ?? 'mouse',
     mode: event.target.closest('[data-vo-roi-resize]') ? 'resize' : 'move',
     start: valorantSourcePoint(event),
     roi: setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId))
@@ -377,7 +601,12 @@ function beginValorantRoiDrag(event) {
 }
 
 function moveValorantRoiDrag(event) {
-  if (!valorantRoiDrag || event.pointerId !== valorantRoiDrag.pointerId) return;
+  if (!valorantRoiDrag) return;
+  if (event.buttons === 0) {
+    endValorantRoiDrag(event);
+    return;
+  }
+  if (!['observer-field', 'timeline-round'].includes(valorantRoiDrag.type) && event.pointerId !== undefined && event.pointerId !== valorantRoiDrag.pointerId) return;
   const point = valorantSourcePoint(event);
   const dx = point.x - valorantRoiDrag.start.x;
   const dy = point.y - valorantRoiDrag.start.y;
@@ -389,30 +618,89 @@ function moveValorantRoiDrag(event) {
     roi.x += dx;
     roi.y += dy;
   }
+  if (['observer-field', 'timeline-round'].includes(valorantRoiDrag.type)) {
+    roi.x = clampNumber(Math.round(roi.x), 0, 1919);
+    roi.y = clampNumber(Math.round(roi.y), 0, 1079);
+    roi.w = clampNumber(Math.round(roi.w), 1, 1920 - roi.x);
+    roi.h = clampNumber(Math.round(roi.h), 12, 1080 - roi.y);
+    valorantRoiDrag.currentRoi = roi;
+    if (valorantRoiDrag.node) {
+      valorantRoiDrag.node.style.left = `${roi.x / 19.2}%`;
+      valorantRoiDrag.node.style.top = `${roi.y / 10.8}%`;
+      valorantRoiDrag.node.style.width = `${roi.w / 19.2}%`;
+      valorantRoiDrag.node.style.height = `${roi.h / 10.8}%`;
+    }
+    event.preventDefault();
+    return;
+  }
   setValorantRoiInputs(valorantRoiDrag.fieldId, roi);
   positionValorantRoiBox(valorantRoiDrag.fieldId);
   event.preventDefault();
 }
 
 async function endValorantRoiDrag(event) {
-  if (!valorantRoiDrag || event.pointerId !== valorantRoiDrag.pointerId) return;
+  if (!valorantRoiDrag) return;
+  event?.preventDefault?.();
+  if (valorantRoiDrag.type === 'timeline-round') {
+    const { round, currentRoi } = valorantRoiDrag;
+    const roi = currentRoi || valorantRoiDrag.roi;
+    const ocr = state.games.valorant.valorantOcr;
+    ocr.scoreboardTableOverrides ||= {};
+    ocr.scoreboardTableOverrides.roundTimeline ||= {};
+    ocr.scoreboardTableOverrides.roundTimeline.rounds ||= {};
+    ocr.scoreboardTableOverrides.roundTimeline.rounds[String(round)] = {
+      x: clampNumber(Math.round(roi.x), 0, 1919),
+      y: clampNumber(Math.round(roi.y), 0, 1079),
+      w: clampNumber(Math.round(roi.w), 1, 1920 - Math.max(0, Math.round(roi.x))),
+      h: clampNumber(Math.round(roi.h), 12, 1080 - Math.max(0, Math.round(roi.y)))
+    };
+    valorantRoiDrag = null;
+    root.querySelector(`[data-vo-timeline-box="${round}"]`)?.classList.remove('active');
+    updateSaveStatus(`Round ${round} box adjusted - click SAVE BOXES to keep`);
+    return;
+  }
+  if (valorantRoiDrag.type === 'observer-field') {
+    const { side, row, guideId, currentRoi } = valorantRoiDrag;
+    applyObserverFieldDragToOverrides(valorantRoiDrag, currentRoi || valorantRoiDrag.roi);
+    valorantRoiDrag = null;
+    root.querySelector(`[data-vo-observer-box="${side}:${row}:${guideId}"]`)?.classList.remove('active');
+    updateSaveStatus('Observer 3 field adjusted - click SAVE BOXES to keep');
+    return;
+  }
   const fieldId = valorantRoiDrag.fieldId;
   valorantRoiDrag = null;
   root.querySelector(`[data-vo-roi-box="${fieldId}"]`)?.classList.remove('active');
-  await saveValorantRoiFromInputs(fieldId);
-  render();
+  applyValorantRoiFromInputs(fieldId);
+  updateSaveStatus('OCR region adjusted - click SAVE BOXES to keep');
 }
 
 function renderValorantOcrPanel(game) {
   const ocr = game.valorantOcr;
   const live = ocr.live || {};
   const fields = live.fields || {};
-  const profile = getValorantOcrProfile(ocr.profileId || DEFAULT_VALORANT_OCR_PROFILE_ID);
+  const profile = currentValorantOcrProfile();
   const roiFields = VALORANT_OCR_FIELD_IDS.map((fieldId) => ({
     id: fieldId,
     ...profile.fields[fieldId],
     roi: { ...profile.fields[fieldId].roi, ...(ocr.roiOverrides?.[fieldId] || {}) }
   }));
+  const observerFieldGuides = (() => {
+    const table = profile.scoreboardTable;
+    const guideColumns = observerGuideColumns();
+    if (!table?.teams?.length || !table?.columns) return [];
+    return table.teams.flatMap((team) => Array.from({ length: Number(team.rows) || 0 }, (_item, row) => guideColumns
+      .map((guide) => {
+        const roi = observerFieldRoi(profile, team.id, row, guide.id);
+        if (!roi) return null;
+        return {
+          ...guide,
+          side: team.id,
+          row,
+          ...roi
+        };
+      })
+      .filter(Boolean))).flat();
+  })();
   const status = live.status || 'disabled';
   const simulatorRunning = status === 'simulating';
   const snapshot = valorantOcrSnapshot;
@@ -423,7 +711,107 @@ function renderValorantOcrPanel(game) {
     <label class="field"><span>CAPTURE ENGINE</span><select data-vo-prop="captureBackend"><option value="auto" ${ocr.captureBackend === 'auto' || !ocr.captureBackend ? 'selected' : ''}>Automatic (native preferred)</option><option value="native" ${ocr.captureBackend === 'native' ? 'selected' : ''}>Windows Graphics Capture</option><option value="electron" ${ocr.captureBackend === 'electron' ? 'selected' : ''}>Electron fallback</option></select></label>
     <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
     <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
+    <label class="field vo-range-field"><span>OBSERVER SCAN INTERVAL</span><input type="range" min="5" max="100" step="1" data-vo-prop="observerScanIntervalMs" value="${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))}"><small><b>${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))} ms</b> between scoreboard cells</small></label>
     <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>`;
+  const observer3 = live.observer3 || {};
+  const profileHasObserverTable = Boolean(profile.scoreboardTable);
+  const timelineRounds = Array.from({ length: 24 }, (_item, index) => ({
+    round: index + 1,
+    ...(observer3.roundTimeline?.rounds?.[index] || {})
+  }));
+  const observerRows = ['home', 'away'].flatMap((side) => Array.from({ length: 5 }, (_item, index) => ({
+    side,
+    index,
+    ...(observer3.teams?.[side]?.players?.[index] || {})
+  })));
+  const activeObserverCell = observer3.activeCell || {};
+  const activeObserverLabel = activeObserverCell.side
+    ? `SCANNING ${escapeHtml(String(activeObserverCell.side).toUpperCase())} ${Number(activeObserverCell.row ?? 0) + 1} ${escapeHtml(String(activeObserverCell.columnId || '').toUpperCase())}`
+    : 'SCANNING SCOREBOARD TABLE';
+  const observerCellClass = (side, index, columnId) => (
+    activeObserverCell.side === side
+      && Number(activeObserverCell.row) === Number(index)
+      && activeObserverCell.columnId === columnId
+      ? ' class="scanning"'
+      : ''
+  );
+  const observerNameClass = (player) => {
+    const classes = [];
+    if (player.nameLocked) classes.push('locked');
+    if (activeObserverCell.side === player.side
+      && Number(activeObserverCell.row) === Number(player.index)
+      && activeObserverCell.columnId === 'playerName') classes.push('scanning');
+    return classes.length ? ` class="${classes.join(' ')}"` : '';
+  };
+  const observerTable = profileHasObserverTable ? `
+      <div class="vo-observer-table">
+        <div class="vo-observer-title"><span>OBSERVER 3 DATA SCREEN</span><strong data-vo-observer-active-label>${observer3.enabled ? activeObserverLabel : 'WAITING FOR SCOREBOARD PROFILE'}</strong></div>
+        <table>
+          <thead><tr><th>Side</th><th>Player</th><th>Name Conf</th><th>Ult</th><th>K</th><th>D</th><th>A</th><th>Credits</th><th>Conf</th></tr></thead>
+          <tbody>${observerRows.map((player) => `<tr>
+            <td>${escapeHtml(String(player.side || '').toUpperCase())} ${Number(player.index ?? 0) + 1}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:playerName`)}"${observerNameClass(player).replace(' class=', ' class=')}><input class="vo-name-override" data-vo-manual-name data-side="${escapeHtml(player.side)}" data-row="${Number(player.index ?? 0)}" value="${escapeHtml(player.name || '')}" placeholder="--" title="Edit name and press Enter to manually lock"></td>
+            <td class="${player.nameLocked ? 'locked' : ''}">${player.nameConfidence ? `${Math.round(Number(player.nameConfidence) * 100)}%` : '--'}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:ultimate`)}"${observerCellClass(player.side, player.index, 'ultimate')}>${escapeHtml(player.ultimate || '--')}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:kills`)}"${observerCellClass(player.side, player.index, 'kills')}>${player.kda?.kills ?? '--'}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:deaths`)}"${observerCellClass(player.side, player.index, 'deaths')}>${player.kda?.deaths ?? '--'}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:assists`)}"${observerCellClass(player.side, player.index, 'assists')}>${player.kda?.assists ?? '--'}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:credits`)}"${observerCellClass(player.side, player.index, 'credits')}>${player.credits === null || player.credits === undefined ? '--' : escapeHtml(Number(player.credits).toLocaleString())}</td>
+            <td>${Math.round((Number(player.confidence) || 0) * 100)}%</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>` : '';
+  const timelineTable = profile.scoreboardTable?.roundTimeline ? `
+      <div class="vo-observer-table vo-timeline-table">
+        <div class="vo-observer-title"><span>ROUND TIMELINE</span><strong>${observer3.roundTimeline?.currentRound ? `ROUND ${Number(observer3.roundTimeline.currentRound)}` : 'WAITING FOR ROUND MARKER'}</strong></div>
+        <table>
+          <thead><tr>${timelineRounds.map((round) => `<th>${round.round}</th>`).join('')}</tr></thead>
+          <tbody>
+            <tr>${timelineRounds.map((round) => `<td data-vo-observer-cell="${escapeHtml(`timeline:${round.round - 1}:roundTimeline`)}" class="${round.current ? 'current' : ''} ${round.winnerRow ? round.winnerRow : ''}">${escapeHtml(round.winnerRole ? String(round.winnerRole).toUpperCase().slice(0, 3) : round.current ? 'LIVE' : '--')}</td>`).join('')}</tr>
+            <tr>${timelineRounds.map((round) => `<td title="${escapeHtml(round.method || '')}">${escapeHtml(valorantTimelineMethodLabel(round.method))}</td>`).join('')}</tr>
+          </tbody>
+        </table>
+      </div>` : '';
+  const debugRoiMarkup = ocr.debugRois
+    ? `${roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('')}${observerFieldGuides.map((guide) => {
+      const guideColumns = guide.id === 'kda' ? ['kills', 'deaths', 'assists'] : [guide.id];
+      const isScanning = activeObserverCell.side === guide.side && Number(activeObserverCell.row) === Number(guide.row) && guideColumns.includes(activeObserverCell.columnId);
+      return `<i class="vo-scoreboard-field-box ${escapeHtml(guide.side)} ${escapeHtml(guide.className)} ${isScanning ? 'scanning' : ''}" data-vo-observer-box="${escapeHtml(`${guide.side}:${guide.row}:${guide.id}`)}" style="left:${guide.x / 19.2}%;top:${guide.y / 10.8}%;width:${guide.w / 19.2}%;height:${guide.h / 10.8}%"><span>${escapeHtml(guide.label)}</span><b data-vo-observer-resize="true"></b></i>`;
+    }).join('')}${timelineRounds.map((round) => {
+      const roi = observerTimelineRoi(profile, round.round);
+      if (!roi) return '';
+      const isScanning = activeObserverCell.side === 'timeline' && Number(activeObserverCell.row) === round.round - 1;
+      return `<i class="vo-timeline-round-box ${isScanning ? 'scanning' : ''}" data-vo-timeline-box="${round.round}" style="left:${roi.x / 19.2}%;top:${roi.y / 10.8}%;width:${roi.w / 19.2}%;height:${roi.h / 10.8}%"><span>R${round.round}</span><b data-vo-timeline-resize="true"></b></i>`;
+    }).join('')}`
+    : '';
+  const observerCropColumns = observerGuideColumns();
+  const observerCropRows = snapshot?.observerCrops?.length
+    ? ['home', 'away'].flatMap((side) => Array.from({ length: 5 }, (_item, row) => ({
+      side,
+      row,
+      crops: Object.fromEntries((snapshot.observerCrops || [])
+        .filter((crop) => crop.side === side && Number(crop.row) === row)
+        .map((crop) => [crop.id, crop]))
+    })))
+    : [];
+  const observerCropMarkup = observerCropRows.length ? `
+        <section class="vo-observer-crops">
+          <header><span>OBSERVER 3 FIELD PREVIEWS</span><strong>Saved boxes after processing</strong></header>
+          <div class="vo-observer-crop-grid">
+            <b>ROW</b>${observerCropColumns.map((column) => `<b>${escapeHtml(column.label)}</b>`).join('')}
+            ${observerCropRows.map((row) => `<span>${escapeHtml(row.side.toUpperCase())} ${row.row + 1}</span>${observerCropColumns.map((column) => {
+              const crop = row.crops[column.id];
+              return crop ? `<img src="${escapeHtml(crop.processedDataUrl)}" alt="${escapeHtml(`${row.side} ${row.row + 1} ${column.label}`)} crop">` : '<em>Not captured</em>';
+            }).join('')}`).join('')}
+          </div>
+        </section>` : '';
+  const timelineCropMarkup = snapshot?.observerTimelineCrops?.length ? `
+        <section class="vo-observer-crops vo-timeline-crops">
+          <header><span>ROUND TIMELINE PREVIEWS</span><strong>Color/icon crops after processing</strong></header>
+          <div class="vo-timeline-crop-grid">
+            ${(snapshot.observerTimelineCrops || []).map((crop) => `<section><span>R${Number(crop.round) || '-'}</span><img src="${escapeHtml(crop.rawDataUrl)}" alt="${escapeHtml(`Round ${crop.round} timeline crop`)}"></section>`).join('')}
+          </div>
+        </section>` : '';
   return `
     <article class="panel valorant-ocr-panel ${snapshot ? 'has-debug-snapshot' : ''}">
       <header class="vo-heading">
@@ -461,14 +849,18 @@ function renderValorantOcrPanel(game) {
         <span>VALIDATION <b>${live.accepted ?? live.metrics?.accepted ?? 0} OK / ${live.rejected ?? live.metrics?.rejected ?? 0} HELD</b></span>
         <span>FRAME AGE <b>${live.frameAgeMs === null || live.frameAgeMs === undefined ? '-' : Math.round(live.frameAgeMs)} MS</b></span>
       </div>
+      ${observerTable}
+      ${timelineTable}
       <details class="vo-roi-editor">
         <summary>ROI PROFILE COORDINATES <small>1920 &times; 1080 source pixels</small></summary>
         <div>${roiFields.map((field) => `<section><h3>${escapeHtml(field.label)}</h3>${['x', 'y', 'w', 'h'].map((axis) => `<label><span>${axis.toUpperCase()}</span><input type="number" min="${axis === 'x' || axis === 'y' ? 0 : 1}" data-vo-roi="${field.id}" data-vo-axis="${axis}" value="${field.roi[axis]}"></label>`).join('')}</section>`).join('')}</div>
       </details>
       ${snapshot ? `<div class="vo-debug-stage">
         <p class="vo-debug-empty">MANUAL DEBUG SNAPSHOT &middot; ${Math.max(0, Math.round((Date.now() - Number(snapshot.capturedAt || Date.now())) / 1000))}S OLD &middot; ${escapeHtml(snapshot.backend || 'unknown engine')} &middot; OCR CONTINUES LIVE</p>
-        <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${ocr.debugRois ? roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('') : ''}</div>
+        <div class="vo-frame"><img src="${escapeHtml(snapshot.frameDataUrl)}" alt="Captured VALORANT frame">${debugRoiMarkup}</div>
         <div class="vo-crops">${roiFields.map((field) => `<section><span>${escapeHtml(field.label)}</span>${snapshot.crops?.[field.id] ? `<img src="${escapeHtml(snapshot.crops[field.id].processedDataUrl)}" alt="${escapeHtml(field.label)} OCR crop">` : '<em>Not captured</em>'}</section>`).join('')}</div>
+        ${observerCropMarkup}
+        ${timelineCropMarkup}
       </div>` : '<p class="vo-debug-empty">Capture a debug frame to inspect the full 1920 &times; 1080 source and processed OCR crops.</p>'}
     </article>`;
 }
@@ -915,6 +1307,34 @@ function syncRocketLeagueConnection() {
   });
 }
 
+function formatObserverActiveLabel(activeCell = {}) {
+  return activeCell.side
+    ? `SCANNING ${String(activeCell.side).toUpperCase()} ${Number(activeCell.row ?? 0) + 1} ${String(activeCell.columnId || '').toUpperCase()}`
+    : 'SCANNING SCOREBOARD TABLE';
+}
+
+function applyValorantOcrActiveHighlight() {
+  if (state.selectedGame !== 'valorant' || state.activeView !== 'control') return;
+  const activeCell = state.games.valorant.valorantOcr.live?.observer3?.activeCell || null;
+  const activeKey = activeCell?.side ? `${activeCell.side}:${activeCell.row}:${activeCell.columnId}:${activeCell.updatedAt || ''}` : '';
+  if (activeKey && activeKey === lastValorantOcrActiveKey) return;
+  lastValorantOcrActiveKey = activeKey;
+  root.querySelectorAll('.vo-observer-table td.scanning, .vo-frame > .vo-scoreboard-field-box.scanning, .vo-frame > .vo-timeline-round-box.scanning')
+    .forEach((node) => node.classList.remove('scanning'));
+  const label = root.querySelector('[data-vo-observer-active-label]');
+  if (label) label.textContent = activeCell?.side ? formatObserverActiveLabel(activeCell) : 'SCANNING SCOREBOARD TABLE';
+  if (!activeCell?.side) return;
+  const side = String(activeCell.side);
+  const row = Number(activeCell.row);
+  const columnId = String(activeCell.columnId || '');
+  root.querySelector(`[data-vo-observer-cell="${CSS.escape(`${side}:${row}:${columnId}`)}"]`)?.classList.add('scanning');
+  if (side === 'timeline') {
+    root.querySelector(`[data-vo-timeline-box="${CSS.escape(String(row + 1))}"]`)?.classList.add('scanning');
+    return;
+  }
+  root.querySelector(`[data-vo-observer-box="${CSS.escape(`${side}:${row}:${observerGuideIdForColumn(columnId)}`)}"]`)?.classList.add('scanning');
+}
+
 async function syncValorantOcr() {
   const ocr = state.games.valorant.valorantOcr;
   if (!window.isuDesktop?.configureValorantOcr) return;
@@ -931,15 +1351,17 @@ async function syncValorantOcr() {
 }
 
 function scheduleValorantOcrUpdate() {
+  applyValorantOcrActiveHighlight();
   if (!livePublishTimer) {
     livePublishTimer = window.setTimeout(() => {
       livePublishTimer = null;
       window.isuDesktop?.publishState(state);
     }, 100);
   }
-  if (state.selectedGame !== 'valorant' || state.activeView !== 'control' || valorantOcrRenderTimer) return;
+  if (state.selectedGame !== 'valorant' || state.activeView !== 'control' || valorantOcrRenderTimer || valorantRoiDrag) return;
   valorantOcrRenderTimer = window.setTimeout(() => {
     valorantOcrRenderTimer = null;
+    if (valorantRoiDrag) return;
     const activeElement = document.activeElement;
     const editing = root.contains(activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement?.tagName);
     const activelyScrolling = performance.now() - lastUserScrollAt < 500;
@@ -1154,18 +1576,23 @@ window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 
 window.isuDesktop?.onValorantOcrState((snapshot) => {
   const ocr = state.games.valorant.valorantOcr;
+  const nextObserver3 = snapshot?.observer3 && typeof snapshot.observer3 === 'object'
+    ? snapshot.observer3
+    : ocr.live.observer3;
   ocr.live = {
     ...ocr.live,
     ...snapshot,
     fields: snapshot?.fields || ocr.live.fields,
-    metrics: snapshot?.metrics || ocr.live.metrics
+    metrics: snapshot?.metrics || ocr.live.metrics,
+    observer3: nextObserver3
   };
   scheduleValorantOcrUpdate();
 });
 
 window.isuDesktop?.onValorantOcrStatus((status) => {
   const ocr = state.games.valorant.valorantOcr;
-  ocr.live = { ...ocr.live, ...status, status: status.state || ocr.live.status };
+  const { observer3: _ignoredObserver3, ...safeStatus } = status || {};
+  ocr.live = { ...ocr.live, ...safeStatus, status: status?.state || ocr.live.status };
   scheduleValorantOcrUpdate();
 });
 
@@ -1364,7 +1791,6 @@ root.addEventListener('click', async (event) => {
   }
   if (button.dataset.action === 'capture-valorant-frame') {
     try {
-      await saveAllValorantRoisFromInputs();
       valorantOcrSnapshot = await window.isuDesktop?.captureValorantOcrSnapshot();
       toast('Debug frame captured');
     } catch (error) {
@@ -1461,13 +1887,50 @@ root.addEventListener('click', async (event) => {
 });
 
 root.addEventListener('pointerdown', beginValorantRoiDrag);
-root.addEventListener('pointermove', moveValorantRoiDrag);
-root.addEventListener('pointerup', endValorantRoiDrag);
-root.addEventListener('pointercancel', endValorantRoiDrag);
+window.addEventListener('pointermove', moveValorantRoiDrag);
+window.addEventListener('pointerup', endValorantRoiDrag);
+window.addEventListener('pointercancel', endValorantRoiDrag);
+root.addEventListener('mousedown', beginValorantRoiDrag);
+window.addEventListener('mousemove', moveValorantRoiDrag);
+window.addEventListener('mouseup', endValorantRoiDrag);
+window.addEventListener('blur', endValorantRoiDrag);
+document.addEventListener('mouseleave', endValorantRoiDrag);
 
 root.addEventListener('input', (event) => {
   const target = event.target;
   if (target.dataset.voRoi) positionValorantRoiBox(target.dataset.voRoi);
+});
+
+root.addEventListener('keydown', async (event) => {
+  const target = event.target;
+  if (target?.dataset?.voManualName === undefined) return;
+  if (event.key === 'Escape') {
+    const side = target.dataset.side === 'away' ? 'away' : 'home';
+    const row = Math.max(0, Math.min(4, Math.round(Number(target.dataset.row) || 0)));
+    const currentName = state.games.valorant.valorantOcr.live?.observer3?.teams?.[side]?.players?.[row]?.name || '';
+    target.value = currentName;
+    target.blur();
+    return;
+  }
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  const side = target.dataset.side === 'away' ? 'away' : 'home';
+  const row = Math.max(0, Math.min(4, Math.round(Number(target.dataset.row) || 0)));
+  const name = target.value.trim();
+  if (!name) return;
+  const snapshot = await window.isuDesktop?.setValorantObserverName?.({ side, row, name });
+  if (snapshot) {
+    const ocr = state.games.valorant.valorantOcr;
+    ocr.live = {
+      ...ocr.live,
+      ...snapshot,
+      fields: snapshot.fields || ocr.live.fields,
+      metrics: snapshot.metrics || ocr.live.metrics,
+      observer3: snapshot.observer3 || ocr.live.observer3
+    };
+  }
+  target.blur();
+  render();
 });
 
 root.addEventListener('change', async (event) => {
@@ -1530,6 +1993,7 @@ root.addEventListener('change', async (event) => {
       const ocr = state.games.valorant.valorantOcr;
       ocr[prop] = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
       if (prop === 'captureFps') ocr.captureFps = Math.max(1, Math.min(15, Math.round(ocr.captureFps || 8)));
+      if (prop === 'observerScanIntervalMs') ocr.observerScanIntervalMs = Math.max(5, Math.min(100, Math.round(Number(target.value) || 25)));
       if (prop === 'profileId' && !VALORANT_OCR_PROFILE_CHOICES.some((choice) => choice.id === ocr.profileId)) ocr.profileId = DEFAULT_VALORANT_OCR_PROFILE_ID;
     }, 'VALORANT OCR settings saved');
     await syncValorantOcr();

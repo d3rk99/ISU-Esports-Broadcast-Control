@@ -17,6 +17,56 @@ function normalizedRoi(roi = {}, fallback, frame) {
   return { x, y, w, h };
 }
 
+function normalizeScoreboardTableOverrides(table, overrides = {}, frame) {
+  if (!table || !overrides || typeof overrides !== 'object') return table;
+  const next = JSON.parse(JSON.stringify(table));
+  if (overrides.teams && typeof overrides.teams === 'object') {
+    next.teams = next.teams.map((team) => {
+      const override = overrides.teams[team.id] || {};
+      return {
+        ...team,
+        origin: {
+          x: finiteInteger(override.origin?.x, team.origin.x, 0, frame.width - 1),
+          y: finiteInteger(override.origin?.y, team.origin.y, 0, frame.height - 1)
+        },
+        rowHeight: finiteInteger(override.rowHeight, team.rowHeight, 12, frame.height)
+      };
+    });
+  }
+  if (overrides.columns && typeof overrides.columns === 'object') {
+    next.columns = Object.fromEntries(Object.entries(next.columns).map(([columnId, column]) => {
+      const override = overrides.columns[columnId] || {};
+      return [columnId, {
+        ...column,
+        x: finiteInteger(override.x, column.x, 0, frame.width - 1),
+        w: finiteInteger(override.w, column.w, 1, frame.width)
+      }];
+    }));
+  }
+  if (overrides.cells && typeof overrides.cells === 'object') {
+    next.cells = JSON.parse(JSON.stringify(overrides.cells));
+  }
+  if (overrides.roundTimeline && typeof overrides.roundTimeline === 'object') {
+    next.roundTimeline = { ...(next.roundTimeline || {}) };
+    const sourceTimeline = table.roundTimeline || {};
+    const timeline = overrides.roundTimeline;
+    if (timeline.defenseLabel) {
+      next.roundTimeline.defenseLabel = normalizedRoi(timeline.defenseLabel, sourceTimeline.defenseLabel || timeline.defenseLabel, frame);
+    }
+    if (timeline.attackLabel) {
+      next.roundTimeline.attackLabel = normalizedRoi(timeline.attackLabel, sourceTimeline.attackLabel || timeline.attackLabel, frame);
+    }
+    if (timeline.rounds && typeof timeline.rounds === 'object') {
+      next.roundTimeline.rounds = { ...(next.roundTimeline.rounds || {}) };
+      for (const [round, roi] of Object.entries(timeline.rounds)) {
+        const fallback = sourceTimeline.rounds?.[round] || next.roundTimeline.rounds[round] || roi;
+        next.roundTimeline.rounds[round] = normalizedRoi(roi, fallback, frame);
+      }
+    }
+  }
+  return next;
+}
+
 function getValorantOcrProfile(profileId = DEFAULT_PROFILE_ID, overrides = {}) {
   const id = profiles[profileId] ? profileId : DEFAULT_PROFILE_ID;
   const source = profiles[id];
@@ -25,6 +75,7 @@ function getValorantOcrProfile(profileId = DEFAULT_PROFILE_ID, overrides = {}) {
   for (const fieldId of FIELD_IDS) {
     profile.fields[fieldId].roi = normalizedRoi(overrides[fieldId], source.fields[fieldId].roi, source.frame);
   }
+  profile.scoreboardTable = normalizeScoreboardTableOverrides(source.scoreboardTable, overrides.scoreboardTable, source.frame);
   return profile;
 }
 
@@ -37,5 +88,6 @@ module.exports = {
   FIELD_IDS,
   getValorantOcrProfile,
   listValorantOcrProfiles,
+  normalizeScoreboardTableOverrides,
   normalizedRoi
 };

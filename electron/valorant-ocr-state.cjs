@@ -100,6 +100,28 @@ class ValorantOcrState {
   observe(fieldId, result = {}, now = Date.now()) {
     if (!FIELD_IDS.includes(fieldId)) return this.snapshot(now);
     const field = this.fields[fieldId];
+    if (fieldId === 'timer' && result.state === 'spike-planted') {
+      const confidence = clampConfidence(result.confidence);
+      this.metrics.observations += 1;
+      field.iteration += 1;
+      field.value = null;
+      field.displayValue = 'SPIKE PLANTED';
+      field.confidence = confidence;
+      field.rawText = String(result.text || 'SPIKE PLANTED');
+      field.normalized = 'spike-planted';
+      field.updatedAt = now;
+      field.observedAt = now;
+      field.accepted = true;
+      field.reason = 'spike-planted';
+      field.correctionCandidate = null;
+      field.correctionProgress = 0;
+      field.correctionRequired = 0;
+      field.stale = false;
+      field.source = result.source || 'color-detect';
+      this.pending[fieldId] = { value: null, count: 0 };
+      this.metrics.accepted += 1;
+      return this.snapshot(now);
+    }
     const parser = fieldId === 'timer' ? parseTimer : parseScore;
     const parsed = parser(result.text);
     const confidence = clampConfidence(result.confidence);
@@ -240,7 +262,9 @@ class ValorantOcrState {
       const stale = ageMs === null || ageMs > staleAfter;
       let displayValue = source.displayValue;
       let value = source.value;
-      if (id === 'timer' && value !== null && !stale) {
+      if (id === 'timer' && source.reason === 'spike-planted' && !stale) {
+        displayValue = 'SPIKE PLANTED';
+      } else if (id === 'timer' && value !== null && !stale) {
         value = Math.max(0, Math.round(value - ageMs / 1000));
         displayValue = `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
       }

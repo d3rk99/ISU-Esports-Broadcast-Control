@@ -51,6 +51,24 @@ function preprocessNativeImage(nativeImageApi, image, options = {}) {
   return nativeImageApi.createFromBitmap(bitmap, outputSize);
 }
 
+function redPixelRatio(image) {
+  const size = image.getSize();
+  const bitmap = Buffer.from(image.toBitmap());
+  let red = 0;
+  let visible = 0;
+  for (let pixel = 0; pixel < size.width * size.height; pixel += 1) {
+    const offset = pixel * 4;
+    const blue = bitmap[offset];
+    const green = bitmap[offset + 1];
+    const redChannel = bitmap[offset + 2];
+    const alpha = bitmap[offset + 3];
+    if (alpha < 32) continue;
+    visible += 1;
+    if (redChannel >= 145 && redChannel > green * 1.45 && redChannel > blue * 1.45) red += 1;
+  }
+  return visible ? red / visible : 0;
+}
+
 class ValorantWindowCapture {
   constructor({ desktopCapturer, nativeImage, expectedWidth = 1920, expectedHeight = 1080, sizeTolerancePixels = 2 } = {}) {
     this.desktopCapturer = desktopCapturer;
@@ -132,6 +150,10 @@ class ValorantWindowCapture {
     };
   }
 
+  redRatio(frame, roi) {
+    return redPixelRatio(frame.image.crop({ x: roi.x, y: roi.y, width: roi.w, height: roi.h }));
+  }
+
   snapshot(frame, fields) {
     const crops = {};
     for (const [id, field] of Object.entries(fields)) crops[id] = this.crop(frame, field.roi, field.preprocess);
@@ -155,4 +177,4 @@ class ValorantWindowCapture {
   async close() {}
 }
 
-module.exports = { ValorantWindowCapture, otsuThreshold, preprocessNativeImage };
+module.exports = { ValorantWindowCapture, otsuThreshold, preprocessNativeImage, redPixelRatio };

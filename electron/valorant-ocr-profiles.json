@@ -83,14 +83,44 @@
       ],
       "columns": {
         "agentIcon": { "label": "Agent icon", "x": 0, "w": 42, "kind": "icon" },
-        "playerName": { "label": "Player name", "x": 70, "w": 230, "kind": "text", "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-[]" },
-        "ultimate": { "label": "Ultimate charge", "x": 315, "w": 68, "kind": "text", "allowedChars": "0123456789/" },
+        "playerName": { "label": "Player name", "x": 70, "w": 230, "kind": "text", "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-[]|" },
+        "ultimate": { "label": "Ultimate charge", "x": 315, "w": 68, "kind": "text", "allowedChars": "0123456789/READYready " },
         "kills": { "label": "Kills", "x": 420, "w": 34, "kind": "score", "allowedChars": "0123456789" },
         "deaths": { "label": "Deaths", "x": 470, "w": 34, "kind": "score", "allowedChars": "0123456789" },
         "assists": { "label": "Assists", "x": 520, "w": 34, "kind": "score", "allowedChars": "0123456789" },
         "loadoutIcon": { "label": "Loadout icon", "x": 590, "w": 130, "kind": "icon" },
-        "credits": { "label": "Credits", "x": 805, "w": 92, "kind": "currency", "allowedChars": "0123456789," },
+        "credits": { "label": "Credits", "x": 805, "w": 92, "kind": "currency", "allowedChars": "0123456789,\u00a4" },
         "ping": { "label": "Ping", "x": 940, "w": 46, "kind": "score", "allowedChars": "0123456789" }
+      },
+      "roundTimeline": {
+        "defenseLabel": { "x": 690, "y": 598, "w": 50, "h": 30 },
+        "attackLabel": { "x": 690, "y": 628, "w": 50, "h": 30 },
+        "rounds": {
+          "1": { "x": 795, "y": 596, "w": 26, "h": 62 },
+          "2": { "x": 827, "y": 596, "w": 26, "h": 62 },
+          "3": { "x": 859, "y": 596, "w": 26, "h": 62 },
+          "4": { "x": 891, "y": 596, "w": 26, "h": 62 },
+          "5": { "x": 923, "y": 596, "w": 26, "h": 62 },
+          "6": { "x": 955, "y": 596, "w": 26, "h": 62 },
+          "7": { "x": 987, "y": 596, "w": 26, "h": 62 },
+          "8": { "x": 1019, "y": 596, "w": 26, "h": 62 },
+          "9": { "x": 1051, "y": 596, "w": 26, "h": 62 },
+          "10": { "x": 1083, "y": 596, "w": 26, "h": 62 },
+          "11": { "x": 1115, "y": 596, "w": 26, "h": 62 },
+          "12": { "x": 1147, "y": 596, "w": 26, "h": 62 },
+          "13": { "x": 1194, "y": 596, "w": 26, "h": 62 },
+          "14": { "x": 1226, "y": 596, "w": 26, "h": 62 },
+          "15": { "x": 1258, "y": 596, "w": 26, "h": 62 },
+          "16": { "x": 1290, "y": 596, "w": 26, "h": 62 },
+          "17": { "x": 1322, "y": 596, "w": 26, "h": 62 },
+          "18": { "x": 1354, "y": 596, "w": 26, "h": 62 },
+          "19": { "x": 1386, "y": 596, "w": 26, "h": 62 },
+          "20": { "x": 1418, "y": 596, "w": 26, "h": 62 },
+          "21": { "x": 1450, "y": 596, "w": 26, "h": 62 },
+          "22": { "x": 1482, "y": 596, "w": 26, "h": 62 },
+          "23": { "x": 1514, "y": 596, "w": 26, "h": 62 },
+          "24": { "x": 1546, "y": 596, "w": 26, "h": 62 }
+        }
       }
     }
   }
