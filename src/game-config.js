@@ -274,6 +274,18 @@ const ROCKET_LEAGUE_MAP_ART = {
 
 const VALORANT_MAPS = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset'];
 
+export const VALORANT_WEAPON_CATEGORIES = {
+  sidearms: ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff'],
+  smgs: ['Stinger', 'Spectre'],
+  shotguns: ['Bucky', 'Judge'],
+  rifles: ['Bulldog', 'Guardian', 'Phantom', 'Vandal'],
+  snipers: ['Marshal', 'Outlaw', 'Operator'],
+  heavies: ['Ares', 'Odin'],
+  melee: ['Melee']
+};
+
+export const VALORANT_WEAPONS = Object.values(VALORANT_WEAPON_CATEGORIES).flat();
+
 const VALORANT_MAP_ART = {
   Abyss: { url: '/assets/valorant/maps/abyss.webp', name: 'abyss.webp' },
   Ascent: { url: '/assets/valorant/maps/ascent.webp', name: 'ascent.webp' },
@@ -314,6 +326,13 @@ function createValorantMapArt() {
   return { ...VALORANT_MAP_ART };
 }
 
+function createValorantWeaponArt() {
+  return Object.fromEntries(VALORANT_WEAPONS.map((weapon) => {
+    const filename = `${weapon.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`;
+    return [weapon, { url: `/assets/valorant/weapons/${filename}`, name: filename }];
+  }));
+}
+
 function createOverwatchCharacterArt() {
   return Object.fromEntries(Object.entries(OVERWATCH_HERO_ART).map(([hero, filename]) => [
     hero,
@@ -348,6 +367,8 @@ export const GAME_CONFIGS = {
     modes: ['Pick 1', 'Pick 2', 'Pick 3'],
     maps: VALORANT_MAPS,
     roles: ['Duelist', 'Initiator', 'Controller', 'Sentinel', 'Flex', 'Coach'],
+    weapons: VALORANT_WEAPONS,
+    weaponCategories: VALORANT_WEAPON_CATEGORIES,
     characters: [
       'Astra', 'Breach', 'Brimstone', 'Chamber', 'Clove', 'Cypher', 'Deadlock', 'Fade', 'Gekko', 'Harbor',
       'Iso', 'Jett', 'KAY/O', 'Killjoy', 'Miks', 'Neon', 'Omen', 'Phoenix', 'Raze', 'Reyna', 'Sage', 'Skye',
@@ -461,6 +482,7 @@ export function createGameState(gameKey) {
     rosterFirstSide: 'home',
     showAwayRoster: false,
     characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : {},
+    weaponArt: gameKey === 'valorant' ? createValorantWeaponArt() : {},
     mapArt: gameKey === 'overwatch'
       ? createOverwatchMapArt()
       : gameKey === 'valorant'

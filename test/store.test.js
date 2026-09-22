@@ -112,6 +112,12 @@ test('character choices and shared artwork library are game specific', () => {
   assert.ok(valorant.mapArt.Ascent.url.endsWith('/ascent.webp'));
   assert.ok(valorant.mapArt.Fracture.url.endsWith('/fracture.webp'));
   assert.ok(valorant.mapArt.Range.url.endsWith('/range.webp'));
+  assert.ok(GAME_CONFIGS.valorant.weapons.includes('Vandal'));
+  assert.ok(GAME_CONFIGS.valorant.weapons.includes('Operator'));
+  assert.ok(GAME_CONFIGS.valorant.weapons.includes('Outlaw'));
+  assert.ok(valorant.weaponArt.Vandal.url.endsWith('/vandal.png'));
+  assert.ok(valorant.weaponArt.Operator.url.endsWith('/operator.png'));
+  assert.ok(valorant.weaponArt.Outlaw.url.endsWith('/outlaw.png'));
   assert.ok(createGameState('rocketleague').mapArt.Mannfield.url.endsWith('/mannfield.webp'));
   assert.ok(createGameState('rocketleague').mapArt['Forbidden Temple'].url.endsWith('/forbidden-temple.webp'));
   assert.equal(state.version, 4);

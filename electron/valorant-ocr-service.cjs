@@ -147,6 +147,7 @@ function emptyObserverPlayer(index, side) {
     ultimate: '',
     ultimateState: { status: 'unknown', current: null, required: null, display: '' },
     kda: { kills: null, deaths: null, assists: null },
+    loadout: { weapon: '', confidence: 0, status: 'pending' },
     credits: null,
     ping: null,
     updatedAt: null,
@@ -846,7 +847,7 @@ class ValorantOcrService {
   observerCells(profile) {
     const table = profile.scoreboardTable;
     if (!table?.columns) return [];
-    const wanted = ['playerName', 'ultimate', 'kills', 'deaths', 'assists', 'credits'];
+    const wanted = ['playerName', 'ultimate', 'kills', 'deaths', 'assists', 'loadoutIcon', 'credits'];
     return this.observerRows(profile).flatMap((rowInfo) => wanted
       .filter((columnId) => table.columns[columnId])
       .map((columnId) => ({ ...rowInfo, columnId, column: table.columns[columnId] })));
@@ -887,6 +888,7 @@ class ValorantOcrService {
       { id: 'playerName', label: 'NAME', columns: ['playerName'], kind: 'text' },
       { id: 'ultimate', label: 'ULT', columns: ['ultimate'], kind: 'text', allowedChars: '0123456789/READYready ' },
       { id: 'kda', label: 'K/D/A', columns: ['kills', 'deaths', 'assists'], kind: 'score', allowedChars: '0123456789' },
+      { id: 'loadoutIcon', label: 'LOADOUT', columns: ['loadoutIcon'], kind: 'icon' },
       { id: 'credits', label: 'CREDS', columns: ['credits'], kind: 'score', allowedChars: '0123456789,¤' }
     ];
     return this.observerRows(profile).flatMap((rowInfo) => guides
@@ -990,6 +992,7 @@ class ValorantOcrService {
 
   async recognizeObserverCell(frame, fieldId, roi, column) {
     if (fieldId.includes('-credits')) return this.recognizeObserverCreditsCell(frame, fieldId, roi);
+    if (fieldId.includes('-loadoutIcon')) return this.recognizeObserverLoadoutCell(frame, fieldId, roi);
     const preprocess = {
       scale: column.kind === 'text' ? 2 : 3,
       grayscale: true,
@@ -1003,6 +1006,25 @@ class ValorantOcrService {
       kind: column.kind || 'text',
       fieldId
     });
+  }
+
+  async recognizeObserverLoadoutCell(frame, fieldId, roi) {
+    const crop = this.capture.crop(frame, roi, {
+      scale: 2,
+      grayscale: true,
+      threshold: 'none',
+      invert: false,
+      allowedChars: ''
+    });
+    return {
+      text: '',
+      confidence: 0,
+      latencyMs: 0,
+      kind: 'icon',
+      fieldId,
+      image: crop.processedDataUrl,
+      reason: 'weapon icon matcher pending'
+    };
   }
 
   async recognizeObserverCreditsCell(frame, fieldId, roi) {

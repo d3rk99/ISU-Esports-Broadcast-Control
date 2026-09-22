@@ -86,7 +86,7 @@ test('observer 3 profile scans scoreboard row data', async (t) => {
   const service = new ValorantOcrService({ capture, ocr, onState: (state) => states.push(state), now: () => now });
   t.after(() => service.stop());
   service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard' });
-  for (let index = 0; index < 18; index += 1) {
+  for (let index = 0; index < 20; index += 1) {
     await service.tick();
     now += 60;
   }
@@ -96,6 +96,7 @@ test('observer 3 profile scans scoreboard row data', async (t) => {
   assert.equal(player.fullName, 'LCU|ObserverOne');
   assert.equal(player.ultimate, '3/8');
   assert.deepEqual(player.kda, { kills: 4, deaths: 1, assists: 2 });
+  assert.deepEqual(player.loadout, { weapon: '', confidence: 0, status: 'pending' });
   assert.equal(player.credits, 2600);
   assert.equal(player.ping, null);
 });

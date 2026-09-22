@@ -61,6 +61,9 @@ export function loadState(storage = window.localStorage) {
       parsed.games[game].mapArt = game === 'overwatch' || game === 'valorant' || game === 'rocketleague'
         ? { ...(parsed.games[game].mapArt || {}), ...fallback.games[game].mapArt }
         : parsed.games[game].mapArt || {};
+      parsed.games[game].weaponArt = game === 'valorant'
+        ? { ...(parsed.games[game].weaponArt || {}), ...fallback.games[game].weaponArt }
+        : parsed.games[game].weaponArt || {};
       if (game === 'rocketleague') {
         for (const collection of ['rosters', 'awayRosters']) {
           for (const rosterType of ['varsity', 'jv']) {

@@ -366,12 +366,14 @@ function observerGuideColumns() {
     { id: 'playerName', label: 'NAME', className: 'name', columns: ['playerName'] },
     { id: 'ultimate', label: 'ULT', className: 'ult', columns: ['ultimate'] },
     { id: 'kda', label: 'K/D/A', className: 'kda', columns: ['kills', 'deaths', 'assists'] },
+    { id: 'loadoutIcon', label: 'LOADOUT', className: 'loadout', columns: ['loadoutIcon'] },
     { id: 'credits', label: 'CREDS', className: 'credits', columns: ['credits'] }
   ];
 }
 
 function observerGuideIdForColumn(columnId) {
   if (['kills', 'deaths', 'assists'].includes(columnId)) return 'kda';
+  if (columnId === 'loadoutIcon') return 'loadoutIcon';
   return columnId;
 }
 
@@ -747,7 +749,7 @@ function renderValorantOcrPanel(game) {
       <div class="vo-observer-table">
         <div class="vo-observer-title"><span>OBSERVER 3 DATA SCREEN</span><strong data-vo-observer-active-label>${observer3.enabled ? activeObserverLabel : 'WAITING FOR SCOREBOARD PROFILE'}</strong></div>
         <table>
-          <thead><tr><th>Side</th><th>Player</th><th>Name Conf</th><th>Ult</th><th>K</th><th>D</th><th>A</th><th>Credits</th><th>Conf</th></tr></thead>
+          <thead><tr><th>Side</th><th>Player</th><th>Name Conf</th><th>Ult</th><th>K</th><th>D</th><th>A</th><th>Loadout</th><th>Credits</th><th>Conf</th></tr></thead>
           <tbody>${observerRows.map((player) => `<tr>
             <td>${escapeHtml(String(player.side || '').toUpperCase())} ${Number(player.index ?? 0) + 1}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:playerName`)}"${observerNameClass(player).replace(' class=', ' class=')}><input class="vo-name-override" data-vo-manual-name data-side="${escapeHtml(player.side)}" data-row="${Number(player.index ?? 0)}" value="${escapeHtml(player.name || '')}" placeholder="--" title="Edit name and press Enter to manually lock"></td>
@@ -756,6 +758,7 @@ function renderValorantOcrPanel(game) {
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:kills`)}"${observerCellClass(player.side, player.index, 'kills')}>${player.kda?.kills ?? '--'}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:deaths`)}"${observerCellClass(player.side, player.index, 'deaths')}>${player.kda?.deaths ?? '--'}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:assists`)}"${observerCellClass(player.side, player.index, 'assists')}>${player.kda?.assists ?? '--'}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:loadoutIcon`)}"${observerCellClass(player.side, player.index, 'loadoutIcon')}>${escapeHtml(player.loadout?.weapon || '--')}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:credits`)}"${observerCellClass(player.side, player.index, 'credits')}>${player.credits === null || player.credits === undefined ? '--' : escapeHtml(Number(player.credits).toLocaleString())}</td>
             <td>${Math.round((Number(player.confidence) || 0) * 100)}%</td>
           </tr>`).join('')}</tbody>
