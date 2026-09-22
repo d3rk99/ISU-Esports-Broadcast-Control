@@ -1,11 +1,22 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, nativeImage } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
-const { RocketLeagueForwarder } = require('./rocket-league-bridge.cjs');
+const { UniversalGameBridge } = require('./game-bridge.cjs');
+const { ValorantWindowCapture } = require('./valorant-capture.cjs');
+const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
+const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 
-app.setName('ISU Rocket League Bridge');
-app.setPath('userData', path.join(app.getPath('appData'), 'ISU Rocket League Bridge'));
-app.setAppUserModelId('edu.isu.esports.rocketleaguebridge');
+const appDataPath = app.getPath('appData');
+app.setName('ISU Esports Game Bridge');
+app.setPath('userData', path.join(appDataPath, 'ISU Esports Game Bridge'));
+app.setAppUserModelId('edu.isu.esports.gamebridge');
+process.on('uncaughtException', (error) => {
+  if (isRecoverableWorkerPipeError(error)) {
+    console.warn('[valorant-ocr] Ignored recoverable OCR worker pipe error:', error?.message || error);
+    return;
+  }
+  throw error;
+});
 
 let mainWindow;
 let forwarder;
@@ -18,18 +29,27 @@ function readConfig() {
   try { return JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { return {}; }
 }
 
+function readConfigWithLegacyFallback() {
+  const current = readConfig();
+  if (Object.keys(current).length) return current;
+  try {
+    return { game: 'rocketleague', ...JSON.parse(fs.readFileSync(path.join(appDataPath, 'ISU Rocket League Bridge', 'bridge-config.json'), 'utf8')) };
+  } catch {}
+  return {};
+}
+
 function saveConfig(config) {
   fs.writeFileSync(configPath(), JSON.stringify(config, null, 2));
 }
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 700,
-    height: 650,
-    minWidth: 620,
-    minHeight: 560,
+    width: 920,
+    height: 900,
+    minWidth: 760,
+    minHeight: 700,
     backgroundColor: '#0b0b0c',
-    title: 'ISU Rocket League Bridge',
+    title: 'ISU Esports Game Bridge',
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'bridge-preload.cjs'),
@@ -42,17 +62,40 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  forwarder = new RocketLeagueForwarder({ onStatus: (status) => mainWindow?.webContents.send('bridge:status', status) });
-  ipcMain.handle('bridge:get-config', () => readConfig());
+  forwarder = new UniversalGameBridge({
+    capture: new HybridValorantWindowCapture({
+      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
+      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
+    }),
+    ocr: new TesseractOcrEngine(),
+    onStatus: (status) => mainWindow?.webContents.send('bridge:status', status),
+    onOcrState: (state) => mainWindow?.webContents.send('bridge:ocr-state', state)
+  });
+  ipcMain.handle('bridge:get-config', () => readConfigWithLegacyFallback());
+  ipcMain.handle('bridge:get-status', () => forwarder.getStatus());
   ipcMain.handle('bridge:start', (_event, config) => {
     saveConfig(config);
-    forwarder.start(config);
-    return true;
+    return forwarder.start(config);
+  });
+  ipcMain.handle('bridge:update-config', (_event, config) => {
+    saveConfig(config);
+    return forwarder.updateConfig(config);
   });
   ipcMain.handle('bridge:stop', () => {
     forwarder.stop();
-    return true;
+    return forwarder.getStatus();
   });
+  ipcMain.handle('bridge:list-windows', () => forwarder.listWindows());
+  ipcMain.handle('bridge:capture-snapshot', () => forwarder.captureSnapshot());
+  ipcMain.handle('bridge:clear-ocr', () => forwarder.clearOcrState());
+  ipcMain.handle('bridge:start-simulator', (_event, config) => {
+    if (config) {
+      saveConfig(config);
+      forwarder.start(config);
+    }
+    return forwarder.startSimulator();
+  });
+  ipcMain.handle('bridge:stop-simulator', () => forwarder.stopSimulator());
   createWindow();
 });
 
@@ -62,6 +105,6 @@ app.on('second-instance', () => {
 });
 
 app.on('window-all-closed', () => {
-  forwarder?.stop();
+  forwarder?.shutdown();
   app.quit();
 });

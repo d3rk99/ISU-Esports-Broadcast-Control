@@ -1,0 +1,127 @@
+{
+  "1920x1080-en-5v5": {
+    "label": "1920×1080 · English · 5v5 Observer",
+    "frame": { "width": 1920, "height": 1080 },
+    "fields": {
+      "homeScore": {
+        "label": "Home score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 808, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      },
+      "timer": {
+        "label": "Round timer",
+        "kind": "timer",
+        "cadenceMs": 200,
+        "roi": { "x": 900, "y": 18, "w": 120, "h": 64 },
+        "preprocess": {
+          "scale": 3,
+          "grayscale": true,
+          "threshold": "otsu",
+          "invert": "auto",
+          "allowedChars": "0123456789:",
+          "variants": [
+            { "threshold": "otsu", "invert": "auto" },
+            { "threshold": 110, "invert": "auto" },
+            { "threshold": 165, "invert": "auto" }
+          ]
+        }
+      },
+      "awayScore": {
+        "label": "Away score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 1020, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      }
+    }
+  },
+  "1920x1080-en-observer3-scoreboard": {
+    "label": "1920x1080 - Observer 3 Data Screen",
+    "frame": { "width": 1920, "height": 1080 },
+    "mode": "observer3-scoreboard",
+    "fields": {
+      "homeScore": {
+        "label": "Home score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 808, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      },
+      "timer": {
+        "label": "Round timer",
+        "kind": "timer",
+        "cadenceMs": 200,
+        "roi": { "x": 900, "y": 18, "w": 120, "h": 64 },
+        "preprocess": {
+          "scale": 3,
+          "grayscale": true,
+          "threshold": "otsu",
+          "invert": "auto",
+          "allowedChars": "0123456789:",
+          "variants": [
+            { "threshold": "otsu", "invert": "auto" },
+            { "threshold": 110, "invert": "auto" },
+            { "threshold": 165, "invert": "auto" }
+          ]
+        }
+      },
+      "awayScore": {
+        "label": "Away score",
+        "kind": "score",
+        "cadenceMs": 350,
+        "roi": { "x": 1020, "y": 18, "w": 92, "h": 64 },
+        "preprocess": { "scale": 3, "grayscale": true, "threshold": "otsu", "invert": "auto", "allowedChars": "0123456789" }
+      }
+    },
+    "scoreboardTable": {
+      "description": "Observer 3 is expected to keep the in-game scoreboard open continuously. These regions are a starting schema for the next scanner pass.",
+      "teams": [
+        { "id": "home", "label": "Home scoreboard rows", "rows": 5, "origin": { "x": 700, "y": 410 }, "rowHeight": 43 },
+        { "id": "away", "label": "Away scoreboard rows", "rows": 5, "origin": { "x": 700, "y": 690 }, "rowHeight": 43 }
+      ],
+      "columns": {
+        "agentIcon": { "label": "Agent icon", "x": 0, "w": 42, "kind": "icon" },
+        "playerName": { "label": "Player name", "x": 70, "w": 230, "kind": "text", "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-[]|" },
+        "ultimate": { "label": "Ultimate charge", "x": 315, "w": 68, "kind": "text", "allowedChars": "0123456789/READYready " },
+        "kills": { "label": "Kills", "x": 420, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "deaths": { "label": "Deaths", "x": 470, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "assists": { "label": "Assists", "x": 520, "w": 34, "kind": "score", "allowedChars": "0123456789" },
+        "loadoutIcon": { "label": "Loadout icon", "x": 590, "w": 130, "kind": "icon" },
+        "credits": { "label": "Credits", "x": 805, "w": 92, "kind": "currency", "allowedChars": "0123456789,\u00a4" },
+        "ping": { "label": "Ping", "x": 940, "w": 46, "kind": "score", "allowedChars": "0123456789" }
+      },
+      "roundTimeline": {
+        "defenseLabel": { "x": 690, "y": 598, "w": 50, "h": 30 },
+        "attackLabel": { "x": 690, "y": 628, "w": 50, "h": 30 },
+        "rounds": {
+          "1": { "x": 795, "y": 596, "w": 26, "h": 62 },
+          "2": { "x": 827, "y": 596, "w": 26, "h": 62 },
+          "3": { "x": 859, "y": 596, "w": 26, "h": 62 },
+          "4": { "x": 891, "y": 596, "w": 26, "h": 62 },
+          "5": { "x": 923, "y": 596, "w": 26, "h": 62 },
+          "6": { "x": 955, "y": 596, "w": 26, "h": 62 },
+          "7": { "x": 987, "y": 596, "w": 26, "h": 62 },
+          "8": { "x": 1019, "y": 596, "w": 26, "h": 62 },
+          "9": { "x": 1051, "y": 596, "w": 26, "h": 62 },
+          "10": { "x": 1083, "y": 596, "w": 26, "h": 62 },
+          "11": { "x": 1115, "y": 596, "w": 26, "h": 62 },
+          "12": { "x": 1147, "y": 596, "w": 26, "h": 62 },
+          "13": { "x": 1194, "y": 596, "w": 26, "h": 62 },
+          "14": { "x": 1226, "y": 596, "w": 26, "h": 62 },
+          "15": { "x": 1258, "y": 596, "w": 26, "h": 62 },
+          "16": { "x": 1290, "y": 596, "w": 26, "h": 62 },
+          "17": { "x": 1322, "y": 596, "w": 26, "h": 62 },
+          "18": { "x": 1354, "y": 596, "w": 26, "h": 62 },
+          "19": { "x": 1386, "y": 596, "w": 26, "h": 62 },
+          "20": { "x": 1418, "y": 596, "w": 26, "h": 62 },
+          "21": { "x": 1450, "y": 596, "w": 26, "h": 62 },
+          "22": { "x": 1482, "y": 596, "w": 26, "h": 62 },
+          "23": { "x": 1514, "y": 596, "w": 26, "h": 62 },
+          "24": { "x": 1546, "y": 596, "w": 26, "h": 62 }
+        }
+      }
+    }
+  }
+}

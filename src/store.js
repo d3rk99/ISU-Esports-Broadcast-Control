@@ -79,6 +79,13 @@ export function loadState(storage = window.localStorage) {
           live: { ...fallback.games[game].rocketLeague.live }
         };
       }
+      if (game === 'valorant') {
+        parsed.games[game].valorantOcr = {
+          ...fallback.games[game].valorantOcr,
+          ...(parsed.games[game].valorantOcr || {}),
+          live: { ...fallback.games[game].valorantOcr.live }
+        };
+      }
       if (parsed.games[game].veto) {
         const usedMaps = new Set();
         parsed.games[game].veto.bans = parsed.games[game].veto.bans.map((map) => {

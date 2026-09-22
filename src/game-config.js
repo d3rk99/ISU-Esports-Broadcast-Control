@@ -505,6 +505,33 @@ export function createGameState(gameKey) {
         recentEvents: [],
         playerStats: {}
       }
+    } : null,
+    valorantOcr: gameKey === 'valorant' ? {
+      enabled: false,
+      source: 'local',
+      windowName: 'VALORANT',
+      captureBackend: 'auto',
+      captureFps: 8,
+      profileId: '1920x1080-en-5v5',
+      language: 'eng',
+      scoreboardMode: 'manual',
+      recordedVideoMode: false,
+      debugRois: true,
+      bridgePort: 3175,
+      bridgeToken: '',
+      roiOverrides: {},
+      scoreboardTableOverrides: {},
+      observerScanIntervalMs: 25,
+      live: {
+        status: 'disabled',
+        message: 'VALORANT OCR is off',
+        fields: {
+          homeScore: { value: null, displayValue: '--', confidence: 0, rawText: '', normalized: '', stale: true, reason: 'waiting' },
+          timer: { value: null, displayValue: '--:--', confidence: 0, rawText: '', normalized: '', stale: true, reason: 'waiting' },
+          awayScore: { value: null, displayValue: '--', confidence: 0, rawText: '', normalized: '', stale: true, reason: 'waiting' }
+        },
+        metrics: { observations: 0, accepted: 0, rejected: 0 }
+      }
     } : null
   };
 }

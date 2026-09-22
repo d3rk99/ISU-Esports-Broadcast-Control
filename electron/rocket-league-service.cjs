@@ -299,6 +299,7 @@ class RocketLeagueService {
         try {
           const packet = JSON.parse(raw.toString());
           if (packet.type === 'telemetry') this.ingest(packet.event, 'bridge');
+          else if (packet.type === 'game-telemetry' && packet.game === 'rocketleague') this.ingest(packet.payload, 'bridge');
         } catch {}
       });
       client.on('close', () => {
