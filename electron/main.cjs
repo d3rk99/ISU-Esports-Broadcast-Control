@@ -41,6 +41,22 @@ process.on('uncaughtException', (error) => {
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
+function findSharedValorantLoadoutTemplateRoot() {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'assets', 'valorant', 'weapons', 'trained'),
+    path.join(path.dirname(app.getPath('exe')), '..', '..', 'public', 'assets', 'valorant', 'weapons', 'trained'),
+    path.join(app.getAppPath(), '..', 'public', 'assets', 'valorant', 'weapons', 'trained')
+  ];
+  for (const candidate of candidates) {
+    try {
+      const root = path.resolve(candidate);
+      const projectRoot = path.resolve(root, '..', '..', '..', '..', '..');
+      if (fs.existsSync(path.join(projectRoot, 'package.json')) && fs.existsSync(path.join(projectRoot, 'public'))) return root;
+    } catch {}
+  }
+  return '';
+}
+
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -519,6 +535,7 @@ function registerIpc() {
   ipcMain.handle('valorant-ocr:get-info', () => valorantOcrService.getInfo());
   ipcMain.handle('valorant-ocr:list-windows', () => valorantOcrService.listWindows());
   ipcMain.handle('valorant-ocr:capture-snapshot', () => valorantOcrService.captureSnapshot());
+  ipcMain.handle('valorant-ocr:save-loadout-template', (_event, details = {}) => valorantOcrService.saveLoadoutTemplate(details));
   ipcMain.handle('valorant-ocr:clear', () => valorantOcrService.clearState());
   ipcMain.handle('valorant-ocr:set-observer-name', (_event, details = {}) => valorantOcrService.setObserverPlayerName(details));
   ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
@@ -657,6 +674,8 @@ app.whenReady().then(async () => {
       fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
     }),
     ocr: new TesseractOcrEngine(),
+    templateRoot: path.join(app.getPath('userData'), 'valorant-loadout-templates'),
+    sharedTemplateRoot: findSharedValorantLoadoutTemplateRoot(),
     onState: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:state', state);
     },

@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   getValorantOcrInfo: () => ipcRenderer.invoke('valorant-ocr:get-info'),
   listValorantWindows: () => ipcRenderer.invoke('valorant-ocr:list-windows'),
   captureValorantOcrSnapshot: () => ipcRenderer.invoke('valorant-ocr:capture-snapshot'),
+  saveValorantLoadoutTemplate: (details) => ipcRenderer.invoke('valorant-ocr:save-loadout-template', details),
   clearValorantOcrState: () => ipcRenderer.invoke('valorant-ocr:clear'),
   setValorantObserverName: (details) => ipcRenderer.invoke('valorant-ocr:set-observer-name', details),
   startValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:start-simulator'),

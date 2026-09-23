@@ -477,6 +477,10 @@ input[type="range"]:focus { border-color: #35353a; }
 .vo-reading small { margin-top: 4px; color: #62626a; font-size: 6px; }
 .vo-metrics { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 7px 17px 13px; border-bottom: 1px solid #29292e; color: #606068; font-size: 7px; font-weight: 800; }
 .vo-metrics b { margin-left: 4px; color: #92929a; }
+.vo-template-trainer { display: grid; grid-template-columns: auto minmax(150px, .8fr) 120px 120px auto; gap: 8px; align-items: end; padding: 10px 17px; border-bottom: 1px solid #29292e; background: #101014; }
+.vo-template-trainer > span { align-self: center; color: #8ab6ff; font-size: 7px; font-weight: 900; letter-spacing: .12em; }
+.vo-template-trainer label small { display: block; margin-bottom: 4px; color: #666670; font-size: 6px; font-weight: 900; letter-spacing: .1em; }
+.vo-template-trainer select { width: 100%; height: 30px; border: 1px solid #34343a; background: #0b0b0d; color: #f4f4f5; font-size: 8px; }
 .vo-observer-table { padding: 13px 17px 16px; border-bottom: 1px solid #29292e; background: #111113; }
 .vo-observer-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; color: #777780; font-size: 7px; font-weight: 900; letter-spacing: .11em; }
 .vo-observer-title span { color: #ff5d69; }
@@ -559,6 +563,15 @@ input[type="range"]:focus { border-color: #35353a; }
 .vo-timeline-crop-grid span { display: block; margin-bottom: 3px; color: #ffe16a; font-size: 6px; font-weight: 900; text-align: center; }
 .vo-timeline-crop-grid img { width: 100%; height: 42px; object-fit: contain; background: #050506; image-rendering: pixelated; border: 1px solid #2d2d32; }
 .vo-debug-empty { margin: 0; padding: 15px 17px 17px; color: #686870; font-size: 8px; text-align: center; }
+.vo-debug-fullscreen { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 12px; background: #000; }
+.vo-debug-fullscreen header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 46px; padding: 9px 12px; border: 1px solid #303036; background: rgba(12, 12, 15, .96); }
+.vo-debug-fullscreen header > div:last-child { display: flex; gap: 8px; align-items: center; }
+.vo-debug-fullscreen header span { display: block; color: #ff5d69; font-size: 7px; font-weight: 900; letter-spacing: .14em; }
+.vo-debug-fullscreen header strong { display: inline-block; margin-top: 4px; color: #f1f1f4; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.vo-debug-fullscreen header small { margin-left: 10px; color: #777780; font-size: 8px; }
+.vo-debug-fullscreen > img { width: 100%; height: 100%; min-height: 0; object-fit: contain; image-rendering: auto; background: #000; }
+.vo-debug-fullscreen.editor .vo-frame { width: min(100%, calc((100vh - 88px) * 16 / 9)); max-height: calc(100vh - 88px); align-self: center; justify-self: center; }
+.vo-debug-fullscreen.editor .vo-frame > img { image-rendering: auto; }
 
 @keyframes pulse { 50% { opacity: .45; } }
 @keyframes observer-scan-flash {

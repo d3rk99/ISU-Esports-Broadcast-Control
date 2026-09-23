@@ -1,135 +1,135 @@
-﻿[
-    {
-        "weapon":  "Classic",
-        "category":  "sidearms",
-        "file":  "classic.png",
-        "url":  "/assets/valorant/weapons/classic.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Classic_icon.png"
-    },
-    {
-        "weapon":  "Shorty",
-        "category":  "sidearms",
-        "file":  "shorty.png",
-        "url":  "/assets/valorant/weapons/shorty.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Shorty_icon.png"
-    },
-    {
-        "weapon":  "Frenzy",
-        "category":  "sidearms",
-        "file":  "frenzy.png",
-        "url":  "/assets/valorant/weapons/frenzy.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Frenzy_icon.png"
-    },
-    {
-        "weapon":  "Ghost",
-        "category":  "sidearms",
-        "file":  "ghost.png",
-        "url":  "/assets/valorant/weapons/ghost.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Ghost_icon.png"
-    },
-    {
-        "weapon":  "Sheriff",
-        "category":  "sidearms",
-        "file":  "sheriff.png",
-        "url":  "/assets/valorant/weapons/sheriff.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Sheriff_icon.png"
-    },
-    {
-        "weapon":  "Stinger",
-        "category":  "smgs",
-        "file":  "stinger.png",
-        "url":  "/assets/valorant/weapons/stinger.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Stinger_icon.png"
-    },
-    {
-        "weapon":  "Spectre",
-        "category":  "smgs",
-        "file":  "spectre.png",
-        "url":  "/assets/valorant/weapons/spectre.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Spectre_icon.png"
-    },
-    {
-        "weapon":  "Bucky",
-        "category":  "shotguns",
-        "file":  "bucky.png",
-        "url":  "/assets/valorant/weapons/bucky.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Bucky_icon.png"
-    },
-    {
-        "weapon":  "Judge",
-        "category":  "shotguns",
-        "file":  "judge.png",
-        "url":  "/assets/valorant/weapons/judge.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Judge_icon.png"
-    },
-    {
-        "weapon":  "Bulldog",
-        "category":  "rifles",
-        "file":  "bulldog.png",
-        "url":  "/assets/valorant/weapons/bulldog.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Bulldog_icon.png"
-    },
-    {
-        "weapon":  "Guardian",
-        "category":  "rifles",
-        "file":  "guardian.png",
-        "url":  "/assets/valorant/weapons/guardian.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Guardian_icon.png"
-    },
-    {
-        "weapon":  "Phantom",
-        "category":  "rifles",
-        "file":  "phantom.png",
-        "url":  "/assets/valorant/weapons/phantom.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Phantom_icon.png"
-    },
-    {
-        "weapon":  "Vandal",
-        "category":  "rifles",
-        "file":  "vandal.png",
-        "url":  "/assets/valorant/weapons/vandal.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Vandal_icon.png"
-    },
-    {
-        "weapon":  "Marshal",
-        "category":  "snipers",
-        "file":  "marshal.png",
-        "url":  "/assets/valorant/weapons/marshal.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Marshal_icon.png"
-    },
-    {
-        "weapon":  "Outlaw",
-        "category":  "snipers",
-        "file":  "outlaw.png",
-        "url":  "/assets/valorant/weapons/outlaw.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Outlaw_icon.png"
-    },
-    {
-        "weapon":  "Operator",
-        "category":  "snipers",
-        "file":  "operator.png",
-        "url":  "/assets/valorant/weapons/operator.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Operator_icon.png"
-    },
-    {
-        "weapon":  "Ares",
-        "category":  "heavies",
-        "file":  "ares.png",
-        "url":  "/assets/valorant/weapons/ares.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Ares_icon.png"
-    },
-    {
-        "weapon":  "Odin",
-        "category":  "heavies",
-        "file":  "odin.png",
-        "url":  "/assets/valorant/weapons/odin.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Odin_icon.png"
-    },
-    {
-        "weapon":  "Melee",
-        "category":  "melee",
-        "file":  "melee.png",
-        "url":  "/assets/valorant/weapons/melee.png",
-        "source":  "https://valorant.fandom.com/wiki/File:Melee_icon.png"
-    }
+[
+  {
+    "weapon": "Classic",
+    "category": "sidearms",
+    "file": "classic.png",
+    "url": "/assets/valorant/weapons/classic.png",
+    "source": "https://valorant.fandom.com/wiki/File:Classic_icon.png"
+  },
+  {
+    "weapon": "Shorty",
+    "category": "sidearms",
+    "file": "shorty.png",
+    "url": "/assets/valorant/weapons/shorty.png",
+    "source": "https://valorant.fandom.com/wiki/File:Shorty_icon.png"
+  },
+  {
+    "weapon": "Frenzy",
+    "category": "sidearms",
+    "file": "frenzy.png",
+    "url": "/assets/valorant/weapons/frenzy.png",
+    "source": "https://valorant.fandom.com/wiki/File:Frenzy_icon.png"
+  },
+  {
+    "weapon": "Ghost",
+    "category": "sidearms",
+    "file": "ghost.png",
+    "url": "/assets/valorant/weapons/ghost.png",
+    "source": "https://valorant.fandom.com/wiki/File:Ghost_icon.png"
+  },
+  {
+    "weapon": "Sheriff",
+    "category": "sidearms",
+    "file": "sheriff.png",
+    "url": "/assets/valorant/weapons/sheriff.png",
+    "source": "https://valorant.fandom.com/wiki/File:Sheriff_icon.png"
+  },
+  {
+    "weapon": "Stinger",
+    "category": "smgs",
+    "file": "stinger.png",
+    "url": "/assets/valorant/weapons/stinger.png",
+    "source": "https://valorant.fandom.com/wiki/File:Stinger_icon.png"
+  },
+  {
+    "weapon": "Spectre",
+    "category": "smgs",
+    "file": "spectre.png",
+    "url": "/assets/valorant/weapons/spectre.png",
+    "source": "https://valorant.fandom.com/wiki/File:Spectre_icon.png"
+  },
+  {
+    "weapon": "Bucky",
+    "category": "shotguns",
+    "file": "bucky.png",
+    "url": "/assets/valorant/weapons/bucky.png",
+    "source": "https://valorant.fandom.com/wiki/File:Bucky_icon.png"
+  },
+  {
+    "weapon": "Judge",
+    "category": "shotguns",
+    "file": "judge.png",
+    "url": "/assets/valorant/weapons/judge.png",
+    "source": "https://valorant.fandom.com/wiki/File:Judge_icon.png"
+  },
+  {
+    "weapon": "Bulldog",
+    "category": "rifles",
+    "file": "bulldog.png",
+    "url": "/assets/valorant/weapons/bulldog.png",
+    "source": "https://valorant.fandom.com/wiki/File:Bulldog_icon.png"
+  },
+  {
+    "weapon": "Guardian",
+    "category": "rifles",
+    "file": "guardian.png",
+    "url": "/assets/valorant/weapons/guardian.png",
+    "source": "https://valorant.fandom.com/wiki/File:Guardian_icon.png"
+  },
+  {
+    "weapon": "Phantom",
+    "category": "rifles",
+    "file": "phantom.png",
+    "url": "/assets/valorant/weapons/phantom.png",
+    "source": "https://valorant.fandom.com/wiki/File:Phantom_icon.png"
+  },
+  {
+    "weapon": "Vandal",
+    "category": "rifles",
+    "file": "vandal.png",
+    "url": "/assets/valorant/weapons/vandal.png",
+    "source": "https://valorant.fandom.com/wiki/File:Vandal_icon.png"
+  },
+  {
+    "weapon": "Marshal",
+    "category": "snipers",
+    "file": "marshal.png",
+    "url": "/assets/valorant/weapons/marshal.png",
+    "source": "https://valorant.fandom.com/wiki/File:Marshal_icon.png"
+  },
+  {
+    "weapon": "Outlaw",
+    "category": "snipers",
+    "file": "outlaw.png",
+    "url": "/assets/valorant/weapons/outlaw.png",
+    "source": "https://valorant.fandom.com/wiki/File:Outlaw_icon.png"
+  },
+  {
+    "weapon": "Operator",
+    "category": "snipers",
+    "file": "operator.png",
+    "url": "/assets/valorant/weapons/operator.png",
+    "source": "https://valorant.fandom.com/wiki/File:Operator_icon.png"
+  },
+  {
+    "weapon": "Ares",
+    "category": "heavies",
+    "file": "ares.png",
+    "url": "/assets/valorant/weapons/ares.png",
+    "source": "https://valorant.fandom.com/wiki/File:Ares_icon.png"
+  },
+  {
+    "weapon": "Odin",
+    "category": "heavies",
+    "file": "odin.png",
+    "url": "/assets/valorant/weapons/odin.png",
+    "source": "https://valorant.fandom.com/wiki/File:Odin_icon.png"
+  },
+  {
+    "weapon": "Melee",
+    "category": "melee",
+    "file": "melee.png",
+    "url": "/assets/valorant/weapons/melee.png",
+    "source": "https://valorant.fandom.com/wiki/File:Melee_icon.png"
+  }
 ]

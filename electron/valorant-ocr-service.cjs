@@ -1,3 +1,9 @@
+const fs = require('node:fs');
+const path = require('node:path');
+let electronNativeImage = null;
+try {
+  electronNativeImage = require('electron')?.nativeImage || null;
+} catch {}
 const { DEFAULT_PROFILE_ID, FIELD_IDS, getValorantOcrProfile, listValorantOcrProfiles } = require('./valorant-ocr-profiles.cjs');
 const { ValorantOcrState, parseScore, parseTimer } = require('./valorant-ocr-state.cjs');
 const { WebSocketServer } = require('ws');
@@ -23,6 +29,37 @@ const DEFAULTS = Object.freeze({
 const OBSERVER_CELL_MIN_CONFIDENCE = 0.72;
 const OBSERVER_NAME_LOCK_CONFIDENCE = 0.85;
 const TIMELINE_SHAPE_GRID_SIZE = 12;
+const LOADOUT_TEMPLATE_WIDTH = 64;
+const LOADOUT_TEMPLATE_HEIGHT = 24;
+const VALORANT_WEAPON_MANIFEST_CANDIDATES = Object.freeze([
+  path.join(__dirname, '..', 'public', 'assets', 'valorant', 'weapons', 'manifest.json'),
+  path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'weapons', 'manifest.json')
+]);
+const VALORANT_SHARED_LOADOUT_TEMPLATE_CANDIDATES = Object.freeze([
+  path.join(__dirname, '..', 'public', 'assets', 'valorant', 'weapons', 'trained'),
+  path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'weapons', 'trained')
+]);
+const VALORANT_LOADOUT_TEMPLATE_WEAPONS = Object.freeze([
+  'classic',
+  'shorty',
+  'frenzy',
+  'ghost',
+  'sheriff',
+  'stinger',
+  'spectre',
+  'bucky',
+  'judge',
+  'bulldog',
+  'guardian',
+  'phantom',
+  'vandal',
+  'marshal',
+  'outlaw',
+  'operator',
+  'ares',
+  'odin',
+  'melee'
+]);
 const TIMELINE_ICON_TEMPLATES = Object.freeze({
   'spike-defuse': [
     '..###.###...',
@@ -135,6 +172,153 @@ function chooseOcrConsensus(results = [], kind = 'timer') {
     consensus: winners.length,
     variants: results.length
   };
+}
+
+function imageForegroundBounds(image, { alphaOnly = false } = {}) {
+  const size = image?.getSize?.() || { width: 0, height: 0 };
+  if (!size.width || !size.height || !image?.toBitmap) return null;
+  const bitmap = Buffer.from(image.toBitmap());
+  let minX = size.width;
+  let minY = size.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < size.height; y += 1) {
+    for (let x = 0; x < size.width; x += 1) {
+      const offset = (y * size.width + x) * 4;
+      const blue = bitmap[offset];
+      const green = bitmap[offset + 1];
+      const red = bitmap[offset + 2];
+      const alpha = bitmap[offset + 3];
+      const maxChannel = Math.max(red, green, blue);
+      const minChannel = Math.min(red, green, blue);
+      const spread = maxChannel - minChannel;
+      if (alpha < 32) continue;
+      const foreground = alphaOnly
+        ? alpha >= 32
+        : maxChannel >= 145 && minChannel >= 85 && spread <= 120;
+      if (!foreground) continue;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  return maxX >= minX && maxY >= minY ? { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 } : null;
+}
+
+function imageToLoadoutMask(image, { alphaOnly = false } = {}) {
+  const bounds = imageForegroundBounds(image, { alphaOnly });
+  if (!bounds) return null;
+  const source = image.crop({ x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h });
+  const resized = source.resize({ width: LOADOUT_TEMPLATE_WIDTH, height: LOADOUT_TEMPLATE_HEIGHT, quality: 'best' });
+  const bitmap = Buffer.from(resized.toBitmap());
+  const mask = new Uint8Array(LOADOUT_TEMPLATE_WIDTH * LOADOUT_TEMPLATE_HEIGHT);
+  let filled = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    const offset = index * 4;
+    const blue = bitmap[offset];
+    const green = bitmap[offset + 1];
+    const red = bitmap[offset + 2];
+    const alpha = bitmap[offset + 3];
+    const maxChannel = Math.max(red, green, blue);
+    const minChannel = Math.min(red, green, blue);
+    const spread = maxChannel - minChannel;
+    const value = alphaOnly
+      ? alpha >= 32
+      : alpha >= 32 && maxChannel >= 145 && minChannel >= 85 && spread <= 120;
+    if (value) {
+      mask[index] = 1;
+      filled += 1;
+    }
+  }
+  return filled ? { mask, filled, bounds } : null;
+}
+
+function compareLoadoutMasks(left, right) {
+  if (!left?.mask || !right?.mask) return 0;
+  let overlap = 0;
+  for (let index = 0; index < left.mask.length; index += 1) {
+    const a = left.mask[index] === 1;
+    const b = right.mask[index] === 1;
+    if (a && b) overlap += 1;
+  }
+  return left.filled + right.filled ? (2 * overlap) / (left.filled + right.filled) : 0;
+}
+
+function safeTemplateWeaponSlug(value) {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (normalized === 'marshall') return 'marshal';
+  return VALORANT_LOADOUT_TEMPLATE_WEAPONS.includes(normalized) ? normalized : '';
+}
+
+function weaponNameFromSlug(slug) {
+  return String(slug || '').replace(/(^|-)([a-z])/g, (_match, spacer, char) => `${spacer ? ' ' : ''}${char.toUpperCase()}`);
+}
+
+function loadValorantWeaponTemplates(customTemplateRoot = '', sharedTemplateRoot = '') {
+  if (!electronNativeImage?.createFromBuffer) return [];
+  const manifestPath = VALORANT_WEAPON_MANIFEST_CANDIDATES.find((candidate) => fs.existsSync(candidate));
+  const assetDir = manifestPath ? path.dirname(manifestPath) : VALORANT_WEAPON_MANIFEST_CANDIDATES
+    .map((candidate) => path.dirname(candidate))
+    .find((candidate) => fs.existsSync(candidate));
+  const templateFromItem = (item, rootDir = assetDir) => {
+    const imagePath = path.join(rootDir, item.file);
+    const image = electronNativeImage.createFromBuffer(fs.readFileSync(imagePath));
+    const template = imageToLoadoutMask(image, { alphaOnly: Boolean(item.alphaOnly) });
+    return template ? { ...item, template, trained: !item.alphaOnly } : null;
+  };
+  const templates = [];
+  if (manifestPath) {
+    try {
+      const manifestText = fs.readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, '');
+      const manifest = JSON.parse(manifestText);
+      templates.push(...manifest.map((item) => templateFromItem({ ...item, alphaOnly: true })).filter(Boolean));
+    } catch {}
+  }
+  if (assetDir && !templates.length) {
+    try {
+      templates.push(...fs.readdirSync(assetDir)
+        .filter((file) => file.toLowerCase().endsWith('.png'))
+        .map((file) => templateFromItem({
+          weapon: weaponNameFromSlug(file.replace(/\.png$/i, '')),
+          category: 'unknown',
+          file,
+          url: `/assets/valorant/weapons/${file}`,
+          source: 'local weapon asset',
+          alphaOnly: true
+        }))
+        .filter(Boolean));
+    } catch {}
+  }
+  const trainedRoots = [
+    sharedTemplateRoot,
+    ...VALORANT_SHARED_LOADOUT_TEMPLATE_CANDIDATES,
+    customTemplateRoot
+  ].filter(Boolean);
+  const seenTrainedRoots = new Set();
+  for (const customRoot of trainedRoots) {
+    const normalizedRoot = path.resolve(customRoot);
+    if (seenTrainedRoots.has(normalizedRoot) || !fs.existsSync(normalizedRoot)) continue;
+    seenTrainedRoots.add(normalizedRoot);
+    for (const weaponSlug of VALORANT_LOADOUT_TEMPLATE_WEAPONS) {
+      const weaponDir = path.join(normalizedRoot, weaponSlug);
+      if (!fs.existsSync(weaponDir)) continue;
+      try {
+        templates.push(...fs.readdirSync(weaponDir)
+          .filter((file) => file.toLowerCase().endsWith('.png'))
+          .map((file) => templateFromItem({
+            weapon: weaponNameFromSlug(weaponSlug),
+          category: 'trained',
+          file,
+          url: '',
+          source: 'trained loadout crop',
+          alphaOnly: false
+          }, weaponDir))
+          .filter(Boolean));
+      } catch {}
+    }
+  }
+  return templates;
 }
 
 function emptyObserverPlayer(index, side) {
@@ -525,9 +709,11 @@ function classifyTimelineMethod(stats, confidence) {
 }
 
 class ValorantOcrService {
-  constructor({ capture = null, ocr = null, onState = () => {}, onStatus = () => {}, now = () => Date.now() } = {}) {
+  constructor({ capture = null, ocr = null, templateRoot = '', sharedTemplateRoot = '', onState = () => {}, onStatus = () => {}, now = () => Date.now() } = {}) {
     this.capture = capture;
     this.ocr = ocr;
+    this.templateRoot = templateRoot;
+    this.sharedTemplateRoot = sharedTemplateRoot;
     this.onState = onState;
     this.onStatus = onStatus;
     this.now = now;
@@ -541,6 +727,7 @@ class ValorantOcrService {
     this.bridgeClients = new Set();
     this.remoteState = null;
     this.remoteSequence = 0;
+    this.weaponTemplates = loadValorantWeaponTemplates(this.templateRoot, this.sharedTemplateRoot);
     this.lastRemoteAt = 0;
     this.captureBusy = false;
     this.ocrBusy = false;
@@ -654,6 +841,7 @@ class ValorantOcrService {
         recovering: this.consecutiveCaptureFailures > 0,
         usingLastGoodFrame: this.consecutiveCaptureFailures > 0 && Boolean(this.latestFrame)
       },
+      weaponTemplates: { count: this.weaponTemplates.length },
       match: { timerSeconds: timer.value, timerDisplay: timer.displayValue },
       teams: {
         home: { score: homeScore.value },
@@ -1009,21 +1197,77 @@ class ValorantOcrService {
   }
 
   async recognizeObserverLoadoutCell(frame, fieldId, roi) {
-    const crop = this.capture.crop(frame, roi, {
+    if (!frame?.image?.crop) {
+      return {
+        text: '',
+        confidence: 0,
+        latencyMs: 0,
+        kind: 'icon',
+        fieldId,
+        reason: 'native frame unavailable'
+      };
+    }
+    const clampVariant = (next, label) => ({
+      label,
+      x: Math.max(0, Math.round(next.x)),
+      y: Math.max(0, Math.round(next.y)),
+      w: Math.max(24, Math.round(next.w)),
+      h: Math.max(12, Math.round(next.h))
+    });
+    const roiVariants = [
+      clampVariant(roi, 'full'),
+      clampVariant({ ...roi, w: roi.w * 0.92 }, 'wide-left'),
+      clampVariant({ ...roi, w: roi.w * 0.78 }, 'left'),
+      clampVariant({ ...roi, x: roi.x + roi.w * 0.08, w: roi.w * 0.82 }, 'center')
+    ];
+    const crop = this.capture.crop(frame, roiVariants[0], {
       scale: 2,
       grayscale: true,
       threshold: 'none',
       invert: false,
       allowedChars: ''
     });
+    const candidates = roiVariants.map((variant) => {
+      const rawImage = frame.image.crop({ x: variant.x, y: variant.y, width: variant.w, height: variant.h });
+      const mask = imageToLoadoutMask(rawImage);
+      return mask ? { variant, mask } : null;
+    }).filter(Boolean).filter((candidate) => candidate.mask.filled >= 18);
+    if (!candidates.length || !this.weaponTemplates.length) {
+      return {
+        text: '',
+        confidence: 0,
+        latencyMs: 0,
+        kind: 'icon',
+        fieldId,
+        image: crop.processedDataUrl,
+        reason: candidates.length ? 'weapon templates unavailable' : 'no loadout silhouette'
+      };
+    }
+    const ranked = candidates.flatMap((candidate) => this.weaponTemplates
+      .map((template) => ({
+        ...template,
+        variant: candidate.variant.label,
+        score: Math.min(1, compareLoadoutMasks(candidate.mask, template.template) + (template.trained ? 0.06 : 0))
+      })))
+      .sort((left, right) => right.score - left.score);
+    const best = ranked[0];
+    const second = ranked[1];
+    const margin = best.score - (second?.score || 0);
+    const accepted = best.score >= 0.52 || (best.score >= 0.38 && margin >= 0.025);
     return {
-      text: '',
-      confidence: 0,
+      text: accepted ? best.weapon : '',
+      confidence: accepted ? Math.min(1, Math.max(0.35, best.score + margin)) : Math.min(0.34, best.score),
       latencyMs: 0,
       kind: 'icon',
       fieldId,
       image: crop.processedDataUrl,
-      reason: 'weapon icon matcher pending'
+      match: best?.weapon || '',
+      score: best?.score || 0,
+      trained: Boolean(best?.trained),
+      second: second?.weapon || '',
+      margin,
+      variant: best?.variant || '',
+      reason: accepted ? best?.trained ? 'trained weapon icon match' : 'weapon icon match' : 'weak weapon icon match'
     };
   }
 
@@ -1266,6 +1510,43 @@ class ValorantOcrService {
       ...(team.players[cellInfo.row] || {}),
       raw: { ...(team.players[cellInfo.row]?.raw || {}) }
     };
+    if (cellInfo.columnId === 'loadoutIcon') {
+      const confidence = Number(result.confidence) || 0;
+      if (confidence >= 0.35 && result.text) {
+        player.loadout = {
+          weapon: cleanObserverText(result.text),
+          confidence,
+          status: 'matched',
+          score: Number(result.score) || 0,
+          second: result.second || '',
+          variant: result.variant || '',
+          margin: Number(result.margin) || 0
+        };
+        player.raw.loadoutIcon = result.text;
+        player.updatedAt = this.now();
+        player.confidence = Math.max(Number(player.confidence) || 0, confidence);
+      } else if (result.match || (result.reason && result.reason !== 'native frame unavailable')) {
+        player.loadout = {
+          weapon: '',
+          confidence,
+          status: result.match ? 'weak' : 'pending',
+          match: result.match || '',
+          score: Number(result.score) || 0,
+          second: result.second || '',
+          variant: result.variant || '',
+          margin: Number(result.margin) || 0,
+          reason: result.reason || ''
+        };
+        player.raw.loadoutIcon = result.match || result.reason || '';
+        player.updatedAt = this.now();
+      }
+      team.players[cellInfo.row] = player;
+      this.observer3.teams[cellInfo.side] = team;
+      this.observer3.enabled = true;
+      this.observer3.profileId = profile.id;
+      this.observer3.updatedAt = player.updatedAt || this.observer3.updatedAt || this.now();
+      return true;
+    }
     if (cellInfo.columnId === 'playerName' && player.nameManual && player.nameLocked) {
       team.players[cellInfo.row] = player;
       this.observer3.teams[cellInfo.side] = team;
@@ -1515,6 +1796,70 @@ class ValorantOcrService {
       observer3: JSON.parse(JSON.stringify(this.observer3)),
       observerCrops: this.observerPreviewCrops(frame, profile),
       observerTimelineCrops: this.observerTimelinePreviewCrops(frame, profile)
+    };
+  }
+
+  async saveLoadoutTemplate({ weapon = '', side = 'home', row = 0 } = {}) {
+    const weaponSlug = safeTemplateWeaponSlug(weapon);
+    if (!weaponSlug) throw new Error('Choose a valid weapon before saving a loadout template');
+    const cleanSide = side === 'away' ? 'away' : 'home';
+    const cleanRow = Math.max(0, Math.min(4, Math.round(Number(row) || 0)));
+    if (this.settings.source === 'remote') throw new Error('Save loadout templates on the Game PC bridge');
+    if (!this.capture) throw new Error('Capture service is unavailable');
+    const frame = await this.capture.capture(this.settings.windowName);
+    this.latestFrame = frame;
+    const profile = getValorantOcrProfile(this.settings.profileId, {
+      ...(this.settings.roiOverrides || {}),
+      scoreboardTable: this.settings.scoreboardTableOverrides || {}
+    });
+    const guide = this.observerPreviewGuides(profile)
+      .find((item) => item.side === cleanSide && Number(item.row) === cleanRow && item.guideId === 'loadoutIcon');
+    const roi = guide ? this.observerPreviewRoi(profile, guide) : null;
+    if (!roi) throw new Error('No loadout box exists for that row');
+    const crop = this.capture.crop(frame, roi, {
+      scale: 3,
+      grayscale: false,
+      threshold: 'none',
+      invert: false,
+      allowedChars: ''
+    });
+    const data = String(crop.rawDataUrl || '').replace(/^data:image\/png;base64,/, '');
+    if (!data) throw new Error('Could not create a loadout crop');
+    const filename = `${Date.now()}-${cleanSide}-${cleanRow + 1}.png`;
+    const imageBuffer = Buffer.from(data, 'base64');
+    const saveRoots = [this.sharedTemplateRoot, this.templateRoot].filter(Boolean);
+    let filePath = '';
+    let saveScope = 'personal';
+    let lastError = null;
+    for (const saveRoot of saveRoots) {
+      try {
+        const weaponDir = path.join(saveRoot, weaponSlug);
+        fs.mkdirSync(weaponDir, { recursive: true });
+        filePath = path.join(weaponDir, filename);
+        fs.writeFileSync(filePath, imageBuffer);
+        saveScope = saveRoot === this.sharedTemplateRoot ? 'shared' : 'personal';
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!filePath) throw lastError || new Error('Could not save loadout template');
+    this.weaponTemplates = loadValorantWeaponTemplates(this.templateRoot, this.sharedTemplateRoot);
+    this.emitStatus(this.status.state, `Saved ${weaponNameFromSlug(weaponSlug)} loadout template`, {
+      weaponTemplates: this.weaponTemplates.length,
+      templatePath: filePath,
+      templateScope: saveScope
+    });
+    this.emitState();
+    return {
+      ok: true,
+      weapon: weaponNameFromSlug(weaponSlug),
+      weaponSlug,
+      side: cleanSide,
+      row: cleanRow,
+      path: filePath,
+      scope: saveScope,
+      templateCount: this.weaponTemplates.length
     };
   }
 

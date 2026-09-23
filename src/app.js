@@ -30,10 +30,14 @@ let lastUserScrollAt = 0;
 let networkAddresses = [];
 let outputDisplays = [];
 let valorantOcrSnapshot = null;
+let valorantDebugFullscreen = false;
 let valorantWindowChoices = [];
 let valorantOcrRenderTimer;
 let valorantRoiDrag = null;
 let lastValorantOcrActiveKey = '';
+let valorantLoadoutTemplateWeapon = 'operator';
+let valorantLoadoutTemplateSide = 'home';
+let valorantLoadoutTemplateRow = 4;
 let outputDisplaySettings = {
   fillDisplayId: '',
   keyDisplayId: '',
@@ -56,6 +60,16 @@ const ROCKET_LEAGUE_STAT_EVENTS = [
   { key: 'shots', label: 'S', title: 'Shot', priority: 2 },
   { key: 'demos', label: 'D', title: 'Demo', priority: 1 }
 ];
+const VALORANT_LOADOUT_TEMPLATE_WEAPONS = [
+  'classic', 'shorty', 'frenzy', 'ghost', 'sheriff',
+  'stinger', 'spectre', 'bucky', 'judge',
+  'bulldog', 'guardian', 'phantom', 'vandal',
+  'marshal', 'outlaw', 'operator', 'ares', 'odin', 'melee'
+];
+
+const valorantWeaponLabel = (weapon = '') => String(weapon)
+  .replaceAll('-', ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 const ICONS = {
   control: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg>',
@@ -128,6 +142,7 @@ function render() {
         <div class="content-scroll">${renderView(config)}</div>
       </main>
     </div>
+    ${valorantDebugFullscreen ? renderValorantDebugFullscreen() : ''}
   `;
   if (previousScroll) {
     const nextScroller = root.querySelector('.content-scroll');
@@ -301,8 +316,9 @@ function setValorantRoiInputs(fieldId, roi) {
   next.w = Math.min(next.w, 1920 - next.x);
   next.h = Math.min(next.h, 1080 - next.y);
   for (const axis of ['x', 'y', 'w', 'h']) {
-    const input = root.querySelector(`[data-vo-roi="${fieldId}"][data-vo-axis="${axis}"]`);
-    if (input) input.value = next[axis];
+    root.querySelectorAll(`[data-vo-roi="${fieldId}"][data-vo-axis="${axis}"]`).forEach((input) => {
+      input.value = next[axis];
+    });
   }
   return next;
 }
@@ -316,18 +332,19 @@ function valorantRoiFromInputs(fieldId) {
 }
 
 function positionValorantRoiBox(fieldId) {
-  const box = root.querySelector(`[data-vo-roi-box="${fieldId}"]`);
-  if (!box) return;
   const roi = setValorantRoiInputs(fieldId, valorantRoiFromInputs(fieldId));
-  box.style.left = `${roi.x / 19.2}%`;
-  box.style.top = `${roi.y / 10.8}%`;
-  box.style.width = `${roi.w / 19.2}%`;
-  box.style.height = `${roi.h / 10.8}%`;
+  root.querySelectorAll(`[data-vo-roi-box="${fieldId}"]`).forEach((box) => {
+    box.style.left = `${roi.x / 19.2}%`;
+    box.style.top = `${roi.y / 10.8}%`;
+    box.style.width = `${roi.w / 19.2}%`;
+    box.style.height = `${roi.h / 10.8}%`;
+  });
 }
 
 function valorantSourcePoint(event) {
-  const img = root.querySelector('.vo-frame img');
-  const rect = (img || root.querySelector('.vo-frame')).getBoundingClientRect();
+  const frame = event.target?.closest?.('.vo-frame') || root.querySelector('.vo-frame');
+  const img = frame?.querySelector('img');
+  const rect = (img || frame).getBoundingClientRect();
   return {
     x: clampNumber(((event.clientX - rect.left) / rect.width) * 1920, 0, 1920),
     y: clampNumber(((event.clientY - rect.top) / rect.height) * 1080, 0, 1080)
@@ -369,6 +386,66 @@ function observerGuideColumns() {
     { id: 'loadoutIcon', label: 'LOADOUT', className: 'loadout', columns: ['loadoutIcon'] },
     { id: 'credits', label: 'CREDS', className: 'credits', columns: ['credits'] }
   ];
+}
+
+function valorantDebugRoiMarkup({ force = false } = {}) {
+  const ocr = state.games.valorant.valorantOcr;
+  if (!force && !ocr.debugRois) return '';
+  const profile = currentValorantOcrProfile();
+  const roiFields = VALORANT_OCR_FIELD_IDS.map((fieldId) => ({
+    id: fieldId,
+    ...profile.fields[fieldId],
+    roi: { ...profile.fields[fieldId].roi, ...(ocr.roiOverrides?.[fieldId] || {}) }
+  }));
+  const observer3 = ocr.live?.observer3 || {};
+  const activeObserverCell = observer3.activeCell || {};
+  const observerFieldGuides = (() => {
+    const table = profile.scoreboardTable;
+    const guideColumns = observerGuideColumns();
+    if (!table?.teams?.length || !table?.columns) return [];
+    return table.teams.flatMap((team) => Array.from({ length: Number(team.rows) || 0 }, (_item, row) => guideColumns
+      .map((guide) => {
+        const roi = observerFieldRoi(profile, team.id, row, guide.id);
+        if (!roi) return null;
+        return {
+          ...guide,
+          side: team.id,
+          row,
+          ...roi
+        };
+      })
+      .filter(Boolean))).flat();
+  })();
+  const timelineRounds = Array.from({ length: 24 }, (_item, index) => ({
+    round: index + 1,
+    ...(observer3.roundTimeline?.rounds?.[index] || {})
+  }));
+  return `${roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('')}${observerFieldGuides.map((guide) => {
+    const guideColumns = guide.id === 'kda' ? ['kills', 'deaths', 'assists'] : [guide.id];
+    const isScanning = activeObserverCell.side === guide.side && Number(activeObserverCell.row) === Number(guide.row) && guideColumns.includes(activeObserverCell.columnId);
+    return `<i class="vo-scoreboard-field-box ${escapeHtml(guide.side)} ${escapeHtml(guide.className)} ${isScanning ? 'scanning' : ''}" data-vo-observer-box="${escapeHtml(`${guide.side}:${guide.row}:${guide.id}`)}" style="left:${guide.x / 19.2}%;top:${guide.y / 10.8}%;width:${guide.w / 19.2}%;height:${guide.h / 10.8}%"><span>${escapeHtml(guide.label)}</span><b data-vo-observer-resize="true"></b></i>`;
+  }).join('')}${timelineRounds.map((round) => {
+    const roi = observerTimelineRoi(profile, round.round);
+    if (!roi) return '';
+    const isScanning = activeObserverCell.side === 'timeline' && Number(activeObserverCell.row) === round.round - 1;
+    return `<i class="vo-timeline-round-box ${isScanning ? 'scanning' : ''}" data-vo-timeline-box="${round.round}" style="left:${roi.x / 19.2}%;top:${roi.y / 10.8}%;width:${roi.w / 19.2}%;height:${roi.h / 10.8}%"><span>R${round.round}</span><b data-vo-timeline-resize="true"></b></i>`;
+  }).join('')}`;
+}
+
+function renderValorantDebugFullscreen() {
+  if (!valorantOcrSnapshot?.frameDataUrl) return '';
+  const ageSeconds = Math.max(0, Math.round((Date.now() - Number(valorantOcrSnapshot.capturedAt || Date.now())) / 1000));
+  return `
+    <div class="vo-debug-fullscreen editor" role="dialog" aria-modal="true" aria-label="Full screen VALORANT debug capture editor">
+      <header>
+        <div><span>VALORANT DEBUG CAPTURE</span><strong>Full-screen box editor</strong><small>${ageSeconds}s old &middot; 1920 &times; 1080 source frame &middot; ${escapeHtml(valorantOcrSnapshot.backend || 'unknown engine')}</small></div>
+        <div>
+          <button class="secondary-button" data-action="save-valorant-rois">SAVE BOXES</button>
+          <button class="secondary-button" data-action="close-valorant-debug-fullscreen">CLOSE</button>
+        </div>
+      </header>
+      <div class="vo-frame"><img src="${escapeHtml(valorantOcrSnapshot.frameDataUrl)}" alt="Full screen captured VALORANT debug frame">${valorantDebugRoiMarkup({ force: true })}</div>
+    </div>`;
 }
 
 function observerGuideIdForColumn(columnId) {
@@ -745,6 +822,23 @@ function renderValorantOcrPanel(game) {
       && activeObserverCell.columnId === 'playerName') classes.push('scanning');
     return classes.length ? ` class="${classes.join(' ')}"` : '';
   };
+  const observerLoadoutText = (loadout = {}) => {
+    if (loadout.weapon) return loadout.weapon;
+    if (loadout.status === 'weak' && loadout.match) return `? ${loadout.match}`;
+    if (loadout.reason && loadout.reason.includes('templates')) return 'NO TPL';
+    return '--';
+  };
+  const observerLoadoutTitle = (loadout = {}) => {
+    if (!loadout.weapon && !loadout.match && !loadout.reason) return '';
+    const parts = [];
+    if (loadout.weapon || loadout.match) parts.push(loadout.weapon || `Weak: ${loadout.match}`);
+    if (loadout.confidence !== undefined) parts.push(`${Math.round((Number(loadout.confidence) || 0) * 100)}%`);
+    if (loadout.score !== undefined) parts.push(`score ${Number(loadout.score || 0).toFixed(2)}`);
+    if (loadout.second) parts.push(`2nd ${loadout.second}`);
+    if (loadout.variant) parts.push(loadout.variant);
+    if (loadout.reason) parts.push(loadout.reason);
+    return parts.join(' | ');
+  };
   const observerTable = profileHasObserverTable ? `
       <div class="vo-observer-table">
         <div class="vo-observer-title"><span>OBSERVER 3 DATA SCREEN</span><strong data-vo-observer-active-label>${observer3.enabled ? activeObserverLabel : 'WAITING FOR SCOREBOARD PROFILE'}</strong></div>
@@ -758,7 +852,7 @@ function renderValorantOcrPanel(game) {
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:kills`)}"${observerCellClass(player.side, player.index, 'kills')}>${player.kda?.kills ?? '--'}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:deaths`)}"${observerCellClass(player.side, player.index, 'deaths')}>${player.kda?.deaths ?? '--'}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:assists`)}"${observerCellClass(player.side, player.index, 'assists')}>${player.kda?.assists ?? '--'}</td>
-            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:loadoutIcon`)}"${observerCellClass(player.side, player.index, 'loadoutIcon')}>${escapeHtml(player.loadout?.weapon || '--')}</td>
+            <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:loadoutIcon`)}"${observerCellClass(player.side, player.index, 'loadoutIcon')}${observerLoadoutTitle(player.loadout) ? ` title="${escapeHtml(observerLoadoutTitle(player.loadout))}"` : ''}>${escapeHtml(observerLoadoutText(player.loadout))}</td>
             <td data-vo-observer-cell="${escapeHtml(`${player.side}:${player.index}:credits`)}"${observerCellClass(player.side, player.index, 'credits')}>${player.credits === null || player.credits === undefined ? '--' : escapeHtml(Number(player.credits).toLocaleString())}</td>
             <td>${Math.round((Number(player.confidence) || 0) * 100)}%</td>
           </tr>`).join('')}</tbody>
@@ -775,18 +869,7 @@ function renderValorantOcrPanel(game) {
           </tbody>
         </table>
       </div>` : '';
-  const debugRoiMarkup = ocr.debugRois
-    ? `${roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('')}${observerFieldGuides.map((guide) => {
-      const guideColumns = guide.id === 'kda' ? ['kills', 'deaths', 'assists'] : [guide.id];
-      const isScanning = activeObserverCell.side === guide.side && Number(activeObserverCell.row) === Number(guide.row) && guideColumns.includes(activeObserverCell.columnId);
-      return `<i class="vo-scoreboard-field-box ${escapeHtml(guide.side)} ${escapeHtml(guide.className)} ${isScanning ? 'scanning' : ''}" data-vo-observer-box="${escapeHtml(`${guide.side}:${guide.row}:${guide.id}`)}" style="left:${guide.x / 19.2}%;top:${guide.y / 10.8}%;width:${guide.w / 19.2}%;height:${guide.h / 10.8}%"><span>${escapeHtml(guide.label)}</span><b data-vo-observer-resize="true"></b></i>`;
-    }).join('')}${timelineRounds.map((round) => {
-      const roi = observerTimelineRoi(profile, round.round);
-      if (!roi) return '';
-      const isScanning = activeObserverCell.side === 'timeline' && Number(activeObserverCell.row) === round.round - 1;
-      return `<i class="vo-timeline-round-box ${isScanning ? 'scanning' : ''}" data-vo-timeline-box="${round.round}" style="left:${roi.x / 19.2}%;top:${roi.y / 10.8}%;width:${roi.w / 19.2}%;height:${roi.h / 10.8}%"><span>R${round.round}</span><b data-vo-timeline-resize="true"></b></i>`;
-    }).join('')}`
-    : '';
+  const debugRoiMarkup = valorantDebugRoiMarkup();
   const observerCropColumns = observerGuideColumns();
   const observerCropRows = snapshot?.observerCrops?.length
     ? ['home', 'away'].flatMap((side) => Array.from({ length: 5 }, (_item, row) => ({
@@ -831,6 +914,7 @@ function renderValorantOcrPanel(game) {
         <button class="secondary-button" data-action="detect-valorant-window">FIND WINDOW</button>
         <button class="secondary-button" data-action="save-valorant-rois">SAVE BOXES</button>
         <button class="secondary-button" data-action="capture-valorant-frame">CAPTURE DEBUG FRAME</button>
+        <button class="secondary-button" data-action="open-valorant-debug-fullscreen" ${valorantOcrSnapshot?.frameDataUrl ? '' : 'disabled'}>FULL SCREEN BOX EDITOR</button>
         <button class="secondary-button" data-action="clear-valorant-ocr">CLEAR LOCKS</button>
         <button class="secondary-button ${simulatorRunning ? 'danger' : ''}" data-action="${simulatorRunning ? 'stop-valorant-simulator' : 'start-valorant-simulator'}">${simulatorRunning ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
         <label class="vo-debug-toggle"><input type="checkbox" data-vo-prop="debugRois" ${ocr.debugRois ? 'checked' : ''}><span>SHOW ROI BOXES</span></label>`}
@@ -848,10 +932,18 @@ function renderValorantOcrPanel(game) {
         <span>CAPTURE HEALTH <b>${live.capture?.consecutiveFailures || live.consecutiveCaptureFailures || 0} CURRENT / ${live.capture?.failures || live.captureFailures || 0} TOTAL</b></span>
         <span>SOURCE <b>${live.captureWidth || live.capture?.width || '-'} &times; ${live.captureHeight || live.capture?.height || '-'}</b></span>
         <span>OCR <b>${Number(live.scansPerSecond || 0).toFixed(1)}/S &middot; ${live.scans || live.metrics?.observations || 0} TOTAL</b></span>
+        <span>WEAPON TPL <b>${live.weaponTemplates?.count ?? '-'}</b></span>
         <span>LATENCY <b>${live.avgOcrLatencyMs ?? '-'} MS</b></span>
         <span>VALIDATION <b>${live.accepted ?? live.metrics?.accepted ?? 0} OK / ${live.rejected ?? live.metrics?.rejected ?? 0} HELD</b></span>
         <span>FRAME AGE <b>${live.frameAgeMs === null || live.frameAgeMs === undefined ? '-' : Math.round(live.frameAgeMs)} MS</b></span>
       </div>
+      ${ocr.source === 'remote' ? '' : `<div class="vo-template-trainer">
+        <span>LOADOUT TEMPLATE TRAINING</span>
+        <label><small>WEAPON</small><select data-vo-template="weapon">${VALORANT_LOADOUT_TEMPLATE_WEAPONS.map((weapon) => `<option value="${weapon}" ${weapon === valorantLoadoutTemplateWeapon ? 'selected' : ''}>${escapeHtml(valorantWeaponLabel(weapon))}</option>`).join('')}</select></label>
+        <label><small>SIDE</small><select data-vo-template="side"><option value="home" ${valorantLoadoutTemplateSide === 'home' ? 'selected' : ''}>Home</option><option value="away" ${valorantLoadoutTemplateSide === 'away' ? 'selected' : ''}>Away</option></select></label>
+        <label><small>ROW</small><select data-vo-template="row">${Array.from({ length: 5 }, (_item, index) => `<option value="${index}" ${index === Number(valorantLoadoutTemplateRow) ? 'selected' : ''}>Player ${index + 1}</option>`).join('')}</select></label>
+        <button class="secondary-button" data-action="save-valorant-loadout-template">SAVE SHARED TEMPLATE</button>
+      </div>`}
       ${observerTable}
       ${timelineTable}
       <details class="vo-roi-editor">
@@ -1802,10 +1894,25 @@ root.addEventListener('click', async (event) => {
   if (button.dataset.action === 'capture-valorant-frame') {
     try {
       valorantOcrSnapshot = await window.isuDesktop?.captureValorantOcrSnapshot();
+      valorantDebugFullscreen = false;
       toast('Debug frame captured');
     } catch (error) {
       toast(error?.message || 'Could not capture VALORANT');
     }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'open-valorant-debug-fullscreen') {
+    if (!valorantOcrSnapshot?.frameDataUrl) {
+      toast('Capture a debug frame first');
+      return;
+    }
+    valorantDebugFullscreen = true;
+    render();
+    return;
+  }
+  if (button.dataset.action === 'close-valorant-debug-fullscreen') {
+    valorantDebugFullscreen = false;
     render();
     return;
   }
@@ -1815,6 +1922,28 @@ root.addEventListener('click', async (event) => {
       toast('OCR boxes saved');
     } catch (error) {
       toast(error?.message || 'Could not save OCR boxes');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'save-valorant-loadout-template') {
+    try {
+      const selectedWeapon = root.querySelector('[data-vo-template="weapon"]')?.value || valorantLoadoutTemplateWeapon;
+      const selectedSide = root.querySelector('[data-vo-template="side"]')?.value || valorantLoadoutTemplateSide;
+      const selectedRow = Number(root.querySelector('[data-vo-template="row"]')?.value ?? valorantLoadoutTemplateRow);
+      valorantLoadoutTemplateWeapon = selectedWeapon;
+      valorantLoadoutTemplateSide = selectedSide === 'away' ? 'away' : 'home';
+      valorantLoadoutTemplateRow = Math.max(0, Math.min(4, Math.round(selectedRow || 0)));
+      const result = await window.isuDesktop?.saveValorantLoadoutTemplate?.({
+        weapon: valorantLoadoutTemplateWeapon,
+        side: valorantLoadoutTemplateSide,
+        row: valorantLoadoutTemplateRow
+      });
+      const info = await window.isuDesktop?.getValorantOcrInfo?.();
+      if (info?.state) state.games.valorant.valorantOcr.live = info.state;
+      toast(`Saved ${result?.weapon || valorantWeaponLabel(valorantLoadoutTemplateWeapon)} ${result?.scope === 'shared' ? 'shared ' : ''}template`);
+    } catch (error) {
+      toast(error?.message || 'Could not save loadout template');
     }
     render();
     return;
@@ -1915,6 +2044,11 @@ root.addEventListener('input', (event) => {
 });
 
 root.addEventListener('keydown', async (event) => {
+  if (event.key === 'Escape' && valorantDebugFullscreen) {
+    valorantDebugFullscreen = false;
+    render();
+    return;
+  }
   const target = event.target;
   if (target?.dataset?.voManualName === undefined) return;
   if (event.key === 'Escape') {
@@ -2010,6 +2144,13 @@ root.addEventListener('change', async (event) => {
       if (prop === 'profileId' && !VALORANT_OCR_PROFILE_CHOICES.some((choice) => choice.id === ocr.profileId)) ocr.profileId = DEFAULT_VALORANT_OCR_PROFILE_ID;
     }, 'VALORANT OCR settings saved');
     await syncValorantOcr();
+    render();
+    return;
+  }
+  if (target.dataset.voTemplate) {
+    if (target.dataset.voTemplate === 'weapon') valorantLoadoutTemplateWeapon = target.value;
+    if (target.dataset.voTemplate === 'side') valorantLoadoutTemplateSide = target.value === 'away' ? 'away' : 'home';
+    if (target.dataset.voTemplate === 'row') valorantLoadoutTemplateRow = Math.max(0, Math.min(4, Math.round(Number(target.value) || 0)));
     render();
     return;
   }
