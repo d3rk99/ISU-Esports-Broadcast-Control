@@ -27,6 +27,28 @@
     shots: '../assets/rocket league/points/Shot_on_Goal_points_icon.png',
     demos: '../assets/rocket league/points/Demolition_points_icon.png'
   };
+  const VALORANT_WEAPON_ICON_BY_SLUG = {
+    classic: '../assets/valorant/weapons/classic.png',
+    shorty: '../assets/valorant/weapons/shorty.png',
+    frenzy: '../assets/valorant/weapons/frenzy.png',
+    ghost: '../assets/valorant/weapons/ghost.png',
+    sheriff: '../assets/valorant/weapons/sheriff.png',
+    stinger: '../assets/valorant/weapons/stinger.png',
+    spectre: '../assets/valorant/weapons/spectre.png',
+    bucky: '../assets/valorant/weapons/bucky.png',
+    judge: '../assets/valorant/weapons/judge.png',
+    bulldog: '../assets/valorant/weapons/bulldog.png',
+    guardian: '../assets/valorant/weapons/guardian.png',
+    phantom: '../assets/valorant/weapons/phantom.png',
+    vandal: '../assets/valorant/weapons/vandal.png',
+    marshal: '../assets/valorant/weapons/marshal.png',
+    marshall: '../assets/valorant/weapons/marshal.png',
+    outlaw: '../assets/valorant/weapons/outlaw.png',
+    operator: '../assets/valorant/weapons/operator.png',
+    ares: '../assets/valorant/weapons/ares.png',
+    odin: '../assets/valorant/weapons/odin.png',
+    melee: '../assets/valorant/weapons/melee.png'
+  };
 
   const FALLBACK = {
     selectedGame: 'overwatch',
@@ -283,6 +305,162 @@
     if (replayIndicator) replayIndicator.hidden = !replayActive;
   }
 
+  function valorantOcrLive(game) {
+    return game?.valorantOcr?.live || {};
+  }
+
+  function trustedValorantScore(live, side, fallback) {
+    const value = live?.teams?.[side]?.score ?? live?.fields?.[`${side}Score`]?.value;
+    return Number.isFinite(Number(value)) ? Number(value) : Number(fallback) || 0;
+  }
+
+  function valorantTimerDisplay(live) {
+    const display = live?.match?.timerDisplay || live?.fields?.timer?.displayValue;
+    if (display) return String(display).toUpperCase();
+    const seconds = live?.match?.timerSeconds ?? live?.fields?.timer?.value;
+    return Number.isFinite(Number(seconds)) ? formatDuration(seconds) : '--';
+  }
+
+  function valorantWeaponSlug(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function valorantWeaponIcon(player) {
+    const loadout = player?.loadout || {};
+    if (loadout.status !== 'matched' || !loadout.weapon) return '';
+    return VALORANT_WEAPON_ICON_BY_SLUG[valorantWeaponSlug(loadout.weapon)] || '';
+  }
+
+  function valorantCredits(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toLocaleString('en-US') : '--';
+  }
+
+  function valorantKda(player) {
+    const kda = player?.kda || {};
+    const k = Number.isFinite(Number(kda.kills)) ? Number(kda.kills) : 0;
+    const d = Number.isFinite(Number(kda.deaths)) ? Number(kda.deaths) : 0;
+    const a = Number.isFinite(Number(kda.assists)) ? Number(kda.assists) : 0;
+    return `${k} / ${d} / ${a}`;
+  }
+
+  function valorantUltimateLabel(player) {
+    const ultimate = player?.ultimateState || {};
+    if (ultimate.status === 'ready') return 'READY';
+    if (ultimate.display) return ultimate.display;
+    if (player?.ultimate) return player.ultimate;
+    return '--';
+  }
+
+  function valorantRoundNumber(live, homeScore, awayScore) {
+    const timelineRound = Number(live?.observer3?.roundTimeline?.currentRound);
+    if (Number.isFinite(timelineRound) && timelineRound > 0) return timelineRound;
+    return Math.max(1, Math.min(24, homeScore + awayScore + 1));
+  }
+
+  function valorantSideLabel(role) {
+    return role === 'defense' ? 'DEF' : role === 'attack' ? 'ATK' : '--';
+  }
+
+  function valorantMethodLabel(method) {
+    if (method === 'spike-defuse') return 'DEFUSE';
+    if (method === 'spike-detonation') return 'BOOM';
+    if (method === 'elimination') return 'ELIM';
+    return '';
+  }
+
+  function renderValorantRoundHistory(live) {
+    const container = $('#val-round-history');
+    if (!container) return;
+    const timeline = live?.observer3?.roundTimeline || {};
+    const rounds = Array.isArray(timeline.rounds) ? timeline.rounds : [];
+    const currentRound = Number(timeline.currentRound) || 0;
+    container.replaceChildren();
+    for (let index = 0; index < 24; index += 1) {
+      const round = rounds[index] || { round: index + 1 };
+      const marker = document.createElement('span');
+      const winnerRole = round.winnerRole || '';
+      marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}${round.method ? ` method-${round.method}` : ''}`;
+      marker.dataset.round = String(index + 1);
+      marker.title = `${index + 1} ${valorantSideLabel(winnerRole)} ${valorantMethodLabel(round.method)}`.trim();
+      if (index === 12) marker.classList.add('half-start');
+      const icon = document.createElement('i');
+      const number = document.createElement('b');
+      number.textContent = String(index + 1);
+      marker.append(icon, number);
+      container.append(marker);
+    }
+  }
+
+  function renderValorantPlayerCards(selector, players = [], side = 'home') {
+    const container = $(selector);
+    if (!container) return;
+    container.replaceChildren();
+    const safePlayers = Array.from({ length: 5 }, (_item, index) => players[index] || { index });
+    safePlayers.forEach((player, index) => {
+      const card = document.createElement('article');
+      card.className = `val-player-card val-player-card--${side}`;
+      const name = document.createElement('strong');
+      name.textContent = player?.name || `PLAYER ${index + 1}`;
+      const kda = document.createElement('span');
+      kda.className = 'val-player-kda';
+      kda.textContent = valorantKda(player);
+      const footer = document.createElement('div');
+      footer.className = 'val-player-footer';
+      const ult = document.createElement('em');
+      ult.className = player?.ultimateState?.status === 'ready' ? 'ready' : '';
+      ult.textContent = valorantUltimateLabel(player);
+      const weaponWrap = document.createElement('span');
+      weaponWrap.className = 'val-weapon-slot';
+      const weaponIcon = valorantWeaponIcon(player);
+      if (weaponIcon) {
+        const image = document.createElement('img');
+        image.src = weaponIcon;
+        image.alt = '';
+        weaponWrap.classList.add('has-weapon');
+        weaponWrap.append(image);
+      }
+      const credits = document.createElement('b');
+      credits.textContent = valorantCredits(player?.credits);
+      footer.append(ult, weaponWrap, credits);
+      card.append(name, kda, footer);
+      container.append(card);
+    });
+  }
+
+  function renderValorantHud(selectedGame, game, teams, activeMap) {
+    const hud = $('#valorant-hud');
+    if (!hud) return;
+    hud.hidden = selectedGame !== 'valorant';
+    if (hud.hidden) return;
+    const live = valorantOcrLive(game);
+    const observer = live.observer3 || {};
+    const homeScore = trustedValorantScore(live, 'home', teams[0]?.detailScore ?? teams[0]?.score);
+    const awayScore = trustedValorantScore(live, 'away', teams[1]?.detailScore ?? teams[1]?.score);
+    const timer = valorantTimerDisplay(live);
+    const spikePlanted = timer === 'SPIKE PLANTED';
+    const roundNumber = valorantRoundNumber(live, homeScore, awayScore);
+    hud.classList.toggle('spike-planted', spikePlanted);
+    setText('#val-home-name', teams[0]?.name || 'HOME');
+    setText('#val-away-name', teams[1]?.name || 'AWAY');
+    setText('#val-home-short', teams[0]?.shortName || 'HOME');
+    setText('#val-away-short', teams[1]?.shortName || 'AWAY');
+    setText('#val-home-score', homeScore);
+    setText('#val-away-score', awayScore);
+    setText('#val-round-label', spikePlanted ? 'OBJECTIVE' : `ROUND ${roundNumber}`);
+    setText('#val-timer', timer);
+    setText('#val-series-label', `${selectedGame === 'valorant' ? 'MAP' : 'GAME'} ${(game.activeMap || 0) + 1} / ${game.match?.format || 'BEST OF 3'}`);
+    setText('#val-map-name', activeMap?.map || 'MAP TBD');
+    setText('#val-map-detail', `MAP ${(game.activeMap || 0) + 1} OF ${Math.max(1, Math.min(3, Number(game.seriesLength) || 3))}`);
+    setText('#val-event-name', game.match?.event || 'COLLEGIATE VALORANT');
+    setText('#val-event-detail', game.match?.round || 'IDAHO STATE ESPORTS');
+    renderLogo('#val-home-logo', teams[0]);
+    renderLogo('#val-away-logo', teams[1]);
+    renderValorantRoundHistory(live);
+    renderValorantPlayerCards('#val-home-players', observer.teams?.home?.players, 'home');
+    renderValorantPlayerCards('#val-away-players', observer.teams?.away?.players, 'away');
+  }
+
   function renderScoreboard(state) {
     const root = $('[data-overlay="scoreboard"]');
     if (!root) return;
@@ -314,6 +492,7 @@
     root.classList.toggle('is-live', Boolean(game.match?.live));
     renderRocketLeagueScorecard(selectedGame, game, teams, activeMap);
     renderRocketLeaguePlayers(game, selectedGame);
+    renderValorantHud(selectedGame, game, teams, activeMap);
   }
 
   function renderValorantVeto(game) {
