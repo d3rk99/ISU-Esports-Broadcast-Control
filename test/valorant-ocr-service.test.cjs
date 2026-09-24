@@ -9,6 +9,45 @@ function fakeFrame(now = Date.now()) {
   return { sourceName: 'VALORANT', capturedAt: now, width: 1920, height: 1080, image: {} };
 }
 
+test('Bandit is accepted as a training weapon while unknown weapons are rejected', async () => {
+  const service = new ValorantOcrService({});
+  await assert.rejects(service.saveLoadoutTemplate({ weapon: 'Bandit' }), /Capture service is unavailable/);
+  await assert.rejects(service.saveLoadoutTemplate({ weapon: 'not-a-weapon' }), /Choose a valid weapon/);
+  const appSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/app.js'), 'utf8');
+  assert.match(appSource, /VALORANT_LOADOUT_TEMPLATE_WEAPONS = \[[\s\S]*?'bandit'/);
+});
+
+test('grid batch runs four cells while score OCR remains available and reset discards pending results', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let started = 0;
+  const service = new ValorantOcrService({
+    now: () => 1000,
+    capture: { crop: () => ({ image: Buffer.from('x') }) },
+    ocr: { recognize: async (_image, recipe) => {
+      if (recipe.fieldId.startsWith('observer3-')) {
+        started++;
+        await gate;
+        return { text: 'OldName', confidence: 0.99 };
+      }
+      return { text: recipe.fieldId === 'timer' ? '1:20' : '2', confidence: 0.99 };
+    } }
+  });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard', observerConcurrency: 4 });
+  service.latestFrame = fakeFrame(1000);
+  const grid = service.observerTick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(started, 4);
+  assert.equal(service.observer3.activeCells.length, 4);
+  assert.equal(await service.ocrTick(), true);
+  assert.equal(service.observerBusy, true);
+  service.clearState();
+  release();
+  await grid;
+  assert.equal(service.observer3.teams.home.players.some((player) => player.name === 'OldName'), false);
+});
+
 function reservePort() {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -142,7 +181,7 @@ test('observer 3 scans names first and locks high-confidence names', async (t) =
   const profile = getValorantOcrProfile(service.settings.profileId, {
     scoreboardTable: service.settings.scoreboardTableOverrides
   });
-  for (let index = 0; index < 10; index += 1) {
+  for (let index = 0; index < Math.ceil(10 / service.settings.observerConcurrency); index += 1) {
     await service.scanObserver3Table(fakeFrame(now), profile, now);
     now += 50;
   }

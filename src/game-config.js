@@ -544,6 +544,7 @@ export function createGameState(gameKey) {
       roiOverrides: {},
       scoreboardTableOverrides: {},
       observerScanIntervalMs: 25,
+      observerConcurrency: 4,
       live: {
         status: 'disabled',
         message: 'VALORANT OCR is off',

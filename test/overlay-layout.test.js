@@ -6,6 +6,29 @@ const overlayCss = readFileSync(new URL('../public/overlays/overlay.css', import
 const overlayHtml = readFileSync(new URL('../public/overlays/scoreboard.html', import.meta.url), 'utf8');
 const overlayJs = readFileSync(new URL('../public/overlays/overlay.js', import.meta.url), 'utf8');
 
+test('controller initialization opens saved Program output after display settings load', () => {
+  const app = readFileSync(new URL('../src/app.js', import.meta.url), 'utf8');
+  const init = app.slice(app.indexOf('function initialize()'));
+  assert.match(init, /getOutputDisplays\(\)[\s\S]*openProgramOutput\(\{ name: state.activeOutputOverlay \|\| 'scoreboard' \}\)/);
+  assert.match(init, /Automatic Program output startup failed/);
+  const main = readFileSync(new URL('../electron/main.cjs', import.meta.url), 'utf8');
+  const open = main.slice(main.indexOf('async function openProgramOutput'), main.indexOf('function writeJson'));
+  assert.ok(open.indexOf('await Promise.all') < open.indexOf('await loadProgramOutput(name)'));
+});
+
+test('Valorant native-fit scoreboard stays in the central HUD corridor without entry expansion', () => {
+  assert.match(overlayHtml, /class="valorant-hud val-native-fit"/);
+  const bar = overlayCss.match(/\.val-native-fit \.val-scorebar \{([^}]+)\}/)[1];
+  assert.match(bar, /top: 20px/);
+  assert.match(bar, /width: 370px/);
+  assert.match(bar, /height: 55px/);
+  assert.match(bar, /grid-template-columns: 90px 190px 90px/);
+  assert.match(bar, /background: #080d14/);
+  assert.match(bar, /animation: none/);
+  assert.match(overlayCss, /\.val-native-fit \.val-team \{[^}]*animation: none/s);
+  assert.match(overlayCss, /\.val-native-fit\.spike-planted \.val-center \{ background: #340d17/);
+});
+
 test('Rocket League away boost cards keep names in the visible outside column', () => {
   assert.match(
     overlayCss,

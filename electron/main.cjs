@@ -28,7 +28,7 @@ const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
 ];
 const VALORANT_OCR_SETTINGS_FIELDS = [
-  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides', 'scoreboardTableOverrides', 'observerScanIntervalMs'
+  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides', 'scoreboardTableOverrides', 'observerScanIntervalMs', 'observerConcurrency'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 process.on('uncaughtException', (error) => {
@@ -242,8 +242,8 @@ async function openProgramOutput(name = programOutputName) {
     displayBySavedId(outputDisplaySettings.keyDisplayId, 1)
   );
   if (!programOutputWindows.fill || !programOutputWindows.key) return false;
-  await loadProgramOutput(name);
   await Promise.all([programOutputWindows.fill.overlayReady, programOutputWindows.key.overlayReady]);
+  await loadProgramOutput(name);
   showOverlayOutputWindow(programOutputWindows.fill);
   showOverlayOutputWindow(programOutputWindows.key);
   return true;

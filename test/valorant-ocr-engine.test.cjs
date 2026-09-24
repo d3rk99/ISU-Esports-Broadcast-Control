@@ -2,6 +2,34 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('../electron/valorant-ocr-engine.cjs');
 
+test('grid reuses a bounded pool and serializes each worker while running workers concurrently', async () => {
+  let created = 0;
+  let active = 0;
+  let peak = 0;
+  const engine = new TesseractOcrEngine({ createWorkerImpl: async () => {
+    created++;
+    let busy = false;
+    return {
+      setParameters: async () => { assert.equal(busy, false); },
+      recognize: async () => {
+        assert.equal(busy, false);
+        busy = true;
+        peak = Math.max(peak, ++active);
+        await new Promise((resolve) => setImmediate(resolve));
+        active--;
+        busy = false;
+        return { data: { text: '7', confidence: 95 } };
+      },
+      terminate: async () => {}
+    };
+  } });
+  engine.observerConcurrency = 2;
+  await Promise.all(Array.from({ length: 20 }, (_, index) => engine.recognize(Buffer.from('x'), { fieldId: `observer3-home-${index}-kills` })));
+  assert.equal(created, 2);
+  assert.equal(peak, 2);
+  await engine.close();
+});
+
 test('OCR engine keeps one independent worker per field', async () => {
   const workers = [];
   const engine = new TesseractOcrEngine({

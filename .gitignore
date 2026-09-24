@@ -1,8 +1,8 @@
 node_modules/
 dist/
 release/
+release-parallel-ocr/
 *.log
 .DS_Store
 Thumbs.db
 .vite/
-

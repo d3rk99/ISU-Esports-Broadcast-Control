@@ -23,6 +23,7 @@ const DEFAULTS = Object.freeze({
   bridgeToken: '',
   roiOverrides: {},
   scoreboardTableOverrides: {},
+  observerConcurrency: 4,
   observerScanIntervalMs: 25
 });
 
@@ -45,6 +46,7 @@ const VALORANT_LOADOUT_TEMPLATE_WEAPONS = Object.freeze([
   'frenzy',
   'ghost',
   'sheriff',
+  'bandit',
   'stinger',
   'spectre',
   'bucky',
@@ -133,6 +135,7 @@ function normalizeSettings(settings = {}) {
     bridgePort: safePort(settings.bridgePort),
     bridgeToken: String(settings.bridgeToken || '').trim(),
     roiOverrides: Object.fromEntries(FIELD_IDS.map((id) => [id, { ...profile.fields[id].roi }])),
+    observerConcurrency: [1, 2, 4, 8].includes(Number(settings.observerConcurrency)) ? Number(settings.observerConcurrency) : 4,
     observerScanIntervalMs: Number.isFinite(observerScanIntervalMs)
       ? Math.max(5, Math.min(100, Math.round(observerScanIntervalMs)))
       : DEFAULTS.observerScanIntervalMs,
@@ -352,6 +355,8 @@ function emptyObserver3State() {
     nextNameCellIndex: 0,
     initialNameScanComplete: false,
     activeCell: null,
+    activeCells: [],
+    performance: { cellsCompleted: 0, lastSweepMs: null },
     roundTimeline: {
       currentRound: null,
       topRole: 'defense',
@@ -731,6 +736,9 @@ class ValorantOcrService {
     this.lastRemoteAt = 0;
     this.captureBusy = false;
     this.ocrBusy = false;
+    this.observerBusy = false;
+    this.observerTimer = null;
+    this.observerSweepStartedAt = 0;
     this.generation = 0;
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
@@ -856,6 +864,8 @@ class ValorantOcrService {
     const wasEnabled = this.settings.enabled;
     this.stopLoops();
     this.settings = normalizeSettings(nextSettings);
+    if (this.ocr) this.ocr.observerConcurrency = this.settings.observerConcurrency;
+    this.observerSweepStartedAt = 0;
     this.validator.setRecordedVideoMode(this.settings.recordedVideoMode);
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
@@ -887,6 +897,7 @@ class ValorantOcrService {
     this.emitStatus('starting', wasEnabled ? 'Restarting VALORANT OCR' : 'Starting VALORANT OCR');
     this.scheduleCapture(0);
     this.scheduleOcr(0);
+    this.scheduleObserver(0);
     return this.status;
   }
 
@@ -894,6 +905,7 @@ class ValorantOcrService {
     this.generation += 1;
     clearTimeout(this.captureTimer);
     clearTimeout(this.ocrTimer);
+    clearTimeout(this.observerTimer);
     clearInterval(this.watchdogTimer);
     clearInterval(this.simulatorTimer);
     this.captureTimer = null;
@@ -939,6 +951,36 @@ class ValorantOcrService {
       await this.ocrTick();
       if (generation === this.generation && this.settings.enabled) this.scheduleOcr();
     }, delay);
+  }
+
+  scheduleObserver(delay = this.settings.observerScanIntervalMs) {
+    const generation = this.generation;
+    clearTimeout(this.observerTimer);
+    this.observerTimer = setTimeout(async () => {
+      if (generation !== this.generation || !this.settings.enabled || this.settings.source !== 'local') return;
+      await this.observerTick();
+      if (generation === this.generation) this.scheduleObserver();
+    }, delay);
+  }
+
+  async observerTick() {
+    if (this.observerBusy || !this.latestFrame || this.consecutiveCaptureFailures > 0 || this.now() - this.latestFrame.capturedAt > 1500) return false;
+    this.observerBusy = true;
+    const generation = this.generation;
+    try {
+      const profile = getValorantOcrProfile(this.settings.profileId, {
+        ...(this.settings.roiOverrides || {}),
+        scoreboardTable: this.settings.scoreboardTableOverrides || {}
+      });
+      const scanned = await this.scanObserver3Table(this.latestFrame, profile, this.now());
+      if (generation === this.generation && scanned) this.emitState();
+      return scanned;
+    } catch (error) {
+      if (generation === this.generation) this.emitStatus('degraded', `Grid OCR failed: ${error.message}`);
+      return false;
+    } finally {
+      this.observerBusy = false;
+    }
   }
 
   async captureTick() {
@@ -1501,8 +1543,11 @@ class ValorantOcrService {
       columnId: cellInfo.columnId,
       updatedAt: this.now()
     };
+    const generation = this.generation;
+    const observerState = this.observer3;
     const roi = this.observerCellRoi(profile, cellInfo);
     const result = await this.recognizeObserverCell(frame, `observer3-${cellInfo.side}-${cellInfo.row}-${cellInfo.columnId}`, roi, cellInfo.column);
+    if (generation !== this.generation || observerState !== this.observer3) return false;
     const accepted = acceptedObserverText(result);
     const team = this.observer3.teams[cellInfo.side] || { players: [] };
     const player = {
@@ -1636,34 +1681,60 @@ class ValorantOcrService {
   }
 
   async scanObserver3Table(frame, profile, now) {
-    if (now - this.lastObserverTableScannedAt < this.settings.observerScanIntervalMs) return false;
+    if (!profile.scoreboardTable || now - this.lastObserverTableScannedAt < this.settings.observerScanIntervalMs) return false;
+    const state = this.observer3;
+    const generation = this.generation;
+    const limit = this.settings.observerConcurrency || 4;
+    const selected = [];
     const nameCells = this.observerNameCells(profile);
-    if (!this.observer3.initialNameScanComplete && nameCells.length) {
-      for (let attempts = 0; attempts < nameCells.length; attempts += 1) {
-        const index = this.observer3.nextNameCellIndex % nameCells.length;
-        const cell = nameCells[index];
-        this.observer3.nextNameCellIndex = index + 1;
-        if (this.observer3.nextNameCellIndex >= nameCells.length) {
-          this.observer3.nextNameCellIndex = 0;
-          this.observer3.initialNameScanComplete = true;
-        }
-        if (this.shouldSkipObserverCell(cell)) continue;
-        this.lastObserverTableScannedAt = now;
-        return this.scanObserver3Cell(frame, profile, cell);
+    const initialNames = !state.initialNameScanComplete && nameCells.length;
+    let sweepComplete = false;
+    if (initialNames) {
+      while (state.nextNameCellIndex < nameCells.length && selected.length < limit) {
+        const cell = nameCells[state.nextNameCellIndex++];
+        if (!this.shouldSkipObserverCell(cell)) selected.push(cell);
       }
-      this.observer3.nextNameCellIndex = 0;
-      this.observer3.initialNameScanComplete = true;
+      if (state.nextNameCellIndex >= nameCells.length) {
+        state.nextNameCellIndex = 0;
+        state.initialNameScanComplete = true;
+      }
+    } else {
+      const cells = [
+        ...this.observerCells(profile).filter((cell) => !this.shouldSkipObserverCell(cell)),
+        ...this.observerTimelineCells(profile)
+      ];
+      if (!cells.length) return false;
+      if (!this.observerSweepStartedAt) this.observerSweepStartedAt = now;
+      const start = state.nextCellIndex % cells.length;
+      selected.push(...cells.slice(start, Math.min(start + limit, cells.length)));
+      state.nextCellIndex = (start + selected.length) % cells.length;
+      sweepComplete = state.nextCellIndex === 0;
     }
-    const cells = [
-      ...this.observerCells(profile).filter((cell) => !this.shouldSkipObserverCell(cell)),
-      ...this.observerTimelineCells(profile)
-    ];
-    if (!cells.length) return false;
-    const index = this.observer3.nextCellIndex % cells.length;
-    this.observer3.nextCellIndex = (index + 1) % cells.length;
+    if (!selected.length) return false;
     this.lastObserverTableScannedAt = now;
-    if (cells[index].columnId === 'roundTimeline') return this.scanObserverTimelineCell(frame, profile, cells[index]);
-    return this.scanObserver3Cell(frame, profile, cells[index]);
+    state.activeCells = selected.map((cell) => ({ side: cell.side, row: cell.row, columnId: cell.columnId, updatedAt: now }));
+    this.emitState();
+    const results = await Promise.allSettled(selected.map(async (cell) => {
+      try {
+        return await (cell.columnId === 'roundTimeline'
+          ? this.scanObserverTimelineCell(frame, profile, cell)
+          : this.scanObserver3Cell(frame, profile, cell));
+      } finally {
+        if (state === this.observer3 && generation === this.generation) {
+          state.activeCells = state.activeCells.filter((active) => !(active.side === cell.side && active.row === cell.row && active.columnId === cell.columnId));
+          this.emitState();
+        }
+      }
+    }));
+    if (generation !== this.generation || state !== this.observer3) return false;
+    state.performance.cellsCompleted += results.filter((result) => result.status === 'fulfilled' && result.value).length;
+    if (sweepComplete) {
+      state.performance.lastSweepMs = this.now() - this.observerSweepStartedAt;
+      this.observerSweepStartedAt = 0;
+    }
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) throw failure.reason;
+    return true;
   }
 
   async ocrTick() {
@@ -1677,8 +1748,7 @@ class ValorantOcrService {
     });
     const dueFields = FIELD_IDS.filter((id) => now - this.lastScannedAt[id] >= profile.fields[id].cadenceMs
       && frame.capturedAt !== this.lastScannedFrameAt[id]);
-    const hasObserverTable = Boolean(profile.scoreboardTable);
-    if (!dueFields.length && !hasObserverTable) return false;
+    if (!dueFields.length) return false;
     this.ocrBusy = true;
     try {
       const results = await Promise.all(dueFields.map(async (fieldId) => ({
@@ -1708,17 +1778,6 @@ class ValorantOcrService {
         captureBackend: frame.backend || this.settings.captureBackend,
         observer3Scanning: false
       });
-      if (hasObserverTable) {
-        const observerScanned = await this.scanObserver3Table(frame, profile, this.now());
-        if (observerScanned && generation === this.generation) {
-          this.emitState();
-          this.emitStatus(this.status.state, this.status.message, {
-            sourceName: frame.sourceName,
-            captureBackend: frame.backend || this.settings.captureBackend,
-            observer3Scanning: true
-          });
-        }
-      }
       return true;
     } catch (error) {
       if (generation !== this.generation) return false;
@@ -1731,7 +1790,8 @@ class ValorantOcrService {
 
   async tick() {
     await this.captureTick();
-    return this.ocrTick();
+    const results = await Promise.all([this.ocrTick(), this.observerTick()]);
+    return results.some(Boolean);
   }
 
   frameRate(now = this.now()) {
@@ -1769,6 +1829,7 @@ class ValorantOcrService {
     }
     const snapshot = this.validator.clear(this.now());
     this.observer3 = emptyObserver3State();
+    this.observerSweepStartedAt = 0;
     this.lastObserverTableScannedAt = 0;
     this.onState(this.normalizedState(snapshot));
     this.emitStatus(this.settings.enabled ? 'calibrating' : 'disabled', this.settings.enabled ? 'OCR state cleared; waiting for a stable read' : 'VALORANT OCR is off');

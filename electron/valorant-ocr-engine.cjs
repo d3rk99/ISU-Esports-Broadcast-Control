@@ -15,6 +15,8 @@ class TesseractOcrEngine {
     this.createWorkerImpl = createWorkerImpl;
     this.workerPromises = new Map();
     this.workerJobs = new Map();
+    this.observerConcurrency = 4;
+    this.observerCursor = 0;
   }
 
   async getWorker(key = 'default') {
@@ -41,9 +43,10 @@ class TesseractOcrEngine {
   enqueueWorkerJob(key, task) {
     const previous = this.workerJobs.get(key) || Promise.resolve();
     const next = previous.catch(() => {}).then(task);
-    this.workerJobs.set(key, next.finally(() => {
-      if (this.workerJobs.get(key) === next) this.workerJobs.delete(key);
-    }));
+    const tail = next.catch(() => {}).finally(() => {
+      if (this.workerJobs.get(key) === tail) this.workerJobs.delete(key);
+    });
+    this.workerJobs.set(key, tail);
     return next;
   }
 
@@ -72,7 +75,10 @@ class TesseractOcrEngine {
 
   async recognize(image, options = {}) {
     const fieldId = options.fieldId || 'default';
-    return this.enqueueWorkerJob(fieldId, () => this.recognizeNow(image, { ...options, fieldId }));
+    const key = fieldId.startsWith('observer3-')
+      ? `grid-worker-${this.observerCursor++ % this.observerConcurrency}`
+      : fieldId;
+    return this.enqueueWorkerJob(key, () => this.recognizeNow(image, { ...options, fieldId: key }));
   }
 
   async close() {

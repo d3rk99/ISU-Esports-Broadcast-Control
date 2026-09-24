@@ -368,6 +368,88 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
   letter-spacing: .08em;
   text-shadow: 0 0 18px rgba(255,70,95,.88), 0 5px 12px rgba(0,0,0,.72);
 }
+/* 1920x1080 observer reference: cover x=775..1145, y=20..75.
+   Keep all scorebar content inside this center corridor, including on entry.
+   Native portraits/health at either side must remain unobstructed. */
+.val-native-fit .val-scorebar {
+  top: 20px;
+  width: 370px;
+  height: 55px;
+  grid-template-columns: 90px 190px 90px;
+  background: #080d14;
+  filter: none;
+  animation: none;
+}
+.val-native-fit .val-team {
+  display: block;
+  overflow: visible;
+  padding: 0;
+  clip-path: none;
+  background: #101822;
+  animation: none;
+}
+.val-native-fit .val-team--home { border-left-color: var(--home-color, #f58220); }
+.val-native-fit .val-team--away { border-right-color: var(--away-color, #ff4655); }
+.val-native-fit .val-logo { display: none; animation: none; }
+.val-native-fit .val-team > b {
+  inset: 0;
+  width: 100%;
+  font-size: 38px;
+  text-shadow: none;
+}
+.val-native-fit .val-team-copy {
+  position: absolute;
+  top: 55px;
+  width: 125px;
+  height: 26px;
+  padding: 6px 8px;
+  background: #101822;
+  animation: none;
+}
+.val-native-fit .val-team--home .val-team-copy { left: -3px; text-align: left; }
+.val-native-fit .val-team--away .val-team-copy { right: -3px; text-align: right; }
+.val-native-fit .val-team-copy span,
+.val-native-fit .val-team-copy small { display: none; }
+.val-native-fit .val-team-copy strong { margin: 0; font-size: 11px; line-height: 14px; }
+.val-native-fit .val-center {
+  overflow: visible;
+  height: 55px;
+  margin: 0;
+  padding: 0;
+  grid-template-rows: 55px;
+  clip-path: none;
+  border: 0;
+  background: #080d14;
+}
+.val-native-fit .val-center strong { font-size: 38px; text-shadow: none; }
+.val-native-fit .val-center small {
+  position: absolute;
+  top: 55px;
+  left: 35px;
+  width: 120px;
+  height: 26px;
+  line-height: 26px;
+  text-align: center;
+  background: #080d14;
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+.val-native-fit .val-center em {
+  position: absolute;
+  top: 81px;
+  left: -90px;
+  width: 370px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  background: #080d14;
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+.val-native-fit.spike-planted .val-center { background: #340d17; box-shadow: none; }
+.val-native-fit.spike-planted .val-center strong { font-size: 23px; letter-spacing: 0; }
+.val-native-fit .val-round-history { top: 130px; }
+
 .val-round-history {
   position: absolute;
   top: 116px;

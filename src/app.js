@@ -34,7 +34,6 @@ let valorantDebugFullscreen = false;
 let valorantWindowChoices = [];
 let valorantOcrRenderTimer;
 let valorantRoiDrag = null;
-let lastValorantOcrActiveKey = '';
 let valorantLoadoutTemplateWeapon = 'operator';
 let valorantLoadoutTemplateSide = 'home';
 let valorantLoadoutTemplateRow = 4;
@@ -61,7 +60,7 @@ const ROCKET_LEAGUE_STAT_EVENTS = [
   { key: 'demos', label: 'D', title: 'Demo', priority: 1 }
 ];
 const VALORANT_LOADOUT_TEMPLATE_WEAPONS = [
-  'classic', 'shorty', 'frenzy', 'ghost', 'sheriff',
+  'classic', 'shorty', 'frenzy', 'ghost', 'sheriff', 'bandit',
   'stinger', 'spectre', 'bucky', 'judge',
   'bulldog', 'guardian', 'phantom', 'vandal',
   'marshal', 'outlaw', 'operator', 'ares', 'odin', 'melee'
@@ -398,7 +397,7 @@ function valorantDebugRoiMarkup({ force = false } = {}) {
     roi: { ...profile.fields[fieldId].roi, ...(ocr.roiOverrides?.[fieldId] || {}) }
   }));
   const observer3 = ocr.live?.observer3 || {};
-  const activeObserverCell = observer3.activeCell || {};
+  const activeObserverCells = observer3.activeCells || (observer3.activeCell ? [observer3.activeCell] : []);
   const observerFieldGuides = (() => {
     const table = profile.scoreboardTable;
     const guideColumns = observerGuideColumns();
@@ -422,12 +421,12 @@ function valorantDebugRoiMarkup({ force = false } = {}) {
   }));
   return `${roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('')}${observerFieldGuides.map((guide) => {
     const guideColumns = guide.id === 'kda' ? ['kills', 'deaths', 'assists'] : [guide.id];
-    const isScanning = activeObserverCell.side === guide.side && Number(activeObserverCell.row) === Number(guide.row) && guideColumns.includes(activeObserverCell.columnId);
+    const isScanning = activeObserverCells.some((cell) => cell.side === guide.side && Number(cell.row) === Number(guide.row) && guideColumns.includes(cell.columnId));
     return `<i class="vo-scoreboard-field-box ${escapeHtml(guide.side)} ${escapeHtml(guide.className)} ${isScanning ? 'scanning' : ''}" data-vo-observer-box="${escapeHtml(`${guide.side}:${guide.row}:${guide.id}`)}" style="left:${guide.x / 19.2}%;top:${guide.y / 10.8}%;width:${guide.w / 19.2}%;height:${guide.h / 10.8}%"><span>${escapeHtml(guide.label)}</span><b data-vo-observer-resize="true"></b></i>`;
   }).join('')}${timelineRounds.map((round) => {
     const roi = observerTimelineRoi(profile, round.round);
     if (!roi) return '';
-    const isScanning = activeObserverCell.side === 'timeline' && Number(activeObserverCell.row) === round.round - 1;
+    const isScanning = activeObserverCells.some((cell) => cell.side === 'timeline' && Number(cell.row) === round.round - 1);
     return `<i class="vo-timeline-round-box ${isScanning ? 'scanning' : ''}" data-vo-timeline-box="${round.round}" style="left:${roi.x / 19.2}%;top:${roi.y / 10.8}%;width:${roi.w / 19.2}%;height:${roi.h / 10.8}%"><span>R${round.round}</span><b data-vo-timeline-resize="true"></b></i>`;
   }).join('')}`;
 }
@@ -790,7 +789,8 @@ function renderValorantOcrPanel(game) {
     <label class="field"><span>CAPTURE ENGINE</span><select data-vo-prop="captureBackend"><option value="auto" ${ocr.captureBackend === 'auto' || !ocr.captureBackend ? 'selected' : ''}>Automatic (native preferred)</option><option value="native" ${ocr.captureBackend === 'native' ? 'selected' : ''}>Windows Graphics Capture</option><option value="electron" ${ocr.captureBackend === 'electron' ? 'selected' : ''}>Electron fallback</option></select></label>
     <label class="field"><span>ROI PROFILE</span><select data-vo-prop="profileId">${VALORANT_OCR_PROFILE_CHOICES.map((choice) => `<option value="${escapeHtml(choice.id)}" ${choice.id === ocr.profileId ? 'selected' : ''}>${escapeHtml(choice.label)}</option>`).join('')}</select></label>
     <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
-    <label class="field vo-range-field"><span>OBSERVER SCAN INTERVAL</span><input type="range" min="5" max="100" step="1" data-vo-prop="observerScanIntervalMs" value="${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))}"><small><b>${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))} ms</b> between scoreboard cells</small></label>
+    <label class="field"><span>PARALLEL GRID OCR</span><select data-vo-prop="observerConcurrency">${[1,2,4,8].map((n) => `<option value="${n}" ${Number(ocr.observerConcurrency || 4) === n ? 'selected' : ''}>${n} workers</option>`).join('')}</select><small>Last grid sweep: ${ocr.live?.observer3?.performance?.lastSweepMs ?? '--'} ms</small></label>
+    <label class="field vo-range-field"><span>OBSERVER SCAN INTERVAL</span><input type="range" min="5" max="100" step="1" data-vo-prop="observerScanIntervalMs" value="${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))}"><small><b>${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))} ms</b> between grid batches</small></label>
     <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>`;
   const observer3 = live.observer3 || {};
   const profileHasObserverTable = Boolean(profile.scoreboardTable);
@@ -803,23 +803,21 @@ function renderValorantOcrPanel(game) {
     index,
     ...(observer3.teams?.[side]?.players?.[index] || {})
   })));
-  const activeObserverCell = observer3.activeCell || {};
-  const activeObserverLabel = activeObserverCell.side
-    ? `SCANNING ${escapeHtml(String(activeObserverCell.side).toUpperCase())} ${Number(activeObserverCell.row ?? 0) + 1} ${escapeHtml(String(activeObserverCell.columnId || '').toUpperCase())}`
-    : 'SCANNING SCOREBOARD TABLE';
+  const activeObserverCells = observer3.activeCells || (observer3.activeCell ? [observer3.activeCell] : []);
+  const activeObserverLabel = `SCANNING ${activeObserverCells.length} BOXES`;
   const observerCellClass = (side, index, columnId) => (
-    activeObserverCell.side === side
-      && Number(activeObserverCell.row) === Number(index)
-      && activeObserverCell.columnId === columnId
+    activeObserverCells.some((cell) => cell.side === side
+      && Number(cell.row) === Number(index)
+      && cell.columnId === columnId)
       ? ' class="scanning"'
       : ''
   );
   const observerNameClass = (player) => {
     const classes = [];
     if (player.nameLocked) classes.push('locked');
-    if (activeObserverCell.side === player.side
-      && Number(activeObserverCell.row) === Number(player.index)
-      && activeObserverCell.columnId === 'playerName') classes.push('scanning');
+    if (activeObserverCells.some((cell) => cell.side === player.side
+      && Number(cell.row) === Number(player.index)
+      && cell.columnId === 'playerName')) classes.push('scanning');
     return classes.length ? ` class="${classes.join(' ')}"` : '';
   };
   const observerLoadoutText = (loadout = {}) => {
@@ -1414,24 +1412,23 @@ function formatObserverActiveLabel(activeCell = {}) {
 
 function applyValorantOcrActiveHighlight() {
   if (state.selectedGame !== 'valorant' || state.activeView !== 'control') return;
-  const activeCell = state.games.valorant.valorantOcr.live?.observer3?.activeCell || null;
-  const activeKey = activeCell?.side ? `${activeCell.side}:${activeCell.row}:${activeCell.columnId}:${activeCell.updatedAt || ''}` : '';
-  if (activeKey && activeKey === lastValorantOcrActiveKey) return;
-  lastValorantOcrActiveKey = activeKey;
+  const observer = state.games.valorant.valorantOcr.live?.observer3 || {};
+  const cells = observer.activeCells || (observer.activeCell ? [observer.activeCell] : []);
   root.querySelectorAll('.vo-observer-table td.scanning, .vo-frame > .vo-scoreboard-field-box.scanning, .vo-frame > .vo-timeline-round-box.scanning')
     .forEach((node) => node.classList.remove('scanning'));
   const label = root.querySelector('[data-vo-observer-active-label]');
-  if (label) label.textContent = activeCell?.side ? formatObserverActiveLabel(activeCell) : 'SCANNING SCOREBOARD TABLE';
-  if (!activeCell?.side) return;
-  const side = String(activeCell.side);
-  const row = Number(activeCell.row);
-  const columnId = String(activeCell.columnId || '');
-  root.querySelector(`[data-vo-observer-cell="${CSS.escape(`${side}:${row}:${columnId}`)}"]`)?.classList.add('scanning');
-  if (side === 'timeline') {
-    root.querySelector(`[data-vo-timeline-box="${CSS.escape(String(row + 1))}"]`)?.classList.add('scanning');
-    return;
+  if (label) label.textContent = cells.length ? `SCANNING ${cells.length} BOXES · GRID SWEEP ${observer.performance?.lastSweepMs ?? '--'} MS` : 'WAITING FOR NEXT GRID BATCH';
+  for (const cell of cells) {
+    const side = String(cell.side);
+    const row = Number(cell.row);
+    const columnId = String(cell.columnId || '');
+    root.querySelector(`[data-vo-observer-cell="${CSS.escape(`${side}:${row}:${columnId}`)}"]`)?.classList.add('scanning');
+    if (side === 'timeline') {
+      root.querySelector(`[data-vo-timeline-box="${CSS.escape(String(row + 1))}"]`)?.classList.add('scanning');
+    } else {
+      root.querySelector(`[data-vo-observer-box="${CSS.escape(`${side}:${row}:${observerGuideIdForColumn(columnId)}`)}"]`)?.classList.add('scanning');
+    }
   }
-  root.querySelector(`[data-vo-observer-box="${CSS.escape(`${side}:${row}:${observerGuideIdForColumn(columnId)}`)}"]`)?.classList.add('scanning');
 }
 
 async function syncValorantOcr() {
@@ -2258,6 +2255,13 @@ function initialize() {
     outputDisplays = result?.displays || [];
     outputDisplaySettings = result?.settings || outputDisplaySettings;
     if (state.activeView === 'settings') render();
+    // Open once during controller initialization, not on live-state updates.
+    return window.isuDesktop.openProgramOutput({ name: state.activeOutputOverlay || 'scoreboard' });
+  }).then((opened) => {
+    if (opened === false) toast('Program outputs could not open. Use Open Program to retry.');
+  }).catch((error) => {
+    console.error('Automatic Program output startup failed', error);
+    toast('Program outputs could not open. Use Open Program to retry.');
   });
 }
 
