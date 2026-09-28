@@ -1,11 +1,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { performance } = require('node:perf_hooks');
 let electronNativeImage = null;
 try {
   electronNativeImage = require('electron')?.nativeImage || null;
 } catch {}
 const { DEFAULT_PROFILE_ID, FIELD_IDS, getValorantOcrProfile, listValorantOcrProfiles } = require('./valorant-ocr-profiles.cjs');
 const { ValorantOcrState, parseScore, parseTimer } = require('./valorant-ocr-state.cjs');
+const { ValorantTimerStateService } = require('./valorant-timer-state.cjs');
 const { WebSocketServer } = require('ws');
 
 const DEFAULTS = Object.freeze({
@@ -24,7 +26,8 @@ const DEFAULTS = Object.freeze({
   roiOverrides: {},
   scoreboardTableOverrides: {},
   observerConcurrency: 4,
-  observerScanIntervalMs: 25
+  observerScanIntervalMs: 25,
+  timerDatasetStart: '1:40'
 });
 
 const OBSERVER_CELL_MIN_CONFIDENCE = 0.72;
@@ -32,6 +35,16 @@ const OBSERVER_NAME_LOCK_CONFIDENCE = 0.85;
 const TIMELINE_SHAPE_GRID_SIZE = 12;
 const LOADOUT_TEMPLATE_WIDTH = 64;
 const LOADOUT_TEMPLATE_HEIGHT = 24;
+const SCORE_TEMPLATE_WIDTH = 52;
+const SCORE_TEMPLATE_HEIGHT = 36;
+const TIMER_TEMPLATE_WIDTH = 96;
+const TIMER_TEMPLATE_HEIGHT = 44;
+const TIMER_DATASET_DEFAULTS = Object.freeze({
+  fps: 8,
+  duplicateThreshold: 0.985,
+  maxSamplesPerValue: 8,
+  lowTimeThresholdSeconds: 15
+});
 const VALORANT_WEAPON_MANIFEST_CANDIDATES = Object.freeze([
   path.join(__dirname, '..', 'public', 'assets', 'valorant', 'weapons', 'manifest.json'),
   path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'weapons', 'manifest.json')
@@ -39,6 +52,14 @@ const VALORANT_WEAPON_MANIFEST_CANDIDATES = Object.freeze([
 const VALORANT_SHARED_LOADOUT_TEMPLATE_CANDIDATES = Object.freeze([
   path.join(__dirname, '..', 'public', 'assets', 'valorant', 'weapons', 'trained'),
   path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'weapons', 'trained')
+]);
+const VALORANT_SHARED_SCORE_TEMPLATE_CANDIDATES = Object.freeze([
+  path.join(__dirname, '..', 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores'),
+  path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'scoreboard', 'trained', 'scores')
+]);
+const VALORANT_TIMER_DATASET_CANDIDATES = Object.freeze([
+  path.join(__dirname, '..', 'public', 'assets', 'valorant', 'timer-dataset'),
+  path.join(__dirname, '..', 'dist', 'assets', 'valorant', 'timer-dataset')
 ]);
 const VALORANT_LOADOUT_TEMPLATE_WEAPONS = Object.freeze([
   'classic',
@@ -248,6 +269,227 @@ function compareLoadoutMasks(left, right) {
   return left.filled + right.filled ? (2 * overlap) / (left.filled + right.filled) : 0;
 }
 
+function imageToScoreMask(image) {
+  const size = image?.getSize?.() || { width: 0, height: 0 };
+  if (!size.width || !size.height || !image?.toBitmap) return null;
+  const resized = image.resize({ width: SCORE_TEMPLATE_WIDTH, height: SCORE_TEMPLATE_HEIGHT, quality: 'best' });
+  const bitmap = Buffer.from(resized.toBitmap());
+  const gray = new Uint8Array(SCORE_TEMPLATE_WIDTH * SCORE_TEMPLATE_HEIGHT);
+  for (let index = 0; index < gray.length; index += 1) {
+    const offset = index * 4;
+    gray[index] = Math.round(bitmap[offset] * 0.114 + bitmap[offset + 1] * 0.587 + bitmap[offset + 2] * 0.299);
+  }
+  let threshold = 127;
+  let min = 255;
+  let max = 0;
+  for (const value of gray) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  threshold = Math.round(min + ((max - min) * 0.45));
+  const mask = new Uint8Array(SCORE_TEMPLATE_WIDTH * SCORE_TEMPLATE_HEIGHT);
+  let filled = 0;
+  for (let index = 0; index < gray.length; index += 1) {
+    if (gray[index] <= threshold) {
+      mask[index] = 1;
+      filled += 1;
+    }
+  }
+  return filled >= 8 ? { mask, filled } : null;
+}
+
+function imageToTimerMask(image) {
+  const size = image?.getSize?.() || { width: 0, height: 0 };
+  if (!size.width || !size.height || !image?.toBitmap) return null;
+  const resized = image.resize({ width: TIMER_TEMPLATE_WIDTH, height: TIMER_TEMPLATE_HEIGHT, quality: 'best' });
+  const bitmap = Buffer.from(resized.toBitmap());
+  const gray = new Uint8Array(TIMER_TEMPLATE_WIDTH * TIMER_TEMPLATE_HEIGHT);
+  for (let index = 0; index < gray.length; index += 1) {
+    const offset = index * 4;
+    gray[index] = Math.round(bitmap[offset] * 0.114 + bitmap[offset + 1] * 0.587 + bitmap[offset + 2] * 0.299);
+  }
+  let min = 255;
+  let max = 0;
+  for (const value of gray) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  const threshold = Math.round(min + ((max - min) * 0.48));
+  const mask = new Uint8Array(TIMER_TEMPLATE_WIDTH * TIMER_TEMPLATE_HEIGHT);
+  let filled = 0;
+  for (let index = 0; index < gray.length; index += 1) {
+    if (gray[index] <= threshold) {
+      mask[index] = 1;
+      filled += 1;
+    }
+  }
+  return filled >= 12 ? { mask, filled } : null;
+}
+
+function compareScoreMasks(left, right) {
+  if (!left?.mask || !right?.mask) return 0;
+  let overlap = 0;
+  let disagreement = 0;
+  for (let index = 0; index < left.mask.length; index += 1) {
+    const a = left.mask[index] === 1;
+    const b = right.mask[index] === 1;
+    if (a && b) overlap += 1;
+    if (a !== b) disagreement += 1;
+  }
+  const dice = left.filled + right.filled ? (2 * overlap) / (left.filled + right.filled) : 0;
+  const penalty = disagreement / Math.max(1, left.mask.length) * 0.18;
+  return Math.max(0, dice - penalty);
+}
+
+const compareTimerMasks = compareScoreMasks;
+
+function safeScoreTemplateLabel(value) {
+  const normalized = String(value ?? '').trim();
+  if (!/^\d{1,2}$/.test(normalized)) return '';
+  const number = Number(normalized);
+  return Number.isInteger(number) && number >= 0 && number <= 99 ? String(number) : '';
+}
+
+function parseTimerInputSeconds(value = '1:40') {
+  const parsed = parseTimer(value);
+  if (parsed.valid) return parsed.value;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : 100;
+}
+
+function timerDatasetLabel(seconds, lowTime = false) {
+  const value = Math.max(0, Number(seconds) || 0);
+  if (lowTime) return value.toFixed(2).padStart(5, '0').replace('.', '_');
+  const whole = Math.max(0, Math.ceil(value));
+  return `${Math.floor(whole / 60)}-${String(whole % 60).padStart(2, '0')}`;
+}
+
+function timerDatasetDisplay(seconds, lowTime = false) {
+  const value = Math.max(0, Number(seconds) || 0);
+  if (lowTime) return value.toFixed(2).padStart(5, '0');
+  const whole = Math.max(0, Math.ceil(value));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
+
+function pngDataUrlBuffer(dataUrl = '') {
+  const data = String(dataUrl || '').replace(/^data:image\/png;base64,/, '');
+  return data ? Buffer.from(data, 'base64') : null;
+}
+
+function cropFingerprint(dataUrl = '') {
+  const buffer = pngDataUrlBuffer(dataUrl);
+  if (!buffer?.length) return '';
+  const buckets = 64;
+  const step = Math.max(1, Math.floor(buffer.length / buckets));
+  const values = [];
+  for (let index = 0; index < buckets; index += 1) values.push(buffer[Math.min(buffer.length - 1, index * step)]);
+  return Buffer.from(values).toString('base64');
+}
+
+function fingerprintSimilarity(left = '', right = '') {
+  if (!left || !right || left.length !== right.length) return 0;
+  let same = 0;
+  for (let index = 0; index < left.length; index += 1) if (left[index] === right[index]) same += 1;
+  return same / left.length;
+}
+
+function loadValorantScoreTemplates(customTemplateRoot = '', sharedTemplateRoot = '') {
+  if (!electronNativeImage?.createFromBuffer) return [];
+  const templates = [];
+  const roots = [
+    sharedTemplateRoot,
+    ...VALORANT_SHARED_SCORE_TEMPLATE_CANDIDATES,
+    customTemplateRoot
+  ].filter(Boolean);
+  const seenRoots = new Set();
+  for (const root of roots) {
+    const normalizedRoot = path.resolve(root);
+    if (seenRoots.has(normalizedRoot) || !fs.existsSync(normalizedRoot)) continue;
+    seenRoots.add(normalizedRoot);
+    let labels = [];
+    try {
+      labels = fs.readdirSync(normalizedRoot, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => safeScoreTemplateLabel(entry.name))
+        .filter(Boolean);
+    } catch {
+      labels = [];
+    }
+    for (const label of labels) {
+      const labelDir = path.join(normalizedRoot, label);
+      try {
+        templates.push(...fs.readdirSync(labelDir)
+          .filter((file) => file.toLowerCase().endsWith('.png'))
+          .map((file) => {
+            const imagePath = path.join(labelDir, file);
+            const image = electronNativeImage.createFromBuffer(fs.readFileSync(imagePath));
+            const template = imageToScoreMask(image);
+            return template ? { label, value: Number(label), file, template, source: 'trained score crop' } : null;
+          })
+          .filter(Boolean));
+      } catch {}
+    }
+  }
+  return templates;
+}
+
+function safeTimerTemplateLabel(value = '') {
+  const label = String(value || '').trim();
+  if (/^\d{1,2}:\d{2}$/.test(label)) return label;
+  if (/^\d{2}\.\d{2}$/.test(label)) return label;
+  return '';
+}
+
+function loadValorantTimerTemplates(datasetRoot = '') {
+  if (!electronNativeImage?.createFromBuffer) return [];
+  const roots = [datasetRoot, ...VALORANT_TIMER_DATASET_CANDIDATES].filter(Boolean);
+  const seenRoots = new Set();
+  const seenFiles = new Set();
+  const templates = [];
+  for (const root of roots) {
+    const normalizedRoot = path.resolve(root);
+    if (seenRoots.has(normalizedRoot) || !fs.existsSync(normalizedRoot)) continue;
+    seenRoots.add(normalizedRoot);
+    let jsonFiles = [];
+    try {
+      const stack = [normalizedRoot];
+      while (stack.length) {
+        const dir = stack.pop();
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) stack.push(fullPath);
+          else if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) jsonFiles.push(fullPath);
+        }
+      }
+    } catch {
+      jsonFiles = [];
+    }
+    for (const jsonPath of jsonFiles) {
+      try {
+        const metadata = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+        const label = safeTimerTemplateLabel(metadata.expectedTimer);
+        if (!label || !metadata.imageFilename) continue;
+        const imagePath = path.join(path.dirname(jsonPath), metadata.imageFilename);
+        const resolvedImagePath = path.resolve(imagePath);
+        if (seenFiles.has(resolvedImagePath) || !fs.existsSync(resolvedImagePath)) continue;
+        seenFiles.add(resolvedImagePath);
+        const image = electronNativeImage.createFromBuffer(fs.readFileSync(resolvedImagePath));
+        const template = imageToTimerMask(image);
+        if (!template) continue;
+        templates.push({
+          label,
+          seconds: Number(metadata.expectedSeconds),
+          hudMode: metadata.hudMode || (label.includes('.') ? 'LOW_TIME' : 'NORMAL'),
+          file: path.basename(imagePath),
+          template,
+          source: 'timer-dataset'
+        });
+      } catch {}
+    }
+  }
+  return templates;
+}
+
 function safeTemplateWeaponSlug(value) {
   const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (normalized === 'marshall') return 'marshal';
@@ -368,6 +610,8 @@ function emptyObserver3State() {
         winnerRole: null,
         method: null,
         current: false,
+        locked: false,
+        manual: false,
         confidence: 0,
         updatedAt: null
       }))
@@ -449,9 +693,21 @@ function emptyTimelineRound(round) {
     winnerRole: null,
     method: null,
     current: false,
+    locked: false,
+    manual: false,
     confidence: 0,
     updatedAt: null
   };
+}
+
+function timelineRolesForRound(round, timeline = {}) {
+  const sideSwapAfter = Math.max(1, Number(timeline.sideSwapAfter) || 12);
+  const topRole = timeline.topRole || 'defense';
+  const bottomRole = timeline.bottomRole || 'attack';
+  if ((Number(round) || 1) > sideSwapAfter) {
+    return { topRole: bottomRole, bottomRole: topRole };
+  }
+  return { topRole, bottomRole };
 }
 
 function selectTimelineComponent(pixels = []) {
@@ -714,16 +970,30 @@ function classifyTimelineMethod(stats, confidence) {
 }
 
 class ValorantOcrService {
-  constructor({ capture = null, ocr = null, templateRoot = '', sharedTemplateRoot = '', onState = () => {}, onStatus = () => {}, now = () => Date.now() } = {}) {
+  constructor({
+    capture = null,
+    ocr = null,
+    templateRoot = '',
+    sharedTemplateRoot = '',
+    scoreTemplateRoot = '',
+    sharedScoreTemplateRoot = '',
+    onState = () => {},
+    onStatus = () => {},
+    now = () => Date.now()
+  } = {}) {
     this.capture = capture;
     this.ocr = ocr;
     this.templateRoot = templateRoot;
     this.sharedTemplateRoot = sharedTemplateRoot;
+    this.scoreTemplateRoot = scoreTemplateRoot;
+    this.sharedScoreTemplateRoot = sharedScoreTemplateRoot;
     this.onState = onState;
     this.onStatus = onStatus;
     this.now = now;
     this.settings = { ...DEFAULTS };
     this.validator = new ValorantOcrState();
+    this.timerState = new ValorantTimerStateService({ now: this.now, monotonicNow: () => performance.now() });
+    this.timerDataset = this.emptyTimerDatasetState();
     this.captureTimer = null;
     this.ocrTimer = null;
     this.watchdogTimer = null;
@@ -733,6 +1003,8 @@ class ValorantOcrService {
     this.remoteState = null;
     this.remoteSequence = 0;
     this.weaponTemplates = loadValorantWeaponTemplates(this.templateRoot, this.sharedTemplateRoot);
+    this.scoreTemplates = loadValorantScoreTemplates(this.scoreTemplateRoot, this.sharedScoreTemplateRoot);
+    this.timerTemplates = loadValorantTimerTemplates();
     this.lastRemoteAt = 0;
     this.captureBusy = false;
     this.ocrBusy = false;
@@ -753,6 +1025,170 @@ class ValorantOcrService {
     this.lastCaptureErrorAt = 0;
     this.lastCaptureRecoveredAt = 0;
     this.status = this.makeStatus('disabled', 'VALORANT OCR is off');
+  }
+
+  emptyTimerDatasetState() {
+    return {
+      status: 'stopped',
+      startSeconds: parseTimerInputSeconds(DEFAULTS.timerDatasetStart),
+      startedAt: null,
+      pausedAt: null,
+      totalPausedMs: 0,
+      lastCaptureAt: 0,
+      samples: 0,
+      samplesByValue: {},
+      fingerprintsByValue: {},
+      currentValue: '--',
+      hudMode: 'NORMAL',
+      elapsedMs: 0,
+      fps: TIMER_DATASET_DEFAULTS.fps,
+      root: '',
+      lastSample: null,
+      lastError: ''
+    };
+  }
+
+  publicTimerDatasetState(now = this.now()) {
+    const dataset = this.timerDataset || this.emptyTimerDatasetState();
+    const elapsedMs = dataset.status === 'running' && dataset.startedAt
+      ? Math.max(0, now - dataset.startedAt - (dataset.totalPausedMs || 0))
+      : dataset.elapsedMs || 0;
+    return {
+      status: dataset.status,
+      startSeconds: dataset.startSeconds,
+      currentValue: dataset.currentValue,
+      hudMode: dataset.hudMode,
+      samples: dataset.samples,
+      samplesByValue: { ...(dataset.samplesByValue || {}) },
+      fps: dataset.fps,
+      elapsedMs,
+      root: dataset.root,
+      lastSample: dataset.lastSample,
+      lastError: dataset.lastError
+    };
+  }
+
+  timerDatasetRoot() {
+    const candidates = [
+      path.join(process.cwd(), 'public', 'assets', 'valorant', 'timer-dataset'),
+      path.join(__dirname, '..', 'public', 'assets', 'valorant', 'timer-dataset')
+    ];
+    return candidates.find((candidate) => {
+      try {
+        const projectRoot = path.resolve(candidate, '..', '..', '..', '..');
+        return fs.existsSync(path.join(projectRoot, 'package.json'));
+      } catch {
+        return false;
+      }
+    }) || candidates[0];
+  }
+
+  startTimerDatasetCapture({ startTime = DEFAULTS.timerDatasetStart, fps = TIMER_DATASET_DEFAULTS.fps } = {}) {
+    const now = this.now();
+    this.timerDataset = this.emptyTimerDatasetState();
+    this.timerDataset.status = 'running';
+    this.timerDataset.startSeconds = parseTimerInputSeconds(startTime);
+    this.timerDataset.startedAt = now;
+    this.timerDataset.fps = Math.max(1, Math.min(15, Math.round(Number(fps) || TIMER_DATASET_DEFAULTS.fps)));
+    this.timerDataset.root = this.timerDatasetRoot();
+    fs.mkdirSync(this.timerDataset.root, { recursive: true });
+    this.emitStatus(this.status.state, 'Timer dataset capture running', { timerDataset: this.publicTimerDatasetState(now) });
+    return this.emitState();
+  }
+
+  pauseTimerDatasetCapture() {
+    if (this.timerDataset.status !== 'running') return this.publicTimerDatasetState();
+    this.timerDataset.status = 'paused';
+    this.timerDataset.pausedAt = this.now();
+    this.emitState();
+    return this.publicTimerDatasetState();
+  }
+
+  stopTimerDatasetCapture() {
+    if (this.timerDataset.status === 'paused' && this.timerDataset.pausedAt) {
+      this.timerDataset.totalPausedMs += Math.max(0, this.now() - this.timerDataset.pausedAt);
+    }
+    this.timerDataset.status = 'stopped';
+    this.timerDataset.pausedAt = null;
+    this.timerDataset.elapsedMs = this.publicTimerDatasetState().elapsedMs;
+    this.emitState();
+    return this.publicTimerDatasetState();
+  }
+
+  reviewTimerDataset() {
+    return this.publicTimerDatasetState();
+  }
+
+  captureTimerDatasetSample(frame, profile, now = this.now()) {
+    const dataset = this.timerDataset;
+    if (!dataset || dataset.status !== 'running' || !frame || !profile?.fields?.timer) return false;
+    const intervalMs = 1000 / Math.max(1, dataset.fps || TIMER_DATASET_DEFAULTS.fps);
+    if (now - (dataset.lastCaptureAt || 0) < intervalMs) return false;
+    dataset.lastCaptureAt = now;
+    const elapsedMs = Math.max(0, now - dataset.startedAt - (dataset.totalPausedMs || 0));
+    dataset.elapsedMs = elapsedMs;
+    const expectedSeconds = Math.max(0, dataset.startSeconds - elapsedMs / 1000);
+    const lowTime = expectedSeconds <= TIMER_DATASET_DEFAULTS.lowTimeThresholdSeconds;
+    const label = timerDatasetLabel(expectedSeconds, lowTime);
+    const display = timerDatasetDisplay(expectedSeconds, lowTime);
+    dataset.currentValue = display;
+    dataset.hudMode = lowTime ? 'LOW_TIME' : 'NORMAL';
+    try {
+      const field = profile.fields.timer;
+      const crop = this.capture.crop(frame, field.roi, field.preprocess || {});
+      const fingerprint = cropFingerprint(crop.processedDataUrl || crop.rawDataUrl);
+      const prior = dataset.fingerprintsByValue[label] || [];
+      if (prior.some((item) => fingerprintSimilarity(item, fingerprint) >= TIMER_DATASET_DEFAULTS.duplicateThreshold)) return false;
+      const count = dataset.samplesByValue[label] || 0;
+      if (count >= TIMER_DATASET_DEFAULTS.maxSamplesPerValue) return false;
+      const dir = path.join(dataset.root, label);
+      fs.mkdirSync(dir, { recursive: true });
+      const filename = `${Date.now()}-${dataset.hudMode.toLowerCase()}-${count + 1}.png`;
+      const filePath = path.join(dir, filename);
+      const imageBuffer = pngDataUrlBuffer(crop.rawDataUrl);
+      if (!imageBuffer) return false;
+      fs.writeFileSync(filePath, imageBuffer);
+      const metadataPath = path.join(dir, `${filename.replace(/\.png$/i, '')}.json`);
+      fs.writeFileSync(metadataPath, JSON.stringify({
+        expectedTimer: display,
+        expectedSeconds,
+        captureTimestamp: now,
+        monotonicElapsedMs: elapsedMs,
+        hudMode: dataset.hudMode,
+        imageFilename: filename,
+        roi: field.roi,
+        source: {
+          sourceName: frame.sourceName,
+          width: frame.width,
+          height: frame.height,
+          backend: frame.backend
+        }
+      }, null, 2));
+      if (electronNativeImage?.createFromBuffer) {
+        try {
+          const template = imageToTimerMask(electronNativeImage.createFromBuffer(imageBuffer));
+          if (template) {
+            this.timerTemplates.push({
+              label: display,
+              seconds: expectedSeconds,
+              hudMode: dataset.hudMode,
+              file: filename,
+              template,
+              source: 'timer-dataset-live'
+            });
+          }
+        } catch {}
+      }
+      dataset.samplesByValue[label] = count + 1;
+      dataset.fingerprintsByValue[label] = [...prior, fingerprint].slice(-TIMER_DATASET_DEFAULTS.maxSamplesPerValue);
+      dataset.samples += 1;
+      dataset.lastSample = { expectedTimer: display, file: filePath, hudMode: dataset.hudMode };
+      dataset.lastError = '';
+      return true;
+    } catch (error) {
+      dataset.lastError = error?.message || String(error);
+      return false;
+    }
   }
 
   makeStatus(state, message, extra = {}) {
@@ -834,6 +1270,7 @@ class ValorantOcrService {
     const homeScore = snapshot.fields.homeScore;
     const timer = snapshot.fields.timer;
     const awayScore = snapshot.fields.awayScore;
+    const stableTimer = this.timerState.snapshot(now);
     return {
       source: 'valorant-ocr',
       connected: Boolean(this.settings.enabled && (this.settings.source === 'simulator' || (this.latestFrame && now - this.latestFrame.capturedAt <= 2500))),
@@ -850,7 +1287,14 @@ class ValorantOcrService {
         usingLastGoodFrame: this.consecutiveCaptureFailures > 0 && Boolean(this.latestFrame)
       },
       weaponTemplates: { count: this.weaponTemplates.length },
-      match: { timerSeconds: timer.value, timerDisplay: timer.displayValue },
+      scoreTemplates: { count: this.scoreTemplates.length },
+      timerTemplates: { count: this.timerTemplates.length },
+      timer: stableTimer,
+      timerDataset: this.publicTimerDatasetState(now),
+      match: {
+        timerSeconds: stableTimer.secondsRemaining === null ? timer.value : Math.max(0, Math.round(stableTimer.secondsRemaining)),
+        timerDisplay: stableTimer.secondsRemaining === null ? timer.displayValue : stableTimer.display
+      },
       teams: {
         home: { score: homeScore.value },
         away: { score: awayScore.value }
@@ -867,6 +1311,7 @@ class ValorantOcrService {
     if (this.ocr) this.ocr.observerConcurrency = this.settings.observerConcurrency;
     this.observerSweepStartedAt = 0;
     this.validator.setRecordedVideoMode(this.settings.recordedVideoMode);
+    if (!wasEnabled || !this.settings.enabled) this.timerState.clear();
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.observer3 = emptyObserver3State();
@@ -1001,6 +1446,11 @@ class ValorantOcrService {
       if (isNewFrame) {
         this.frameTimestamps.push(frame.capturedAt || now);
         this.frameTimestamps = this.frameTimestamps.filter((value) => now - value <= 2000);
+        const profile = getValorantOcrProfile(this.settings.profileId, {
+          ...(this.settings.roiOverrides || {}),
+          scoreboardTable: this.settings.scoreboardTableOverrides || {}
+        });
+        this.captureTimerDatasetSample(frame, profile, now);
       }
       return isNewFrame;
     } catch (error) {
@@ -1034,6 +1484,26 @@ class ValorantOcrService {
   async recognizeField(frame, fieldId, field) {
     const base = { ...field.preprocess };
     delete base.variants;
+    if ((fieldId === 'homeScore' || fieldId === 'awayScore') && this.scoreTemplates.length) {
+      const templateResult = this.recognizeScoreTemplate(frame, fieldId, field, base);
+      if (templateResult?.confidence >= 0.88) return templateResult;
+    }
+    if (fieldId === 'timer') {
+      const redRatio = typeof this.capture.redRatio === 'function' ? this.capture.redRatio(frame, field.roi) : 0;
+      if (redRatio >= 0.035) {
+        return {
+          text: 'SPIKE PLANTED',
+          confidence: Math.min(1, Math.max(0.82, redRatio * 12)),
+          latencyMs: 0,
+          kind: 'timer',
+          state: 'spike-planted',
+          source: 'color-detect',
+          redRatio
+        };
+      }
+      const templateResult = this.recognizeTimerTemplate(frame, field, base);
+      if (templateResult?.confidence >= 0.88) return templateResult;
+    }
     const variants = Array.isArray(field.preprocess.variants) && field.preprocess.variants.length
       ? field.preprocess.variants
       : [{}];
@@ -1062,6 +1532,68 @@ class ValorantOcrService {
     return result;
   }
 
+  recognizeTimerTemplate(frame, field, preprocess = {}) {
+    if (!electronNativeImage?.createFromBuffer || !this.capture || !this.timerTemplates.length) return null;
+    const crop = this.capture.crop(frame, field.roi, preprocess);
+    const rawBuffer = pngDataUrlBuffer(crop.rawDataUrl);
+    const image = electronNativeImage.createFromBuffer(rawBuffer || crop.image);
+    const candidate = imageToTimerMask(image);
+    if (!candidate) return null;
+    const ranked = this.timerTemplates
+      .map((template) => ({
+        ...template,
+        score: compareTimerMasks(candidate, template.template)
+      }))
+      .sort((left, right) => right.score - left.score);
+    const best = ranked[0];
+    const second = ranked.find((item) => item.label !== best?.label);
+    if (!best) return null;
+    const margin = Number(best.score || 0) - Number(second?.score || 0);
+    const accepted = best.score >= 0.78 && (!second || margin >= 0.035 || best.score >= 0.92);
+    return {
+      text: accepted ? best.label : '',
+      confidence: accepted ? Math.min(0.99, 0.82 + (best.score * 0.16) + Math.min(0.04, margin)) : Math.min(0.55, best.score),
+      latencyMs: 0,
+      kind: 'timer',
+      fieldId: 'timer',
+      source: accepted ? 'timer-template' : 'weak-timer-template',
+      hudMode: best.hudMode,
+      templateScore: best.score,
+      second: second?.label || '',
+      secondScore: second?.score || 0
+    };
+  }
+
+  recognizeScoreTemplate(frame, fieldId, field, preprocess = {}) {
+    if (!electronNativeImage?.createFromBuffer || !this.capture || !this.scoreTemplates.length) return null;
+    const crop = this.capture.crop(frame, field.roi, preprocess);
+    const image = electronNativeImage.createFromBuffer(crop.image);
+    const candidate = imageToScoreMask(image);
+    if (!candidate) return null;
+    const ranked = this.scoreTemplates
+      .map((template) => ({
+        ...template,
+        score: compareScoreMasks(candidate, template.template)
+      }))
+      .sort((left, right) => right.score - left.score);
+    const best = ranked[0];
+    const second = ranked.find((item) => item.label !== best?.label);
+    if (!best) return null;
+    const margin = Number(best.score || 0) - Number(second?.score || 0);
+    const accepted = best.score >= 0.78 && (!second || margin >= 0.055 || best.score >= 0.90);
+    return {
+      text: accepted ? best.label : '',
+      confidence: accepted ? Math.min(0.99, 0.82 + (best.score * 0.16) + Math.min(0.05, margin)) : Math.min(0.55, best.score),
+      latencyMs: 0,
+      kind: 'score',
+      fieldId,
+      source: accepted ? 'score-template' : 'weak-score-template',
+      templateScore: best.score,
+      second: second?.label || '',
+      secondScore: second?.score || 0
+    };
+  }
+
   observerRows(profile) {
     const table = profile.scoreboardTable;
     if (!table?.teams || !table?.columns) return [];
@@ -1083,19 +1615,46 @@ class ValorantOcrService {
       .map((columnId) => ({ ...rowInfo, columnId, column: table.columns[columnId] })));
   }
 
-  observerTimelineCells(profile) {
-    const rounds = profile.scoreboardTable?.roundTimeline?.rounds;
-    if (!rounds) return [];
-    return Object.entries(rounds)
-      .map(([round, roi]) => ({
-        side: 'timeline',
-        row: Number(round) - 1,
-        round: Number(round),
-        columnId: 'roundTimeline',
-        roi
-      }))
-      .filter((cell) => Number.isInteger(cell.round) && cell.round >= 1 && cell.round <= 24)
-      .sort((left, right) => left.round - right.round);
+  observerTimelineCells(_profile) {
+    return [];
+  }
+
+  observerTimelineCurrentRound() {
+    const scoreSnapshot = this.validator.snapshot(this.now());
+    const homeScore = Number(scoreSnapshot.fields?.homeScore?.value);
+    const awayScore = Number(scoreSnapshot.fields?.awayScore?.value);
+    if (Number.isFinite(homeScore) && Number.isFinite(awayScore)) {
+      return Math.max(1, Math.min(24, homeScore + awayScore + 1));
+    }
+    const rounds = this.observer3.roundTimeline?.rounds || [];
+    const markerRound = rounds.find((round) => round?.current)?.round || null;
+    if (markerRound) return markerRound;
+    const completedRounds = rounds.filter((round) => round?.winnerRow).length;
+    return completedRounds > 0 && completedRounds < 24 ? completedRounds + 1 : null;
+  }
+
+  nextObserverTimelineRound() {
+    const currentRound = this.observerTimelineCurrentRound();
+    if (!currentRound || currentRound <= 1) return null;
+    const previousRound = Math.max(1, Math.min(24, currentRound - 1));
+    const round = this.observer3.roundTimeline?.rounds?.[previousRound - 1];
+    if (round?.locked || round?.manual) return null;
+    return previousRound;
+  }
+
+  refreshObserverTimelineCurrentRound(profile) {
+    if (!profile.scoreboardTable?.roundTimeline) return;
+    const currentRound = this.observerTimelineCurrentRound();
+    const rounds = (this.observer3.roundTimeline.rounds || []).map((round, index) => ({
+      ...emptyTimelineRound(index + 1),
+      ...(round || {}),
+      current: currentRound === index + 1 && !round?.winnerRow
+    }));
+    this.observer3.roundTimeline = {
+      ...this.observer3.roundTimeline,
+      currentRound,
+      rounds
+    };
   }
 
   observerNameCells(profile) {
@@ -1188,8 +1747,7 @@ class ValorantOcrService {
       iconConfidence = bottomIcon.confidence;
     }
     const confidence = Math.min(1, Math.max(iconConfidence, current ? yellowRatio * 14 : 0));
-    const topRole = this.observer3.roundTimeline.topRole || 'defense';
-    const bottomRole = this.observer3.roundTimeline.bottomRole || 'attack';
+    const { topRole, bottomRole } = timelineRolesForRound(cellInfo.round, this.observer3.roundTimeline);
     return {
       round: cellInfo.round,
       winnerRow,
@@ -1492,6 +2050,8 @@ class ValorantOcrService {
   }
 
   scanObserverTimelineCell(frame, profile, cellInfo) {
+    const existing = this.observer3.roundTimeline?.rounds?.[cellInfo.round - 1];
+    if (existing?.locked || existing?.manual) return false;
     this.observer3.activeCell = {
       side: 'timeline',
       row: cellInfo.round - 1,
@@ -1504,7 +2064,9 @@ class ValorantOcrService {
     rounds[cellInfo.round - 1] = {
       ...emptyTimelineRound(cellInfo.round),
       ...(rounds[cellInfo.round - 1] || {}),
-      ...result
+      ...result,
+      locked: Boolean(result.winnerRow && result.method && result.method !== 'unknown'),
+      manual: false
     };
     const currentRoundFromMarker = rounds.find((round) => round?.current)?.round || null;
     const completedRounds = rounds.filter((round) => round?.winnerRow).length;
@@ -1680,12 +2242,52 @@ class ValorantOcrService {
     return this.emitState();
   }
 
+  setObserverTimelineRound({ round = 1, winnerRole = '', method = '' } = {}) {
+    const index = Math.max(0, Math.min(23, Math.round(Number(round) || 1) - 1));
+    const cleanWinnerRole = ['attack', 'defense'].includes(String(winnerRole)) ? String(winnerRole) : '';
+    const rounds = [...(this.observer3.roundTimeline.rounds || [])];
+    const current = {
+      ...emptyTimelineRound(index + 1),
+      ...(rounds[index] || {})
+    };
+    const winnerRow = cleanWinnerRole === 'defense'
+      ? 'top'
+      : cleanWinnerRole === 'attack'
+        ? 'bottom'
+        : null;
+    rounds[index] = {
+      ...current,
+      winnerRow,
+      winnerRole: cleanWinnerRole || null,
+      method: null,
+      locked: Boolean(cleanWinnerRole),
+      manual: Boolean(cleanWinnerRole),
+      confidence: cleanWinnerRole ? 1 : 0,
+      updatedAt: this.now()
+    };
+    this.observer3.roundTimeline = {
+      ...this.observer3.roundTimeline,
+      rounds
+    };
+    this.observer3.enabled = true;
+    this.observer3.updatedAt = rounds[index].updatedAt;
+    this.observer3.activeCell = {
+      side: 'timeline',
+      row: index,
+      columnId: 'roundTimeline',
+      round: index + 1,
+      updatedAt: rounds[index].updatedAt
+    };
+    return this.emitState();
+  }
+
   async scanObserver3Table(frame, profile, now) {
     if (!profile.scoreboardTable || now - this.lastObserverTableScannedAt < this.settings.observerScanIntervalMs) return false;
     const state = this.observer3;
     const generation = this.generation;
     const limit = this.settings.observerConcurrency || 4;
     const selected = [];
+    this.refreshObserverTimelineCurrentRound(profile);
     const nameCells = this.observerNameCells(profile);
     const initialNames = !state.initialNameScanComplete && nameCells.length;
     let sweepComplete = false;
@@ -1766,7 +2368,8 @@ class ValorantOcrService {
           this.latencies.push(result.latencyMs);
           if (this.latencies.length > 30) this.latencies.shift();
         }
-        this.validator.observe(fieldId, { ...result, source: 'ocr' }, observedAt);
+        this.validator.observe(fieldId, { ...result, source: result.source || 'ocr' }, observedAt);
+        if (fieldId === 'timer') this.timerState.observe(result, observedAt, performance.now());
       }
       this.emitState();
       const snapshot = this.validator.snapshot(this.now());
@@ -1828,6 +2431,7 @@ class ValorantOcrService {
       return this.emitState();
     }
     const snapshot = this.validator.clear(this.now());
+    this.timerState.clear();
     this.observer3 = emptyObserver3State();
     this.observerSweepStartedAt = 0;
     this.lastObserverTableScannedAt = 0;
@@ -1924,6 +2528,59 @@ class ValorantOcrService {
     };
   }
 
+  async saveScoreTemplate({ value = '', fieldId = 'homeScore' } = {}) {
+    const scoreLabel = safeScoreTemplateLabel(value);
+    if (!scoreLabel) throw new Error('Choose a valid score value before saving a score template');
+    const cleanFieldId = fieldId === 'awayScore' ? 'awayScore' : 'homeScore';
+    if (this.settings.source === 'remote') throw new Error('Save score templates on the Game PC bridge');
+    if (!this.capture) throw new Error('Capture service is unavailable');
+    const frame = await this.capture.capture(this.settings.windowName);
+    this.latestFrame = frame;
+    const profile = getValorantOcrProfile(this.settings.profileId, {
+      ...(this.settings.roiOverrides || {}),
+      scoreboardTable: this.settings.scoreboardTableOverrides || {}
+    });
+    const field = profile.fields[cleanFieldId];
+    if (!field?.roi) throw new Error('No score box exists for that field');
+    const crop = this.capture.crop(frame, field.roi, field.preprocess || {});
+    const data = String(crop.processedDataUrl || '').replace(/^data:image\/png;base64,/, '');
+    if (!data) throw new Error('Could not create a score crop');
+    const filename = `${Date.now()}-${cleanFieldId}.png`;
+    const imageBuffer = Buffer.from(data, 'base64');
+    const saveRoots = [this.sharedScoreTemplateRoot, this.scoreTemplateRoot].filter(Boolean);
+    let filePath = '';
+    let saveScope = 'personal';
+    let lastError = null;
+    for (const saveRoot of saveRoots) {
+      try {
+        const scoreDir = path.join(saveRoot, scoreLabel);
+        fs.mkdirSync(scoreDir, { recursive: true });
+        filePath = path.join(scoreDir, filename);
+        fs.writeFileSync(filePath, imageBuffer);
+        saveScope = saveRoot === this.sharedScoreTemplateRoot ? 'shared' : 'personal';
+        break;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!filePath) throw lastError || new Error('Could not save score template');
+    this.scoreTemplates = loadValorantScoreTemplates(this.scoreTemplateRoot, this.sharedScoreTemplateRoot);
+    this.emitStatus(this.status.state, `Saved score ${scoreLabel} template`, {
+      scoreTemplates: this.scoreTemplates.length,
+      templatePath: filePath,
+      templateScope: saveScope
+    });
+    this.emitState();
+    return {
+      ok: true,
+      value: scoreLabel,
+      fieldId: cleanFieldId,
+      path: filePath,
+      scope: saveScope,
+      templateCount: this.scoreTemplates.length
+    };
+  }
+
   startReceiver() {
     if (!this.settings.bridgeToken) return this.emitStatus('error', 'Create a bridge key before starting remote mode');
     try {
@@ -1968,6 +2625,7 @@ class ValorantOcrService {
     this.stopLoops();
     this.settings = { ...this.settings, enabled: true, source: 'simulator' };
     this.validator.clear(this.now());
+    this.timerState.clear();
     this.latestFrame = null;
     this.frameTimestamps = [];
     this.scanTimestamps = [];
@@ -1983,7 +2641,9 @@ class ValorantOcrService {
       for (const fieldId of FIELD_IDS) {
         const value = values[fieldId];
         const text = fieldId === 'timer' ? `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}` : String(value);
-        this.validator.observe(fieldId, { text, confidence: 0.99, latencyMs: 1, source: 'simulator' }, this.now());
+        const result = { text, confidence: 0.99, latencyMs: 1, source: 'simulator' };
+        this.validator.observe(fieldId, result, this.now());
+        if (fieldId === 'timer') this.timerState.observe(result, this.now(), performance.now());
       }
       this.emitState();
       this.emitStatus('simulating', 'Deterministic OCR test feed is running');
@@ -2007,3 +2667,4 @@ class ValorantOcrService {
 }
 
 module.exports = { DEFAULTS, ValorantOcrService, chooseOcrConsensus, normalizeSettings };
+

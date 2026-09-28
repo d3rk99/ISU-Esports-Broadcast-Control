@@ -1,0 +1,20 @@
+{
+  "expectedTimer": "1:12",
+  "expectedSeconds": 71.393,
+  "captureTimestamp": 1790236372360,
+  "monotonicElapsedMs": 28607,
+  "hudMode": "NORMAL",
+  "imageFilename": "1790236372909-normal-1.png",
+  "roi": {
+    "x": 918,
+    "y": 17,
+    "w": 87,
+    "h": 69
+  },
+  "source": {
+    "sourceName": "VALORANT  ",
+    "width": 1920,
+    "height": 1080,
+    "backend": "electron-desktop-capturer"
+  }
+}

@@ -10,6 +10,7 @@
   const IS_TEST_OUTPUT = OUTPUT_MODE === 'test-fill' || OUTPUT_MODE === 'test-key';
   document.documentElement.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
   document.body.dataset.output = OUTPUT_VALID ? OUTPUT_MODE : 'invalid';
+  document.body.dataset.setup = (OVERLAY_QUERY.get('setup') || '').toLowerCase();
   document.body.classList.toggle('key-output', OUTPUT_VALID && IS_KEY_OUTPUT);
   document.body.classList.toggle('test-output', OUTPUT_VALID && IS_TEST_OUTPUT);
 
@@ -359,14 +360,7 @@
   }
 
   function valorantSideLabel(role) {
-    return role === 'defense' ? 'DEF' : role === 'attack' ? 'ATK' : '--';
-  }
-
-  function valorantMethodLabel(method) {
-    if (method === 'spike-defuse') return 'DEFUSE';
-    if (method === 'spike-detonation') return 'BOOM';
-    if (method === 'elimination') return 'ELIM';
-    return '';
+    return role === 'defense' ? 'GREEN' : role === 'attack' ? 'RED' : '--';
   }
 
   function renderValorantRoundHistory(live) {
@@ -380,15 +374,27 @@
       const round = rounds[index] || { round: index + 1 };
       const marker = document.createElement('span');
       const winnerRole = round.winnerRole || '';
-      marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}${round.method ? ` method-${round.method}` : ''}`;
+      marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}`;
       marker.dataset.round = String(index + 1);
-      marker.title = `${index + 1} ${valorantSideLabel(winnerRole)} ${valorantMethodLabel(round.method)}`.trim();
+      marker.title = `${index + 1} ${valorantSideLabel(winnerRole)}`.trim();
       if (index === 12) marker.classList.add('half-start');
       const icon = document.createElement('i');
       const number = document.createElement('b');
       number.textContent = String(index + 1);
       marker.append(icon, number);
       container.append(marker);
+    }
+  }
+
+  function renderValorantSeriesDots(selector, score = 0, total = 3) {
+    const container = $(selector);
+    if (!container) return;
+    const safeScore = Math.max(0, Math.min(total, Number(score) || 0));
+    container.replaceChildren();
+    for (let index = 0; index < total; index += 1) {
+      const dot = document.createElement('i');
+      dot.className = index < safeScore ? 'is-won' : '';
+      container.append(dot);
     }
   }
 
@@ -435,20 +441,29 @@
     if (hud.hidden) return;
     const live = valorantOcrLive(game);
     const observer = live.observer3 || {};
-    const homeScore = trustedValorantScore(live, 'home', teams[0]?.detailScore ?? teams[0]?.score);
-    const awayScore = trustedValorantScore(live, 'away', teams[1]?.detailScore ?? teams[1]?.score);
-    const timer = valorantTimerDisplay(live);
-    const spikePlanted = timer === 'SPIKE PLANTED';
+    const homeScore = Number.isFinite(Number(teams[0]?.detailScore))
+      ? Number(teams[0].detailScore)
+      : trustedValorantScore(live, 'home', teams[0]?.score);
+    const awayScore = Number.isFinite(Number(teams[1]?.detailScore))
+      ? Number(teams[1].detailScore)
+      : trustedValorantScore(live, 'away', teams[1]?.score);
     const roundNumber = valorantRoundNumber(live, homeScore, awayScore);
-    hud.classList.toggle('spike-planted', spikePlanted);
+    hud.classList.remove('spike-planted');
+    hud.dataset.homeName = teams[0]?.name || 'HOME';
+    hud.dataset.awayName = teams[1]?.name || 'AWAY';
     setText('#val-home-name', teams[0]?.name || 'HOME');
     setText('#val-away-name', teams[1]?.name || 'AWAY');
+    setText('#val-home-strip-name', teams[0]?.name || 'HOME');
+    setText('#val-away-strip-name', teams[1]?.name || 'AWAY');
     setText('#val-home-short', teams[0]?.shortName || 'HOME');
     setText('#val-away-short', teams[1]?.shortName || 'AWAY');
     setText('#val-home-score', homeScore);
     setText('#val-away-score', awayScore);
-    setText('#val-round-label', spikePlanted ? 'OBJECTIVE' : `ROUND ${roundNumber}`);
-    setText('#val-timer', timer);
+    const valorantSeriesDots = Math.max(1, Math.ceil((Number(game.seriesLength) || 3) / 2));
+    renderValorantSeriesDots('#val-home-series', teams[0]?.score, valorantSeriesDots);
+    renderValorantSeriesDots('#val-away-series', teams[1]?.score, valorantSeriesDots);
+    setText('#val-round-label', `ROUND ${roundNumber}`);
+    setText('#val-timer', '');
     setText('#val-series-label', `${selectedGame === 'valorant' ? 'MAP' : 'GAME'} ${(game.activeMap || 0) + 1} / ${game.match?.format || 'BEST OF 3'}`);
     setText('#val-map-name', activeMap?.map || 'MAP TBD');
     setText('#val-map-detail', `MAP ${(game.activeMap || 0) + 1} OF ${Math.max(1, Math.min(3, Number(game.seriesLength) || 3))}`);

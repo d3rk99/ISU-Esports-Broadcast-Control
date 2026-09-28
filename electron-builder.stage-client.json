@@ -1,0 +1,17 @@
+{
+  "appId": "edu.isu.esports.stagedisplayclient",
+  "productName": "ISU Stage Display Client",
+  "directories": { "output": "release/stage-client" },
+  "files": [
+    "electron/stage-displays/**/*",
+    "stage-assets/**/*",
+    "stage-display-client.config.example.json",
+    "package.json"
+  ],
+  "extraMetadata": { "main": "electron/stage-displays/stage-display-client-main.cjs" },
+  "win": {
+    "icon": "build/icon.svg",
+    "target": [{ "target": "portable", "arch": ["x64"] }]
+  },
+  "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+}

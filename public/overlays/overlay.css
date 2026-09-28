@@ -375,14 +375,16 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
   top: 20px;
   width: 370px;
   height: 55px;
-  grid-template-columns: 90px 190px 90px;
-  background: #080d14;
+  grid-template-columns: 116px 138px 116px;
+  background: transparent;
   filter: none;
-  animation: none;
+  animation:
+    val-native-scorebar-drop 620ms cubic-bezier(.2,.82,.18,1) both,
+    val-native-scorebar-expand 560ms cubic-bezier(.2,.82,.18,1) 760ms forwards;
 }
 .val-native-fit .val-team {
   display: block;
-  overflow: visible;
+  overflow: hidden;
   padding: 0;
   clip-path: none;
   background: #101822;
@@ -390,27 +392,59 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
 }
 .val-native-fit .val-team--home { border-left-color: var(--home-color, #f58220); }
 .val-native-fit .val-team--away { border-right-color: var(--away-color, #ff4655); }
-.val-native-fit .val-logo { display: none; animation: none; }
+.val-native-fit .val-logo {
+  position: absolute;
+  top: 5px;
+  z-index: 2;
+  display: grid;
+  width: 45px;
+  height: 45px;
+  padding: 5px;
+  animation: none;
+  background: rgba(3,7,12,.82);
+}
+.val-native-fit .val-team--home .val-logo { left: 6px; }
+.val-native-fit .val-team--away .val-logo { right: 6px; }
 .val-native-fit .val-team > b {
-  inset: 0;
-  width: 100%;
+  top: -6px;
+  bottom: 6px;
+  width: 58px;
   font-size: 38px;
   text-shadow: none;
 }
-.val-native-fit .val-team-copy {
+.val-native-fit .val-team--home > b { right: 8px; }
+.val-native-fit .val-team--away > b { left: 8px; }
+.val-native-fit .val-series-dots {
   position: absolute;
-  top: 55px;
-  width: 125px;
-  height: 26px;
-  padding: 6px 8px;
-  background: #101822;
-  animation: none;
+  top: 44px;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  width: 58px;
+  height: 8px;
 }
-.val-native-fit .val-team--home .val-team-copy { left: -3px; text-align: left; }
-.val-native-fit .val-team--away .val-team-copy { right: -3px; text-align: right; }
-.val-native-fit .val-team-copy span,
-.val-native-fit .val-team-copy small { display: none; }
-.val-native-fit .val-team-copy strong { margin: 0; font-size: 11px; line-height: 14px; }
+.val-native-fit .val-series-dots--home { right: 8px; }
+.val-native-fit .val-series-dots--away { left: 8px; }
+.val-native-fit .val-series-dots i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  transform: rotate(45deg);
+  background: rgba(117,127,138,.48);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.08);
+}
+.val-native-fit .val-series-dots--home i.is-won {
+  background: var(--val-teal);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--val-teal) 70%, transparent);
+}
+.val-native-fit .val-series-dots--away i.is-won {
+  background: var(--val-coral);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--val-coral) 70%, transparent);
+}
+.val-native-fit .val-team-copy {
+  display: none;
+}
 .val-native-fit .val-center {
   overflow: visible;
   height: 55px;
@@ -419,36 +453,192 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
   grid-template-rows: 55px;
   clip-path: none;
   border: 0;
-  background: #080d14;
+  background: transparent;
+  box-shadow: none;
 }
-.val-native-fit .val-center strong { font-size: 38px; text-shadow: none; }
-.val-native-fit .val-center small {
+.val-native-fit .val-center::before,
+.val-native-fit .val-center::after {
+  content: "";
   position: absolute;
-  top: 55px;
-  left: 35px;
-  width: 120px;
-  height: 26px;
-  line-height: 26px;
-  text-align: center;
-  background: #080d14;
-  font-size: 10px;
-  letter-spacing: .04em;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 54px;
+  opacity: .98;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.055), transparent 38%),
+    linear-gradient(180deg, rgba(16,24,34,.96), rgba(5,9,15,.98));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.045);
+}
+.val-native-fit .val-center::before {
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 42% 50%, 100% 100%, 0 100%);
+}
+.val-native-fit .val-center::after {
+  right: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 58% 50%);
+}
+.val-native-fit .val-timer-chevron {
+  position: absolute;
+  top: 8px;
+  z-index: 3;
+  width: 27px;
+  height: 39px;
+  opacity: .94;
+  filter: drop-shadow(0 0 7px currentColor);
+}
+.val-native-fit .val-timer-chevron--home {
+  left: 16px;
+  color: var(--val-teal);
+  background: currentColor;
+  clip-path: polygon(100% 0, 76% 0, 0 50%, 76% 100%, 100% 100%, 24% 50%);
+}
+.val-native-fit .val-timer-chevron--away {
+  right: 16px;
+  color: var(--val-coral);
+  background: currentColor;
+  clip-path: polygon(0 0, 24% 0, 100% 50%, 24% 100%, 0 100%, 76% 50%);
+}
+body[data-setup="game"] .val-native-fit .val-center {
+  filter: drop-shadow(0 0 0 rgba(255,255,255,.01));
+}
+.val-native-fit .val-center strong { display: none; }
+.val-native-fit .val-center small {
+  display: none;
 }
 .val-native-fit .val-center em {
-  position: absolute;
-  top: 81px;
-  left: -90px;
-  width: 370px;
-  height: 22px;
-  line-height: 22px;
-  text-align: center;
-  background: #080d14;
-  font-size: 10px;
-  letter-spacing: .04em;
+  display: none;
 }
-.val-native-fit.spike-planted .val-center { background: #340d17; box-shadow: none; }
-.val-native-fit.spike-planted .val-center strong { font-size: 23px; letter-spacing: 0; }
-.val-native-fit .val-round-history { top: 130px; }
+.val-native-fit.spike-planted .val-center { background: transparent; box-shadow: none; }
+.val-native-fit.spike-planted .val-center strong { display: none; }
+.val-native-fit .val-round-history {
+  top: 74px;
+  grid-template-columns: repeat(24, 13px);
+  gap: 3px;
+  width: 418px;
+  min-height: 30px;
+  padding: 4px 10px 3px;
+  clip-path: polygon(3% 0, 97% 0, 94.5% 100%, 5.5% 100%);
+  animation: val-native-round-history-in 440ms cubic-bezier(.2,.82,.18,1) 980ms both;
+}
+.val-native-fit .val-round-dot {
+  grid-template-rows: 10px 9px;
+  font-size: 7px;
+}
+.val-native-fit .val-round-dot i {
+  width: 8px;
+  height: 8px;
+  border-width: 1px;
+}
+.val-native-fit .val-round-dot.half-start::before {
+  left: -3px;
+  height: 21px;
+}
+.val-name-strip {
+  display: none;
+}
+.val-native-fit .val-name-strip {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  width: 1084px;
+  max-width: calc(100% - 286px);
+  height: 22px;
+  padding: 0 68px;
+  box-sizing: border-box;
+  overflow: hidden;
+  clip-path: polygon(17px 0, calc(100% - 17px) 0, 100% 100%, 0 100%);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.05), transparent 34%),
+    linear-gradient(180deg, rgba(16,24,34,.96), rgba(5,9,15,.98)) padding-box,
+    linear-gradient(90deg,
+      var(--home-color, var(--val-teal)) 0%,
+      color-mix(in srgb, var(--home-color, var(--val-teal)) 70%, var(--away-color, var(--val-coral))) 42%,
+      color-mix(in srgb, var(--away-color, var(--val-coral)) 70%, var(--home-color, var(--val-teal))) 58%,
+      var(--away-color, var(--val-coral)) 100%) border-box;
+  border: 2px solid transparent;
+  opacity: 0;
+  box-shadow: 0 5px 12px rgba(0,0,0,.26), inset 0 0 0 1px rgba(255,255,255,.045);
+  animation: val-native-name-strip-in 560ms cubic-bezier(.2,.82,.18,1) 760ms forwards;
+}
+.val-native-fit .val-name-strip strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f4f8fb;
+  font-size: 11px;
+  font-weight: 1000;
+  line-height: 18px;
+  letter-spacing: .06em;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 8px rgba(0,0,0,.7);
+  white-space: nowrap;
+}
+.val-native-fit .val-name-strip strong:first-child {
+  text-align: left;
+}
+.val-native-fit .val-name-strip strong:last-child {
+  text-align: right;
+}
+.val-native-fit::before,
+.val-native-fit::after {
+  display: none;
+  position: absolute;
+  top: 9px;
+  z-index: 5;
+  height: 18px;
+  width: 358px;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #f4f8fb;
+  font-size: 10px;
+  font-weight: 1000;
+  line-height: 18px;
+  letter-spacing: .07em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 2px solid transparent;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.05), transparent 34%),
+    linear-gradient(180deg, rgba(16,24,34,.96), rgba(5,9,15,.98)) padding-box,
+    linear-gradient(var(--team-plate-color, #ff4655), var(--team-plate-color, #ff4655)) border-box;
+  text-shadow: 0 2px 8px rgba(0,0,0,.7);
+  opacity: 0;
+}
+.val-native-fit::before {
+  --team-plate-color: var(--home-color, var(--val-teal));
+  content: attr(data-home-name);
+  left: 410px;
+  padding: 0 18px 0 58px;
+  border-right-width: 3px;
+  clip-path: polygon(14% 0, 100% 0, 96% 100%, 0 100%);
+  transform: scaleX(0);
+  transform-origin: right center;
+  animation: val-native-home-namebar-in 560ms cubic-bezier(.2,.82,.18,1) 760ms forwards;
+  filter:
+    drop-shadow(-1px 0 0 var(--home-color, var(--val-teal)))
+    drop-shadow(0 -1px 0 var(--home-color, var(--val-teal)))
+    drop-shadow(0 1px 0 var(--home-color, var(--val-teal)));
+}
+.val-native-fit::after {
+  --team-plate-color: var(--away-color, var(--val-coral));
+  content: attr(data-away-name);
+  right: 410px;
+  padding: 0 58px 0 18px;
+  text-align: right;
+  border-left-width: 3px;
+  clip-path: polygon(0 0, 86% 0, 100% 100%, 4% 100%);
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: val-native-away-namebar-in 560ms cubic-bezier(.2,.82,.18,1) 760ms forwards;
+  filter:
+    drop-shadow(1px 0 0 var(--away-color, var(--val-coral)))
+    drop-shadow(0 -1px 0 var(--away-color, var(--val-coral)))
+    drop-shadow(0 1px 0 var(--away-color, var(--val-coral)));
+}
 
 .val-round-history {
   position: absolute;
@@ -523,7 +713,7 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
   width: 228px;
   opacity: 0;
   transform: translateY(18px);
-  animation: val-player-panels-in 520ms cubic-bezier(.2,.82,.18,1) 8.95s forwards;
+  animation: val-player-panels-in 520ms cubic-bezier(.2,.82,.18,1) 1.45s forwards;
 }
 .val-players--home { left: 18px; }
 .val-players--away { right: 18px; }
@@ -1392,6 +1582,36 @@ body[data-game="smash"] .score-core { clip-path: polygon(12% 0, 88% 0, 100% 20%,
 @keyframes scoreboard-in { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes val-scorebar-drop {
   from { opacity: 0; transform: translate(-50%, -135%); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes val-native-scorebar-drop {
+  from { opacity: 0; transform: translate(-50%, -135%); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes val-native-scorebar-expand {
+  from {
+    width: 370px;
+    grid-template-columns: 116px 138px 116px;
+  }
+  to {
+    width: 418px;
+    grid-template-columns: 140px 138px 140px;
+  }
+}
+@keyframes val-native-home-namebar-in {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+@keyframes val-native-away-namebar-in {
+  from { opacity: 0; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+@keyframes val-native-name-strip-in {
+  from { opacity: 0; transform: translateX(-50%) scaleX(.18); }
+  to { opacity: 1; transform: translateX(-50%) scaleX(1); }
+}
+@keyframes val-native-round-history-in {
+  from { opacity: 0; transform: translate(-50%, -18px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
 @keyframes val-scorebar-layout {

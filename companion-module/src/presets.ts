@@ -9,6 +9,7 @@ const GREEN = 0x2e7d32
 const RED = 0xc62828
 const GRAY = 0x333338
 const BLUE = 0x2d8cff
+const YELLOW = 0xffce47
 
 function scorePreset(name: string, team: 'home' | 'away', operation: 'increment' | 'decrement', detail = false) {
 	const side = team === 'home' ? 'HOME' : 'AWAY'
@@ -82,6 +83,26 @@ export function UpdatePresets(self: ModuleInstance): void {
 				},
 			],
 		},
+		{
+			id: 'stage-displays',
+			name: 'Stage Displays',
+			definitions: [
+				{
+					id: 'stage-primary',
+					name: 'Primary stage controls',
+					description: 'Control the audience-facing station displays',
+					type: 'simple',
+					presets: [
+						'stage-gameplay',
+						'stage-blackout',
+						'stage-hold',
+						'stage-prepare-starting',
+						'stage-fire-prepared',
+						'stage-update-outdated',
+					],
+				},
+			],
+		},
 	]
 
 	const presets: CompanionPresetDefinitions<ModuleSchema> = {
@@ -131,9 +152,71 @@ export function UpdatePresets(self: ModuleInstance): void {
 		'program-roster': programOutputPreset('Roster', 'roster'),
 		'program-map-pool': programOutputPreset('Map Pool', 'map-pool'),
 		'program-clean': programOutputPreset('Clean', 'clean'),
+		'stage-gameplay': stageModePreset('Gameplay Mirror', 'GAMEPLAY', 'gameplay', GREEN),
+		'stage-blackout': stageModePreset('Blackout', 'BLACKOUT', 'blackout', BLACK),
+		'stage-hold': stageModePreset('Hold Graphic', 'HOLD', 'hold', GRAY),
+		'stage-prepare-starting': {
+			type: 'simple',
+			name: 'Stage: Prepare starting-soon',
+			style: { text: 'PREP\nSTARTING', size: 'auto', color: WHITE, bgcolor: BLUE, show_topbar: false },
+			steps: [
+				{
+					down: [
+						{
+							actionId: 'stage_prepare_preset',
+							options: { preset: 'starting-soon', mode: 'graphic', wallTotal: '10', wallGroup: '' },
+						},
+					],
+					up: [],
+				},
+			],
+			feedbacks: [
+				{
+					feedbackId: 'stage_prepared_ready',
+					options: {},
+					style: { text: 'READY\nFIRE', color: WHITE, bgcolor: GREEN },
+				},
+			],
+		},
+		'stage-fire-prepared': {
+			type: 'simple',
+			name: 'Stage: Fire prepared cue',
+			style: { text: 'FIRE\nSTAGE', size: 'auto', color: WHITE, bgcolor: ORANGE, show_topbar: false },
+			steps: [{ down: [{ actionId: 'stage_fire_prepared', options: { executeDelaySeconds: 1 } }], up: [] }],
+			feedbacks: [
+				{
+					feedbackId: 'stage_prepared_ready',
+					options: {},
+					style: { color: WHITE, bgcolor: GREEN },
+				},
+			],
+		},
+		'stage-update-outdated': {
+			type: 'simple',
+			name: 'Stage: Update outdated clients',
+			style: { text: 'UPDATE\nCLIENTS', size: 'auto', color: BLACK, bgcolor: YELLOW, show_topbar: false },
+			steps: [{ down: [{ actionId: 'stage_client_update', options: { target: 'outdated', station: '1' } }], up: [] }],
+			feedbacks: [],
+		},
 	}
 
 	self.setPresetDefinitions(structure, presets)
+}
+
+function stageModePreset(name: string, text: string, mode: 'gameplay' | 'blackout' | 'hold', color: number) {
+	return {
+		type: 'simple' as const,
+		name: `Stage: ${name}`,
+		style: {
+			text: `STAGE\n${text}`,
+			size: 'auto' as const,
+			color: WHITE,
+			bgcolor: color,
+			show_topbar: false,
+		},
+		steps: [{ down: [{ actionId: 'stage_global_mode' as const, options: { mode } }], up: [] }],
+		feedbacks: [],
+	}
 }
 
 function programOutputPreset(label: string, output: 'scoreboard' | 'roster' | 'map-pool' | 'clean') {

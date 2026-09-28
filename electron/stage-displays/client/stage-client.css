@@ -1,0 +1,286 @@
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #000;
+  color: #f5f5f7;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#gameplay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  opacity: 0;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(244, 121, 32, .28), transparent 34%),
+    linear-gradient(135deg, #111318, #050506 64%, #15100c);
+  opacity: 1;
+}
+
+#preset-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#preset-frame {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #000;
+  transform-origin: top left;
+}
+
+#preload-frame {
+  position: fixed;
+  left: -10000px;
+  top: -10000px;
+  width: 1920px;
+  height: 1080px;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scene-card {
+  display: grid;
+  justify-items: center;
+  gap: 1.8vh;
+  text-align: center;
+  filter: drop-shadow(0 22px 55px rgba(0,0,0,.55));
+}
+
+.isu-mark {
+  display: grid;
+  place-items: center;
+  width: 14vh;
+  height: 14vh;
+  border: .4vh solid #f47920;
+  color: #fff;
+  background: linear-gradient(135deg, #f47920, #111);
+  font-size: 4vh;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -.08em;
+}
+
+p, h1, span { margin: 0; }
+
+#eyebrow {
+  color: #f47920;
+  font-size: 1.5vh;
+  font-weight: 900;
+  letter-spacing: .32em;
+}
+
+#headline {
+  font-size: clamp(56px, 8vw, 150px);
+  line-height: .92;
+  font-style: italic;
+  font-weight: 950;
+  letter-spacing: .03em;
+}
+
+#subhead {
+  color: #a4a6ae;
+  font-size: 2vh;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+body.mode-gameplay #gameplay { opacity: 1; }
+body.mode-gameplay #scene { opacity: 0; pointer-events: none; }
+body.using-preset #preset-shell { opacity: 1; }
+body.using-preset #scene { opacity: 0; pointer-events: none; }
+body.mode-blackout #gameplay { opacity: 0; }
+body.mode-blackout #scene { opacity: 1; background: #000; }
+body.mode-blackout .scene-card { display: none; }
+
+body.mode-graphic #scene {
+  background:
+    linear-gradient(90deg, rgba(244, 121, 32, .18), transparent 35%, rgba(45, 140, 255, .12)),
+    repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 10px, transparent 10px 24px),
+    #090a0d;
+}
+
+body.mode-wall #scene {
+  background:
+    linear-gradient(90deg, rgba(244,121,32,.36), rgba(45,140,255,.24)),
+    #050506;
+}
+
+body.mode-individual #scene {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(45,140,255,.25), transparent 45%),
+    #07090e;
+}
+
+#config-open {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(244, 121, 32, .7);
+  color: #fff;
+  background: rgba(10, 10, 12, .78);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity .16s ease, transform .16s ease;
+}
+
+#config-open svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.cursor-active #config-open,
+body.config-open #config-open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+#config-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  place-items: center;
+  background: rgba(0, 0, 0, .74);
+}
+
+body.config-open #config-panel { display: grid; }
+body.config-open #config-open { display: none; }
+
+#config-form {
+  width: min(520px, calc(100vw - 42px));
+  padding: 20px;
+  border: 1px solid #34343a;
+  border-top: 3px solid #f47920;
+  background: linear-gradient(180deg, #18191e, #0b0c0f);
+  box-shadow: 0 24px 80px rgba(0,0,0,.58);
+}
+
+#config-form header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+#config-form header span {
+  display: block;
+  margin-bottom: 5px;
+  color: #f47920;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+
+#config-form h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 26px;
+}
+
+#config-form label {
+  display: block;
+  margin: 12px 0;
+  color: #8d8f98;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+#config-form input,
+#config-form select {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 6px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  border: 1px solid #34343a;
+  color: #f5f5f7;
+  background: #08090b;
+  font-size: 14px;
+}
+
+#config-form .config-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+#config-form .config-check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+#config-form .config-check span {
+  color: #f0f0f3;
+}
+
+#config-form button {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid #3a3a42;
+  color: #f4f4f6;
+  background: #121319;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+#config-form footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+#config-form footer button {
+  border-color: #f47920;
+  background: #f47920;
+  color: #111;
+}
+
+#config-status {
+  min-height: 18px;
+  margin-top: 10px;
+  color: #8d8f98;
+  font-size: 12px;
+}

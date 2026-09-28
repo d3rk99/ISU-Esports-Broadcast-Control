@@ -10,6 +10,7 @@ const { ValorantWindowCapture } = require('./valorant-capture.cjs');
 const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
+const { StageDisplayManager } = require('./stage-displays/stage-display-manager.cjs');
 
 const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
@@ -21,6 +22,7 @@ let overlayServer;
 let rocketLeagueService;
 let valorantOcrService;
 let companionApiService;
+let stageDisplayManager;
 let companionRequestId = 0;
 let controllerWindow = null;
 const pendingCompanionActions = new Map();
@@ -57,6 +59,34 @@ function findSharedValorantLoadoutTemplateRoot() {
   return '';
 }
 
+function writableStageAssetRoot() {
+  return path.join(app.getPath('userData'), 'stage-assets');
+}
+
+function writableStageClientUpdateRoot() {
+  return path.join(app.getPath('userData'), 'stage-client-updates');
+}
+
+function bundledStageAssetRoot() {
+  return path.join(__dirname, '..', 'stage-assets');
+}
+
+function findSharedValorantScoreTemplateRoot() {
+  const candidates = [
+    path.join(process.cwd(), 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores'),
+    path.join(path.dirname(app.getPath('exe')), '..', '..', 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores'),
+    path.join(app.getAppPath(), '..', 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores')
+  ];
+  for (const candidate of candidates) {
+    try {
+      const root = path.resolve(candidate);
+      const projectRoot = path.resolve(root, '..', '..', '..', '..', '..', '..');
+      if (fs.existsSync(path.join(projectRoot, 'package.json')) && fs.existsSync(path.join(projectRoot, 'public'))) return root;
+    } catch {}
+  }
+  return '';
+}
+
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -73,15 +103,21 @@ const PROGRAM_OUTPUTS = new Set(['scoreboard', 'map-pool', 'roster', 'clean']);
 const overlayOutputWindows = new Set();
 let programOutputWindows = { fill: null, key: null };
 let programOutputName = 'scoreboard';
+let gameSetupOutputWindow = null;
 
 function overlayOutputSize(query = {}) {
+  if (query.setup === 'game' && query.resolution === '1440') return { width: 2560, height: 1440 };
   return query.output === 'pair' ? { width: 3840, height: 1080 } : { width: 1920, height: 1080 };
 }
 
 function normalizeOutputDisplaySettings(settings = {}) {
+  const gameOverlayResolution = String(settings.gameOverlayResolution || '1080') === '1440' ? '1440' : '1080';
   return {
     fillDisplayId: settings.fillDisplayId === undefined || settings.fillDisplayId === null ? '' : String(settings.fillDisplayId),
-    keyDisplayId: settings.keyDisplayId === undefined || settings.keyDisplayId === null ? '' : String(settings.keyDisplayId)
+    keyDisplayId: settings.keyDisplayId === undefined || settings.keyDisplayId === null ? '' : String(settings.keyDisplayId),
+    gameOverlayDisplayId: settings.gameOverlayDisplayId === undefined || settings.gameOverlayDisplayId === null ? '' : String(settings.gameOverlayDisplayId),
+    gameOverlayResolution,
+    autoOpenProgramOutput: settings.autoOpenProgramOutput !== false
   };
 }
 
@@ -100,6 +136,7 @@ function trackOverlayOutputWindow(window) {
     overlayOutputWindows.delete(window);
     if (programOutputWindows.fill === window) programOutputWindows.fill = null;
     if (programOutputWindows.key === window) programOutputWindows.key = null;
+    if (gameSetupOutputWindow === window) gameSetupOutputWindow = null;
   });
 }
 
@@ -150,16 +187,20 @@ function createOverlayOutputWindow(details = {}, display = null) {
   if (!outputUrl) return null;
   const size = overlayOutputSize(details.query || {});
   const outputMode = details.query?.output || 'fill';
+  const gameSetupMode = details.query?.setup === 'game';
   const bounds = display?.bounds;
   const options = {
     width: size.width,
     height: size.height,
     minWidth: 640,
     minHeight: 360,
-    title: `${details.name} ${outputMode} output`,
-    backgroundColor: '#000000',
+    title: gameSetupMode ? 'Valorant game alignment overlay' : `${details.name} ${outputMode} output`,
+    backgroundColor: gameSetupMode ? '#00000000' : '#000000',
     autoHideMenuBar: true,
     frame: false,
+    transparent: gameSetupMode,
+    alwaysOnTop: gameSetupMode,
+    skipTaskbar: gameSetupMode,
     useContentSize: true,
     show: false,
     webPreferences: {
@@ -174,6 +215,8 @@ function createOverlayOutputWindow(details = {}, display = null) {
     options.y = bounds.y;
   }
   const output = new BrowserWindow(options);
+  output.gameSetupMode = gameSetupMode;
+  if (gameSetupMode) gameSetupOutputWindow = output;
   output.setAspectRatio(size.width / size.height);
   output.outputDisplayBounds = bounds || null;
   output.on('resize', () => fitOverlayOutputScale(output));
@@ -206,6 +249,10 @@ function orderedDisplays() {
 function showOverlayOutputWindow(window) {
   if (window.outputDisplayBounds) window.setBounds(window.outputDisplayBounds);
   window.show();
+  if (window.gameSetupMode) {
+    window.setAlwaysOnTop(true, 'screen-saver');
+    window.setIgnoreMouseEvents(true, { forward: true });
+  }
   window.setFullScreen(true);
   setTimeout(() => fitOverlayOutputScale(window), 100);
 }
@@ -404,6 +451,10 @@ function startOverlayServer() {
 
   overlayServer = http.createServer((request, response) => {
     const requestUrl = new URL(request.url, `http://${OVERLAY_HOST}:${OVERLAY_PORT}`);
+    if (requestUrl.pathname.startsWith('/api/stage')) {
+      stageDisplayManager?.handleHttp(request, response, requestUrl);
+      return;
+    }
     if (request.method !== 'GET') {
       writeJson(response, 405, { error: 'Method not allowed' });
       return;
@@ -445,6 +496,13 @@ function startOverlayServer() {
       serveFile(response, safeFilePath(assetRoot, relativePath));
       return;
     }
+    if (requestUrl.pathname.startsWith('/stage-assets/')) {
+      const relativePath = requestUrl.pathname.slice('/stage-assets'.length);
+      const stageAssetPath = stageDisplayManager?.resolveAssetPath(relativePath);
+      if (stageAssetPath) serveFile(response, stageAssetPath);
+      else writeJson(response, 404, { error: 'Stage asset not found' });
+      return;
+    }
     if (requestUrl.pathname.startsWith('/assets/')) {
       serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
       return;
@@ -458,8 +516,53 @@ function startOverlayServer() {
 
   return new Promise((resolve, reject) => {
     overlayServer.once('error', reject);
-    overlayServer.listen(OVERLAY_PORT, OVERLAY_HOST, resolve);
+    overlayServer.listen(OVERLAY_PORT, '0.0.0.0', resolve);
   });
+}
+
+async function dispatchCompanionStageAction(action = {}) {
+  const actionId = String(action.action || '');
+  if (!stageDisplayManager) throw Object.assign(new Error('Stage Display Manager is not ready'), { statusCode: 503 });
+  if (actionId === 'stage.mode.set') {
+    const result = stageDisplayManager.setGlobalMode(action.mode, action);
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage mode failed'), { statusCode: 400 });
+    return { message: `Stage mode: ${result.mode}` };
+  }
+  if (actionId === 'stage.station.mode.set') {
+    const result = stageDisplayManager.setStationMode(action.station, action.mode, action);
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Station mode failed'), { statusCode: 400 });
+    return { message: `Station ${String(result.station).padStart(2, '0')}: ${result.mode}` };
+  }
+  if (actionId === 'stage.preset.prepare') {
+    const result = stageDisplayManager.preparePreset(action.preset, action);
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset prepare failed'), { statusCode: 400 });
+    return { message: `Prepared stage preset: ${result.title || result.preset}` };
+  }
+  if (actionId === 'stage.prepared.play') {
+    const delay = Math.max(0.2, Number(action.executeDelaySeconds) || 1);
+    const result = await stageDisplayManager.playPreparedPreset({
+      ...action,
+      executeAt: (Date.now() / 1000) + delay,
+      prepareTimeoutMs: Number(action.prepareTimeoutMs) || 3500
+    });
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage prepared cue failed'), { statusCode: 409 });
+    return { message: `Fired prepared stage preset: ${result.preset}` };
+  }
+  if (actionId === 'stage.preset.play') {
+    const delay = Math.max(0.2, Number(action.executeDelaySeconds) || 1.5);
+    const result = await stageDisplayManager.playPreset(action.preset, {
+      ...action,
+      executeAt: (Date.now() / 1000) + delay
+    });
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset failed'), { statusCode: 400 });
+    return { message: `Stage preset: ${result.preset}` };
+  }
+  if (actionId === 'stage.client.update') {
+    const result = stageDisplayManager.sendClientUpdate(action.target || 'outdated', action.station || null);
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage client update failed'), { statusCode: 400 });
+    return { message: `Stage client update sent to ${result.sent || 0} station${Number(result.sent || 0) === 1 ? '' : 's'}` };
+  }
+  throw Object.assign(new Error(`Unknown stage action: ${actionId}`), { statusCode: 404 });
 }
 
 function registerIpc() {
@@ -493,6 +596,67 @@ function registerIpc() {
     return { settings: saved, status };
   });
   ipcMain.handle('companion:get-status', () => companionApiService.getStatus());
+  ipcMain.handle('stage-displays:get-status', () => stageDisplayManager.status());
+  ipcMain.handle('stage-displays:list-presets', () => stageDisplayManager.listPresets());
+  ipcMain.handle('stage-displays:import-preset', async (event, details = {}) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Import Stage Preset',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Stage graphics', extensions: ['html', 'htm', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov'] }
+      ]
+    });
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    const layoutChoice = await dialog.showMessageBox(parent, {
+      type: 'question',
+      title: 'Stage Preset Layout',
+      message: 'What screen layout is this preset designed for?',
+      detail: 'This controls the buttons shown for the preset in Stage Displays.',
+      buttons: ['5-screen span', '10-screen span', 'Mirror / single screen', 'Cancel'],
+      cancelId: 3,
+      defaultId: 0,
+      noLink: true
+    });
+    if (layoutChoice.response === 3) return null;
+    const layout = layoutChoice.response === 0 ? 'wall-5'
+      : layoutChoice.response === 1 ? 'wall-10'
+        : 'mirror';
+    return stageDisplayManager.importPresetFromFile(result.filePaths[0], { ...details, layout });
+  });
+  ipcMain.handle('stage-displays:delete-preset', (_event, details = {}) => stageDisplayManager.deletePreset(details.name || details.preset));
+  ipcMain.handle('stage-displays:update-preset', (_event, details = {}) => stageDisplayManager.updatePreset(details.name || details.preset, details));
+  ipcMain.handle('stage-displays:replace-preset', async (event, details = {}) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Replace Stage Preset Media',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Stage graphics', extensions: ['html', 'htm', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov'] }
+      ]
+    });
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    return stageDisplayManager.replacePresetFromFile(details.name || details.preset, result.filePaths[0], details);
+  });
+  ipcMain.handle('stage-displays:publish-client-update', async (event, details = {}) => {
+    const parent = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(parent, {
+      title: 'Publish Stage Display Client Update',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Stage Display Client build', extensions: ['exe'] }
+      ]
+    });
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    return stageDisplayManager.publishClientUpdateFromFile(result.filePaths[0], details);
+  });
+  ipcMain.handle('stage-displays:send-client-update', (_event, details = {}) => stageDisplayManager.sendClientUpdate(details.target || 'outdated', details.station || null));
+  ipcMain.handle('stage-displays:clear-previews', () => stageDisplayManager.clearStationPreviews());
+  ipcMain.handle('stage-displays:set-global-mode', (_event, details = {}) => stageDisplayManager.setGlobalMode(details.mode, details));
+  ipcMain.handle('stage-displays:set-station-mode', (_event, details = {}) => stageDisplayManager.setStationMode(details.station, details.mode, details));
+  ipcMain.handle('stage-displays:prepare-preset', (_event, details = {}) => stageDisplayManager.preparePreset(details.preset, details));
+  ipcMain.handle('stage-displays:play-prepared', (_event, details = {}) => stageDisplayManager.playPreparedPreset(details));
+  ipcMain.handle('stage-displays:play-preset', (_event, details = {}) => stageDisplayManager.playPreset(details.preset, details));
   ipcMain.on('companion:action-result', (_event, result = {}) => {
     const pending = pendingCompanionActions.get(String(result.id));
     if (!pending) return;
@@ -536,8 +700,14 @@ function registerIpc() {
   ipcMain.handle('valorant-ocr:list-windows', () => valorantOcrService.listWindows());
   ipcMain.handle('valorant-ocr:capture-snapshot', () => valorantOcrService.captureSnapshot());
   ipcMain.handle('valorant-ocr:save-loadout-template', (_event, details = {}) => valorantOcrService.saveLoadoutTemplate(details));
+  ipcMain.handle('valorant-ocr:save-score-template', (_event, details = {}) => valorantOcrService.saveScoreTemplate(details));
+  ipcMain.handle('valorant-ocr:start-timer-dataset', (_event, details = {}) => valorantOcrService.startTimerDatasetCapture(details));
+  ipcMain.handle('valorant-ocr:pause-timer-dataset', () => valorantOcrService.pauseTimerDatasetCapture());
+  ipcMain.handle('valorant-ocr:stop-timer-dataset', () => valorantOcrService.stopTimerDatasetCapture());
+  ipcMain.handle('valorant-ocr:review-timer-dataset', () => valorantOcrService.reviewTimerDataset());
   ipcMain.handle('valorant-ocr:clear', () => valorantOcrService.clearState());
   ipcMain.handle('valorant-ocr:set-observer-name', (_event, details = {}) => valorantOcrService.setObserverPlayerName(details));
+  ipcMain.handle('valorant-ocr:set-timeline-round', (_event, details = {}) => valorantOcrService.setObserverTimelineRound(details));
   ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
   ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
@@ -589,8 +759,25 @@ function registerIpc() {
       return openProgramOutput(details.name);
     }
     const outputDisplaySettings = readOutputDisplaySettings();
+    if (details.query?.setup === 'game') {
+      if (gameSetupOutputWindow && !gameSetupOutputWindow.isDestroyed()) {
+        gameSetupOutputWindow.close();
+        gameSetupOutputWindow = null;
+        return { opened: false, closed: true };
+      }
+      details = {
+        ...details,
+        query: {
+          ...(details.query || {}),
+          output: details.query?.output || 'fill',
+          resolution: outputDisplaySettings.gameOverlayResolution || '1080'
+        }
+      };
+    }
     const outputMode = details.query?.output || 'fill';
-    const targetDisplay = outputMode === 'key'
+    const targetDisplay = details.query?.setup === 'game'
+      ? displayBySavedId(outputDisplaySettings.gameOverlayDisplayId, 0)
+      : outputMode === 'key'
       ? displayBySavedId(outputDisplaySettings.keyDisplayId, 1)
       : displayBySavedId(outputDisplaySettings.fillDisplayId, 0);
     const output = createOverlayOutputWindow(details, targetDisplay);
@@ -657,8 +844,19 @@ function createWindow() {
 app.whenReady().then(async () => {
   companionApiService = new CompanionApiService({
     getState: () => broadcastState,
+    getStageStatus: () => stageDisplayManager?.status() || {},
     dispatchAction: dispatchCompanionAction,
+    dispatchStageAction: dispatchCompanionStageAction,
     onDiagnostic: recordDiagnostic
+  });
+  stageDisplayManager = new StageDisplayManager({
+    assetRoot: writableStageAssetRoot(),
+    bundledAssetRoot: bundledStageAssetRoot(),
+    updateRoot: writableStageClientUpdateRoot(),
+    onStatus: (status) => {
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('stage-displays:status', status);
+      companionApiService?.publish(broadcastState);
+    }
   });
   rocketLeagueService = new RocketLeagueService({
     onEvent: (event) => {
@@ -676,6 +874,8 @@ app.whenReady().then(async () => {
     ocr: new TesseractOcrEngine(),
     templateRoot: path.join(app.getPath('userData'), 'valorant-loadout-templates'),
     sharedTemplateRoot: findSharedValorantLoadoutTemplateRoot(),
+    scoreTemplateRoot: path.join(app.getPath('userData'), 'valorant-score-templates'),
+    sharedScoreTemplateRoot: findSharedValorantScoreTemplateRoot(),
     onState: (state) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:state', state);
     },
@@ -685,6 +885,7 @@ app.whenReady().then(async () => {
   });
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
+  await stageDisplayManager.start();
   try {
     await startOverlayServer();
   } catch (error) {
@@ -706,6 +907,7 @@ app.on('second-instance', () => {
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
   valorantOcrService?.shutdown();
+  stageDisplayManager?.shutdown();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();
 });

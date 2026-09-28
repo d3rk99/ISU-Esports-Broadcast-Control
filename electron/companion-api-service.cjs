@@ -111,6 +111,39 @@ function buildCompanionVariables(state = {}) {
   return variables;
 }
 
+function buildStageVariables(status = {}) {
+  const pending = status.pendingPreset || {};
+  const readiness = pending.readiness || {};
+  const update = status.clientUpdate || {};
+  const variables = {
+    stage_enabled: Boolean(status.enabled),
+    stage_online_count: Number(status.onlineCount) || 0,
+    stage_expected_client_version: scalar(status.expectedClientVersion),
+    stage_update_available: Boolean(update.available),
+    stage_update_version: scalar(update.version),
+    stage_update_size: Number(update.size) || 0,
+    stage_pending_preset: scalar(pending.preset),
+    stage_pending_mode: scalar(pending.mode),
+    stage_pending_ready_count: Number(readiness.ready) || 0,
+    stage_pending_online_count: Number(readiness.online) || 0,
+    stage_pending_all_ready: Boolean(readiness.allReady)
+  };
+  const stations = Array.isArray(status.stations) ? status.stations : [];
+  for (let index = 1; index <= 10; index += 1) {
+    const station = stations.find((item) => Number(item.station) === index) || {};
+    variables[`stage_station_${index}_online`] = Boolean(station.online);
+    variables[`stage_station_${index}_mode`] = scalar(station.mode, 'offline');
+    variables[`stage_station_${index}_hostname`] = scalar(station.hostname);
+    variables[`stage_station_${index}_client_version`] = scalar(station.clientVersion);
+    variables[`stage_station_${index}_outdated`] = Boolean(station.outdated);
+    variables[`stage_station_${index}_updating`] = Boolean(station.updating);
+    variables[`stage_station_${index}_update_status`] = scalar(station.updateStatus);
+    variables[`stage_station_${index}_preset`] = scalar(station.preset);
+    variables[`stage_station_${index}_ready`] = Boolean(station.ready);
+  }
+  return variables;
+}
+
 function buildCompanionCapabilities(state = {}) {
   const gameKey = state.selectedGame || '';
   const rows = state.games?.[gameKey]?.mapRows || [];
@@ -133,6 +166,14 @@ function buildCompanionCapabilities(state = {}) {
     { id: 'maps.reset', label: 'Clear all map/game results', parameters: ['game?'] }
   ];
   if (gameKey === 'valorant') actions.push({ id: 'veto.reset', label: 'Reset VALORANT veto selections', parameters: ['game?'] });
+  actions.push(
+    { id: 'stage.mode.set', label: 'Stage Displays: Set global mode', parameters: ['mode'] },
+    { id: 'stage.station.mode.set', label: 'Stage Displays: Set one station mode', parameters: ['station', 'mode'] },
+    { id: 'stage.preset.prepare', label: 'Stage Displays: Prepare preset', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },
+    { id: 'stage.prepared.play', label: 'Stage Displays: Fire prepared preset', parameters: ['executeDelaySeconds?'] },
+    { id: 'stage.preset.play', label: 'Stage Displays: Play preset now', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },
+    { id: 'stage.client.update', label: 'Stage Displays: Send client update', parameters: ['target', 'station?'] }
+  );
   return {
     apiVersion: 1,
     selectedGame: gameKey,
@@ -191,9 +232,11 @@ function authorized(request, requestUrl, token) {
 }
 
 class CompanionApiService {
-  constructor({ getState, dispatchAction, onDiagnostic = () => {} }) {
+  constructor({ getState, getStageStatus = () => ({}), dispatchAction, dispatchStageAction = null, onDiagnostic = () => {} }) {
     this.getState = getState;
+    this.getStageStatus = getStageStatus;
     this.dispatchAction = dispatchAction;
+    this.dispatchStageAction = dispatchStageAction;
     this.onDiagnostic = onDiagnostic;
     this.server = null;
     this.clients = new Set();
@@ -254,7 +297,11 @@ class CompanionApiService {
     if (this.publishTimer) return;
     this.publishTimer = setTimeout(() => {
       this.publishTimer = null;
-      const payload = `event: variables\ndata: ${JSON.stringify(buildCompanionVariables(this.pendingState || {}))}\n\n`;
+      const variables = {
+        ...buildCompanionVariables(this.pendingState || {}),
+        ...buildStageVariables(this.getStageStatus() || {})
+      };
+      const payload = `event: variables\ndata: ${JSON.stringify(variables)}\n\n`;
       this.pendingState = null;
       for (const client of this.clients) {
         if (!client.writableEnded && !client.writableNeedDrain) client.write(payload);
@@ -286,7 +333,10 @@ class CompanionApiService {
 
     const state = this.getState() || {};
     if (request.method === 'GET' && requestUrl.pathname === '/api/companion/variables') {
-      sendJson(response, 200, buildCompanionVariables(state));
+      sendJson(response, 200, {
+        ...buildCompanionVariables(state),
+        ...buildStageVariables(this.getStageStatus() || {})
+      });
       return;
     }
     if (request.method === 'GET' && requestUrl.pathname === '/api/companion/capabilities') {
@@ -304,7 +354,10 @@ class CompanionApiService {
         Connection: 'keep-alive',
         'Access-Control-Allow-Origin': '*'
       });
-      response.write(`event: variables\ndata: ${JSON.stringify(buildCompanionVariables(state))}\n\n`);
+      response.write(`event: variables\ndata: ${JSON.stringify({
+        ...buildCompanionVariables(state),
+        ...buildStageVariables(this.getStageStatus() || {})
+      })}\n\n`);
       this.clients.add(response);
       this.status.clients = this.clients.size;
       request.on('close', () => {
@@ -320,8 +373,17 @@ class CompanionApiService {
           sendJson(response, 400, { error: 'Provide a JSON object with an action field' });
           return;
         }
-        const result = await this.dispatchAction(body);
-        sendJson(response, 200, { ok: true, ...result, variables: buildCompanionVariables(this.getState() || state) });
+        const result = String(body.action || '').startsWith('stage.') && this.dispatchStageAction
+          ? await this.dispatchStageAction(body)
+          : await this.dispatchAction(body);
+        sendJson(response, 200, {
+          ok: true,
+          ...result,
+          variables: {
+            ...buildCompanionVariables(this.getState() || state),
+            ...buildStageVariables(this.getStageStatus() || {})
+          }
+        });
       } catch (error) {
         sendJson(response, Number(error.statusCode) || 400, { error: error.message || 'Action failed' });
       }
@@ -336,6 +398,7 @@ module.exports = {
   DEFAULT_COMPANION_PORT,
   buildCompanionCapabilities,
   buildCompanionVariables,
+  buildStageVariables,
   createCompanionToken,
   normalizeCompanionSettings
 };

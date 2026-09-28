@@ -1,6 +1,6 @@
 import './styles.css';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
-import { advanceGameMatch, applyCompanionAction, swapGameTeams } from './companion-actions.js';
+import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
@@ -37,9 +37,16 @@ let valorantRoiDrag = null;
 let valorantLoadoutTemplateWeapon = 'operator';
 let valorantLoadoutTemplateSide = 'home';
 let valorantLoadoutTemplateRow = 4;
+let valorantScoreTemplateValue = '0';
+let valorantScoreTemplateField = 'homeScore';
+let valorantTimerDatasetStart = '1:40';
+let valorantTimerDatasetFps = 8;
 let outputDisplaySettings = {
   fillDisplayId: '',
   keyDisplayId: '',
+  gameOverlayDisplayId: '',
+  gameOverlayResolution: '1080',
+  autoOpenProgramOutput: true,
   ...(window.isuDesktop?.savedOutputDisplaySettings || {})
 };
 let companionSettings = {
@@ -49,6 +56,8 @@ let companionSettings = {
   ...(window.isuDesktop?.savedCompanionSettings || {})
 };
 let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
+let stageDisplayStatus = { enabled: false, port: 3178, onlineCount: 0, stations: [] };
+let stagePresets = [];
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
 const ROCKET_LEAGUE_EVENT_BADGE_MS = 5500;
 const ROCKET_LEAGUE_EVENT_FADE_MS = 850;
@@ -70,11 +79,17 @@ const valorantWeaponLabel = (weapon = '') => String(weapon)
   .replaceAll('-', ' ')
   .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
+const formatMsDuration = (ms = 0) => {
+  const seconds = Math.max(0, Math.floor(Number(ms) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+};
+
 const ICONS = {
   control: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M10 14v6"/></svg>',
   maps: '<svg viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15M15 6v15"/></svg>',
   roster: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   outputs: '<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+  stage: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="5" height="8" rx="1"/><rect x="9.5" y="5" width="5" height="8" rx="1"/><rect x="16" y="5" width="5" height="8" rx="1"/><path d="M4 19h16M7 13v6M12 13v6M17 13v6"/></svg>',
   settings: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.16.4.4.75.73 1 .3.25.7.4 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>'
 };
 
@@ -157,7 +172,8 @@ function renderSidebar(config) {
     ['control', 'Match Control'],
     ['maps', 'Map Pool'],
     ['roster', 'Rosters'],
-    ['outputs', 'OBS Outputs']
+    ['outputs', 'OBS Outputs'],
+    ['stage', 'Stage Displays']
   ];
   return `
     <aside class="sidebar">
@@ -195,6 +211,7 @@ function renderTopbar(config) {
     maps: ['Map Pool', `Plan and record the ${config.name} series`],
     roster: ['Team Rosters', 'Manage Home and Away Varsity/JV lineups'],
     outputs: ['OBS Outputs', 'Browser-source graphics and live asset status'],
+    stage: ['Stage Displays', 'Control audience-facing station monitors over LAN'],
     settings: ['Workspace Settings', 'Defaults, data, and application information']
   };
   const [title, subtitle] = labels[state.activeView];
@@ -215,8 +232,200 @@ function renderView(config) {
   if (state.activeView === 'maps') return renderMaps(config);
   if (state.activeView === 'roster') return renderRosters(config);
   if (state.activeView === 'outputs') return renderOutputs();
+  if (state.activeView === 'stage') return renderStageDisplays();
   if (state.activeView === 'settings') return renderSettings();
   return renderControl(config);
+}
+
+function stageModeLabel(mode = '') {
+  return ({
+    gameplay: 'Gameplay Mirror',
+    wall: 'Wall / Span',
+    graphic: 'Mirror Graphic',
+    individual: 'Individual',
+    blackout: 'Blackout',
+    hold: 'Hold Graphic',
+    offline: 'Offline'
+  })[mode] || String(mode || 'Unknown').toUpperCase();
+}
+
+function renderStageModeButtons(scope, station = '') {
+  const modes = [
+    ['gameplay', 'Gameplay'],
+    ['wall', 'Wall'],
+    ['graphic', 'Test Graphic'],
+    ['individual', 'Individual'],
+    ['hold', 'Hold'],
+    ['blackout', 'Blackout']
+  ];
+  return modes.map(([mode, label]) => `<button data-action="${scope === 'global' ? 'stage-global-mode' : 'stage-station-mode'}" data-stage-mode="${mode}" ${station ? `data-station="${station}"` : ''}>${label}</button>`).join('');
+}
+
+function stageStationList() {
+  const byStation = new Map((stageDisplayStatus.stations || []).map((station) => [Number(station.station), station]));
+  return Array.from({ length: 10 }, (_item, index) => byStation.get(index + 1) || {
+    station: index + 1,
+    online: false,
+    mode: 'offline',
+    hostname: '',
+    clientVersion: '',
+    lastSeen: null
+  });
+}
+
+function stageReadinessText(readiness = {}) {
+  const online = Number(readiness.online || 0);
+  const ready = Number(readiness.ready || 0);
+  if (!online) return 'No online stations';
+  return `${ready} of ${online} online stations ready`;
+}
+
+function stagePresetModeLabel(mode = '') {
+  if (mode === 'wall') return 'Wall / Span';
+  if (mode === 'graphic') return 'Mirror Graphic';
+  if (mode === 'individual') return 'Individual';
+  return stageModeLabel(mode);
+}
+
+function stageTargetText(pending = {}) {
+  if (!pending?.targetStations?.length) return '&mdash;';
+  const targets = pending.targetStations.map(Number).sort((a, b) => a - b);
+  if (targets.length === 10) return pending.wallGroup === 'mirror-5' ? '1-5 and 6-10 mirrored' : '1-10';
+  return `${targets[0]}-${targets[targets.length - 1]}`;
+}
+
+function stagePresetActionButtons(preset) {
+  const name = escapeHtml(preset.name);
+  const layout = preset.layout || 'any';
+  const button = (action, label, mode, extra = '') => `<button data-action="${action}" data-preset="${name}" data-stage-mode="${mode}" ${extra}>${label}</button>`;
+  if (layout === 'wall-10') {
+    return [
+      button('stage-prepare-preset', 'Prepare Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
+      button('stage-play-preset', 'Play Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"')
+    ].join('');
+  }
+  if (layout === 'wall-5') {
+    return [
+      button('stage-prepare-preset', 'Prepare 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
+      button('stage-prepare-preset', 'Prepare 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
+      button('stage-prepare-preset', 'Prepare Mirror', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
+      button('stage-play-preset', 'Play 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
+      button('stage-play-preset', 'Play 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
+      button('stage-play-preset', 'Play Mirror', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
+    ].join('');
+  }
+  if (layout === 'mirror') {
+    return [
+      button('stage-prepare-preset', 'Prepare Mirror', 'graphic'),
+      button('stage-play-preset', 'Play Mirror', 'graphic')
+    ].join('');
+  }
+  return [
+    button('stage-prepare-preset', 'Prepare Mirror', 'graphic'),
+    button('stage-prepare-preset', 'Prepare Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
+    button('stage-prepare-preset', 'Prepare Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
+    button('stage-play-preset', 'Play Mirror', 'graphic'),
+    button('stage-play-preset', 'Play Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
+    button('stage-play-preset', 'Play Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
+  ].join('');
+}
+
+function renderStageDisplays() {
+  const stations = stageStationList();
+  const baseUrl = `${overlayBaseUrl}/api/stage/status`;
+  const pending = stageDisplayStatus.pendingPreset;
+  const readiness = pending?.readiness || {};
+  const warnings = Array.isArray(stageDisplayStatus.warnings) ? stageDisplayStatus.warnings : [];
+  const clientUpdate = stageDisplayStatus.clientUpdate || {};
+  const outdatedCount = stations.filter((station) => station.online && station.outdated).length;
+  const presets = stagePresets.length ? stagePresets : [
+    { name: 'isu-idle', title: 'ISU Idle' },
+    { name: 'starting-soon', title: 'Starting Soon' },
+    { name: 'team-intro', title: 'Team Intro' },
+    { name: 'sponsors', title: 'Sponsors' }
+  ];
+  return `
+    <section class="view-stack stage-display-view">
+      <div class="section-heading"><div><span class="section-number">01</span><div><h2>Stage display clients</h2><p>${Number(stageDisplayStatus.onlineCount || 0)} of 10 stations online &middot; WebSocket port ${Number(stageDisplayStatus.port || 3178)}</p></div></div>
+        <div class="heading-actions"><button class="secondary-button" data-action="stage-clear-previews">CLEAR PREVIEWS</button><button class="secondary-button" data-action="refresh-stage-displays">REFRESH</button></div>
+      </div>
+      ${warnings.length ? `<article class="panel stage-warning-panel"><div class="panel-title compact"><div><h2>Stage warnings</h2><p>${warnings.map(escapeHtml).join('<br>')}</p></div></div></article>` : ''}
+      <article class="panel stage-update-panel">
+        <div class="panel-title compact">
+          <div>
+            <h2>Stage client updates</h2>
+            <p>${clientUpdate.available ? `Published client ${escapeHtml(clientUpdate.version || '')} &middot; ${Math.round(Number(clientUpdate.size || 0) / 1024 / 1024)} MB` : `No client update published yet &middot; Expected client ${escapeHtml(stageDisplayStatus.expectedClientVersion || '')}`} &middot; ${outdatedCount} outdated online</p>
+          </div>
+          <div class="heading-actions">
+            <button class="secondary-button" data-action="stage-publish-client-update">PUBLISH BUILD</button>
+            <button class="secondary-button" data-action="stage-send-client-update" data-update-target="outdated" ${clientUpdate.available && outdatedCount ? '' : 'disabled'}>UPDATE OUTDATED</button>
+            <button class="secondary-button" data-action="stage-send-client-update" data-update-target="all" ${clientUpdate.available && Number(stageDisplayStatus.onlineCount || 0) ? '' : 'disabled'}>UPDATE ALL</button>
+          </div>
+        </div>
+      </article>
+      <article class="panel stage-api-panel">
+        <div class="panel-title compact"><div><h2>Companion-ready API</h2><p>Use these from HTTP/REST buttons later.</p></div></div>
+        <div class="stage-api-grid">
+          <code>GET ${escapeHtml(baseUrl)}</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/gameplay</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/blackout</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/station/4/mode/graphic</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepare/team-intro</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepared/play</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/preset/team-intro</code>
+        </div>
+      </article>
+      <article class="panel stage-global-panel">
+        <div class="panel-title compact"><div><h2>Global mode</h2><p>Send the same state to every connected station.</p></div></div>
+        <div class="stage-mode-grid">${renderStageModeButtons('global')}</div>
+      </article>
+      <article class="panel stage-ready-panel ${pending ? 'armed' : ''}">
+        <div class="panel-title compact">
+          <div><h2>Prepared stage cue</h2><p>Preload a preset first, wait for clients to report ready, then fire it in sync.</p></div>
+          <button class="primary-button" data-action="stage-play-prepared" ${pending ? '' : 'disabled'}>FIRE PREPARED</button>
+        </div>
+        <div class="stage-ready-grid">
+          <section><span>Preset</span><strong>${pending ? escapeHtml(pending.title || pending.preset) : 'None prepared'}</strong></section>
+          <section><span>Mode</span><strong>${pending ? escapeHtml(stagePresetModeLabel(pending.mode)) : '&mdash;'}</strong></section>
+          <section><span>Readiness</span><strong>${escapeHtml(stageReadinessText(readiness))}</strong></section>
+          <section><span>Targets</span><strong>${pending ? stageTargetText(pending) : '&mdash;'}</strong></section>
+        </div>
+      </article>
+      <article class="panel stage-preset-panel">
+        <div class="panel-title compact"><div><h2>Stage presets</h2><p>Import graphics here, then push them from the controller to every connected station.</p></div>
+          <button class="secondary-button" data-action="stage-import-preset">IMPORT GRAPHIC</button>
+        </div>
+        <div class="stage-preset-grid">
+          ${presets.map((preset) => `
+            <section class="stage-preset-card ${preset.source === 'library' ? 'library' : 'builtin'}">
+              <div class="stage-preset-preview">
+                <iframe src="${escapeHtml(overlayBaseUrl)}${escapeHtml(preset.assetPath || `/stage-assets/${encodeURIComponent(preset.name)}/index.html`)}?preview=1" loading="lazy" title="${escapeHtml(preset.title || preset.name)} preview"></iframe>
+              </div>
+              <strong>${escapeHtml(preset.title || preset.name)}</strong>
+              <small>${escapeHtml(preset.category || 'General')} &middot; ${escapeHtml(preset.name)} &middot; ${escapeHtml(preset.layoutLabel || preset.layout || 'any')} &middot; ${escapeHtml(preset.kind || 'html')} &middot; ${preset.width && preset.height ? `${preset.width}x${preset.height} &middot; ` : ''}${escapeHtml(preset.source || 'built-in')}</small>
+              <div class="stage-preset-actions">
+                ${stagePresetActionButtons(preset)}
+                ${preset.source === 'library' ? `<button data-action="stage-rename-preset" data-preset="${escapeHtml(preset.name)}">Rename</button><button data-action="stage-category-preset" data-preset="${escapeHtml(preset.name)}">Category</button><button data-action="stage-replace-preset" data-preset="${escapeHtml(preset.name)}">Replace</button><button class="danger" data-action="stage-delete-preset" data-preset="${escapeHtml(preset.name)}">Delete</button>` : ''}
+              </div>
+            </section>`).join('')}
+        </div>
+      </article>
+      <div class="stage-station-grid">
+        ${stations.map((station) => `
+          <article class="stage-station-card ${station.online ? 'online' : 'offline'}">
+            <header><span>${String(station.station).padStart(2, '0')}</span><strong>${station.online ? 'ONLINE' : 'OFFLINE'}</strong></header>
+            <div class="stage-station-preview ${station.preview ? 'has-preview' : ''}">
+              ${station.preview ? `<img src="${escapeHtml(station.preview)}" alt="Station ${String(station.station).padStart(2, '0')} live preview">` : '<span>NO PREVIEW</span>'}
+            </div>
+            <h3>${escapeHtml(stageModeLabel(station.mode))}</h3>
+            <p>${escapeHtml(station.hostname || 'No client connected')}</p>
+            ${station.outdated ? `<p class="stage-station-warning">Client ${escapeHtml(station.clientVersion)} needs update</p>` : ''}
+            <small>${station.updating ? escapeHtml(station.updateStatus || 'Updating client...') : station.preparing ? 'Preparing preset...' : station.preparedPreset ? `Prepared ${escapeHtml(station.preparedPreset)}` : station.clientVersion ? `Client ${escapeHtml(station.clientVersion)}` : 'Waiting for Stage Display Client'}</small>
+            <div class="stage-station-actions">${renderStageModeButtons('station', station.station)}</div>
+            ${station.online && station.outdated && clientUpdate.available ? `<button class="stage-station-update" data-action="stage-send-client-update" data-update-target="station" data-station="${Number(station.station)}">Update Client</button>` : ''}
+          </article>`).join('')}
+      </div>
+    </section>`;
 }
 
 function renderControl(config) {
@@ -263,7 +472,7 @@ function renderControl(config) {
           <div class="field-grid">
             ${field('Event / league', 'match.event', game.match.event)}
             ${field('Round / stage', 'match.round', game.match.round)}
-            ${state.selectedGame === 'rocketleague' && config.formatOptions ? formatSelect(config, game, 'field format-select') : field('Series format', 'match.format', game.match.format)}
+            ${config.formatOptions ? formatSelect(config, game, 'field format-select') : field('Series format', 'match.format', game.match.format)}
             <label class="field"><span>Active map</span><select data-field="activeMap">
               ${visibleMapRows(game, config).map((row, index) => `<option value="${index}" ${index === game.activeMap ? 'selected' : ''}>${index + 1} &mdash; ${escapeHtml(row.map || 'TBD')}</option>`).join('')}
             </select></label>
@@ -415,19 +624,10 @@ function valorantDebugRoiMarkup({ force = false } = {}) {
       })
       .filter(Boolean))).flat();
   })();
-  const timelineRounds = Array.from({ length: 24 }, (_item, index) => ({
-    round: index + 1,
-    ...(observer3.roundTimeline?.rounds?.[index] || {})
-  }));
   return `${roiFields.map((field) => `<i class="vo-roi-box" data-vo-roi-box="${field.id}" style="--roi-color:${valorantOcrFieldColor(field.id)};left:${field.roi.x / 19.2}%;top:${field.roi.y / 10.8}%;width:${field.roi.w / 19.2}%;height:${field.roi.h / 10.8}%"><span>${valorantOcrFieldLabel(field.id)}</span><b data-vo-roi-resize="true"></b></i>`).join('')}${observerFieldGuides.map((guide) => {
     const guideColumns = guide.id === 'kda' ? ['kills', 'deaths', 'assists'] : [guide.id];
     const isScanning = activeObserverCells.some((cell) => cell.side === guide.side && Number(cell.row) === Number(guide.row) && guideColumns.includes(cell.columnId));
     return `<i class="vo-scoreboard-field-box ${escapeHtml(guide.side)} ${escapeHtml(guide.className)} ${isScanning ? 'scanning' : ''}" data-vo-observer-box="${escapeHtml(`${guide.side}:${guide.row}:${guide.id}`)}" style="left:${guide.x / 19.2}%;top:${guide.y / 10.8}%;width:${guide.w / 19.2}%;height:${guide.h / 10.8}%"><span>${escapeHtml(guide.label)}</span><b data-vo-observer-resize="true"></b></i>`;
-  }).join('')}${timelineRounds.map((round) => {
-    const roi = observerTimelineRoi(profile, round.round);
-    if (!roi) return '';
-    const isScanning = activeObserverCells.some((cell) => cell.side === 'timeline' && Number(cell.row) === round.round - 1);
-    return `<i class="vo-timeline-round-box ${isScanning ? 'scanning' : ''}" data-vo-timeline-box="${round.round}" style="left:${roi.x / 19.2}%;top:${roi.y / 10.8}%;width:${roi.w / 19.2}%;height:${roi.h / 10.8}%"><span>R${round.round}</span><b data-vo-timeline-resize="true"></b></i>`;
   }).join('')}`;
 }
 
@@ -453,13 +653,13 @@ function observerGuideIdForColumn(columnId) {
   return columnId;
 }
 
-function valorantTimelineMethodLabel(method) {
-  return ({
-    elimination: 'ELIM',
-    'spike-detonation': 'BOOM',
-    'spike-defuse': 'DEF',
-    unknown: 'UNK'
-  })[method] || '--';
+function valorantTimelineWinnerSelect(round) {
+  const value = round.winnerRole || '';
+  return `<select class="vo-timeline-select" data-vo-timeline-round="${Number(round.round) || 1}" data-vo-timeline-prop="winnerRole" title="Manual round winner color">
+    <option value="" ${value ? '' : 'selected'}>--</option>
+    <option value="defense" ${value === 'defense' ? 'selected' : ''}>GREEN</option>
+    <option value="attack" ${value === 'attack' ? 'selected' : ''}>RED</option>
+  </select>`;
 }
 
 function observerGuideBounds(table, guide) {
@@ -862,8 +1062,7 @@ function renderValorantOcrPanel(game) {
         <table>
           <thead><tr>${timelineRounds.map((round) => `<th>${round.round}</th>`).join('')}</tr></thead>
           <tbody>
-            <tr>${timelineRounds.map((round) => `<td data-vo-observer-cell="${escapeHtml(`timeline:${round.round - 1}:roundTimeline`)}" class="${round.current ? 'current' : ''} ${round.winnerRow ? round.winnerRow : ''}">${escapeHtml(round.winnerRole ? String(round.winnerRole).toUpperCase().slice(0, 3) : round.current ? 'LIVE' : '--')}</td>`).join('')}</tr>
-            <tr>${timelineRounds.map((round) => `<td title="${escapeHtml(round.method || '')}">${escapeHtml(valorantTimelineMethodLabel(round.method))}</td>`).join('')}</tr>
+            <tr>${timelineRounds.map((round) => `<td data-vo-observer-cell="${escapeHtml(`timeline:${round.round - 1}:roundTimeline`)}" class="${round.current ? 'current' : ''} ${round.winnerRow ? round.winnerRow : ''} ${round.locked ? 'locked' : ''} ${round.manual ? 'manual' : ''}">${valorantTimelineWinnerSelect(round)}</td>`).join('')}</tr>
           </tbody>
         </table>
       </div>` : '';
@@ -896,6 +1095,41 @@ function renderValorantOcrPanel(game) {
             ${(snapshot.observerTimelineCrops || []).map((crop) => `<section><span>R${Number(crop.round) || '-'}</span><img src="${escapeHtml(crop.rawDataUrl)}" alt="${escapeHtml(`Round ${crop.round} timeline crop`)}"></section>`).join('')}
           </div>
         </section>` : '';
+  const timerDiag = live.timer || {};
+  const timerDataset = live.timerDataset || {};
+  const timerDiagnosticPanel = `
+      <div class="vo-timer-diagnostics">
+        <div class="vo-observer-title"><span>TIMER DIAGNOSTICS</span><strong>${escapeHtml(timerDiag.state || 'UNKNOWN')}</strong></div>
+        <div class="vo-timer-diagnostic-grid">
+          <section><span>Trusted display</span><strong>${escapeHtml(timerDiag.display || '--')}</strong><small>${escapeHtml(timerDiag.source || 'waiting')}</small></section>
+          <section><span>Internal seconds</span><strong>${timerDiag.secondsRemaining === null || timerDiag.secondsRemaining === undefined ? '--' : Number(timerDiag.secondsRemaining).toFixed(2)}</strong><small>Sync age ${timerDiag.syncAgeMs === null || timerDiag.syncAgeMs === undefined ? '--' : `${Math.round(timerDiag.syncAgeMs)} ms`}</small></section>
+          <section><span>Raw vision</span><strong>${escapeHtml(timerDiag.rawVision?.rawText || '--')}</strong><small>${Math.round((Number(timerDiag.rawVision?.confidence) || 0) * 100)}% &middot; ${escapeHtml(timerDiag.rawVision?.hudMode || '--')}</small></section>
+          <section><span>Trusted vision</span><strong>${escapeHtml(timerDiag.trustedVision?.rawText || '--')}</strong><small>${Math.round((Number(timerDiag.visionConfidence) || 0) * 100)}% confidence</small></section>
+          <section><span>Sync error</span><strong>${timerDiag.syncErrorSeconds === null || timerDiag.syncErrorSeconds === undefined ? '--' : Number(timerDiag.syncErrorSeconds).toFixed(2)}</strong><small>Vision minus internal</small></section>
+          <section><span>State flags</span><strong>${timerDiag.lowTime ? 'LOW' : 'NORMAL'} / ${timerDiag.spikePlanted ? 'SPIKE' : 'NO SPIKE'}</strong><small>${Number(timerDiag.acceptedReadings || 0)} accepted / ${Number(timerDiag.rejectedReadings || 0)} rejected</small></section>
+          <section><span>Last reject</span><strong>${escapeHtml(timerDiag.lastRejectionReason || '--')}</strong><small>Continuity filter</small></section>
+        </div>
+      </div>`;
+  const timerDatasetPanel = ocr.source === 'remote' ? '' : `
+      <div class="vo-timer-dataset">
+        <div class="vo-observer-title"><span>TIMER DATASET CAPTURE</span><strong>${escapeHtml((timerDataset.status || 'stopped').toUpperCase())}</strong></div>
+        <div class="vo-template-trainer vo-timer-dataset-controls">
+          <label><small>START TIME</small><input data-vo-timer-dataset="start" value="${escapeHtml(valorantTimerDatasetStart)}" placeholder="1:40"></label>
+          <label><small>FPS</small><input type="number" min="1" max="15" data-vo-timer-dataset="fps" value="${Number(valorantTimerDatasetFps) || 8}"></label>
+          <button class="secondary-button" data-action="start-valorant-timer-dataset">START CAPTURE</button>
+          <button class="secondary-button" data-action="pause-valorant-timer-dataset">PAUSE</button>
+          <button class="secondary-button" data-action="stop-valorant-timer-dataset">STOP</button>
+          <button class="secondary-button" data-action="review-valorant-timer-dataset">REVIEW DATASET</button>
+        </div>
+        <div class="vo-timer-dataset-stats">
+          <span>INFERRED <b>${escapeHtml(timerDataset.currentValue || '--')}</b></span>
+          <span>SAMPLES <b>${Number(timerDataset.samples || 0)}</b></span>
+          <span>HUD <b>${escapeHtml(timerDataset.hudMode || 'NORMAL')}</b></span>
+          <span>FPS <b>${Number(timerDataset.fps || valorantTimerDatasetFps || 0)}</b></span>
+          <span>ELAPSED <b>${formatMsDuration(timerDataset.elapsedMs || 0)}</b></span>
+          <span>VALUES <b>${Object.keys(timerDataset.samplesByValue || {}).length}</b></span>
+        </div>
+      </div>`;
   return `
     <article class="panel valorant-ocr-panel ${snapshot ? 'has-debug-snapshot' : ''}">
       <header class="vo-heading">
@@ -924,6 +1158,7 @@ function renderValorantOcrPanel(game) {
           return `<section class="vo-reading ${field.stale ? 'stale' : ''}"><span>${valorantOcrFieldLabel(fieldId)}</span><strong>${escapeHtml(field.displayValue ?? '--')}</strong><div><b>${confidence}%</b><em>${field.stale ? 'STALE' : field.accepted ? 'ACCEPTED' : 'HELD'}</em></div><code>RAW ${escapeHtml(field.rawText || 'no OCR text')}</code><small>NORM ${escapeHtml(field.normalized || '--')} &middot; ${escapeHtml(field.reason || 'waiting')}</small></section>`;
         }).join('')}
       </div>
+      ${timerDiagnosticPanel}
       <div class="vo-metrics">
         <span>CAPTURE <b>${Number(live.captureFps || 0).toFixed(1)} FPS</b></span>
         <span>ENGINE <b>${escapeHtml(live.capture?.backend || live.captureBackend || ocr.captureBackend || 'auto')}</b></span>
@@ -931,16 +1166,25 @@ function renderValorantOcrPanel(game) {
         <span>SOURCE <b>${live.captureWidth || live.capture?.width || '-'} &times; ${live.captureHeight || live.capture?.height || '-'}</b></span>
         <span>OCR <b>${Number(live.scansPerSecond || 0).toFixed(1)}/S &middot; ${live.scans || live.metrics?.observations || 0} TOTAL</b></span>
         <span>WEAPON TPL <b>${live.weaponTemplates?.count ?? '-'}</b></span>
+        <span>SCORE TPL <b>${live.scoreTemplates?.count ?? '-'}</b></span>
+        <span>TIMER TPL <b>${live.timerTemplates?.count ?? '-'}</b></span>
         <span>LATENCY <b>${live.avgOcrLatencyMs ?? '-'} MS</b></span>
         <span>VALIDATION <b>${live.accepted ?? live.metrics?.accepted ?? 0} OK / ${live.rejected ?? live.metrics?.rejected ?? 0} HELD</b></span>
         <span>FRAME AGE <b>${live.frameAgeMs === null || live.frameAgeMs === undefined ? '-' : Math.round(live.frameAgeMs)} MS</b></span>
       </div>
+      ${timerDatasetPanel}
       ${ocr.source === 'remote' ? '' : `<div class="vo-template-trainer">
         <span>LOADOUT TEMPLATE TRAINING</span>
         <label><small>WEAPON</small><select data-vo-template="weapon">${VALORANT_LOADOUT_TEMPLATE_WEAPONS.map((weapon) => `<option value="${weapon}" ${weapon === valorantLoadoutTemplateWeapon ? 'selected' : ''}>${escapeHtml(valorantWeaponLabel(weapon))}</option>`).join('')}</select></label>
         <label><small>SIDE</small><select data-vo-template="side"><option value="home" ${valorantLoadoutTemplateSide === 'home' ? 'selected' : ''}>Home</option><option value="away" ${valorantLoadoutTemplateSide === 'away' ? 'selected' : ''}>Away</option></select></label>
         <label><small>ROW</small><select data-vo-template="row">${Array.from({ length: 5 }, (_item, index) => `<option value="${index}" ${index === Number(valorantLoadoutTemplateRow) ? 'selected' : ''}>Player ${index + 1}</option>`).join('')}</select></label>
         <button class="secondary-button" data-action="save-valorant-loadout-template">SAVE SHARED TEMPLATE</button>
+      </div>
+      <div class="vo-template-trainer vo-score-template-trainer">
+        <span>SCORE TEMPLATE TRAINING</span>
+        <label><small>SCORE</small><select data-vo-score-template="value">${Array.from({ length: 30 }, (_item, index) => `<option value="${index}" ${String(index) === String(valorantScoreTemplateValue) ? 'selected' : ''}>${index}</option>`).join('')}</select></label>
+        <label><small>BOX</small><select data-vo-score-template="field"><option value="homeScore" ${valorantScoreTemplateField === 'homeScore' ? 'selected' : ''}>Home score</option><option value="awayScore" ${valorantScoreTemplateField === 'awayScore' ? 'selected' : ''}>Away score</option></select></label>
+        <button class="secondary-button" data-action="save-valorant-score-template">SAVE SCORE TEMPLATE</button>
       </div>`}
       ${observerTable}
       ${timelineTable}
@@ -1320,6 +1564,7 @@ function renderOutputs() {
   const programPairUrl = programUrlFor('pair');
   const programFillUrl = programUrlFor('fill');
   const programKeyUrl = programUrlFor('key');
+  const gameSetupUrl = `${overlayBaseUrl}/overlays/scoreboard.html?output=fill&setup=game`;
   return `<section class="view-stack">
     <div class="coming-banner live-output-banner"><div class="coming-icon">&lt;/&gt;</div><div><span>LOCAL OVERLAY SERVER</span><h2>OBS graphics are ready</h2><p>Open Program Output once, then take Scoreboard, Roster, or Map Pool from the controller or Companion without resetting the projectors.</p></div><strong><i></i>ONLINE &middot; PORT 3174</strong></div>
     <article class="output-card pair-output-card program-output-card">
@@ -1330,6 +1575,12 @@ function renderOutputs() {
       </div>
       <div class="output-url">${escapeHtml(programPairUrl)}</div>
       <footer><span class="planned-dot online"></span>PROGRAM OUTPUT <button data-action="open-program-output" data-overlay="${activeProgram.name}">OPEN PROGRAM</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programFillUrl)}">COPY FILL URL</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programKeyUrl)}">COPY KEY URL</button><button data-action="copy-overlay-url" data-url="${escapeHtml(programPairUrl)}">COPY OBS PAIR URL</button></footer>
+    </article>
+    <article class="output-card">
+      <div class="output-thumb"><span>VAL SETUP</span><div class="ghost-score"><i></i><b>GAME</b><strong>ALIGN</strong><b>HUD</b><i></i></div></div>
+      <div class="output-info"><div><h3>Valorant Game Alignment Overlay</h3><p>Transparent setup window that sits over the game so the score/logo covers can be lined up while the native timer remains visible.</p></div><span>${outputDisplaySettings.gameOverlayResolution === '1440' ? '2560 &times; 1440' : '1920 &times; 1080'}</span></div>
+      <div class="output-url">${escapeHtml(gameSetupUrl)}</div>
+      <footer><span class="planned-dot online"></span>GAME SETUP <button data-action="open-game-overlay-setup">TOGGLE GAME OVERLAY</button><button data-action="copy-overlay-url" data-url="${escapeHtml(gameSetupUrl)}">COPY URL</button></footer>
     </article>
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Browser-source outputs</h2><p>Individual Fill and Key HTML graphics &middot; current game: ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)}</p></div></div></div>
     <div class="output-grid">${outputs.map((output) => `<article class="output-card ${output.keyOutput ? 'key-output-card' : ''} ${output.pairOutput ? 'pair-output-card' : ''}"><div class="output-thumb"><span>${output.tag}</span><div class="ghost-score"><i></i><b>ISU</b><strong>${output.name === 'roster' ? 'PLAYER &rarr; HERO' : '0 &mdash; 0'}</strong><b>OPP</b><i></i></div></div><div class="output-info"><div><h3>${output.title}</h3><p>${output.description}</p></div><span>${output.pairOutput ? '2x 1920' : '1920'} &times; 1080</span></div><div class="output-url">${escapeHtml(urlFor(output))}</div><footer><span class="planned-dot online"></span>${output.pairOutput ? 'DUAL OUTPUT' : output.keyOutput ? 'KEY OUTPUT' : 'FILL OUTPUT'} <button data-action="preview-overlay" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>PREVIEW</button><button data-action="open-overlay-output" data-overlay="${output.name}" data-query='${escapeHtml(JSON.stringify(output.query || {}))}'>${output.pairOutput ? 'OPEN DUAL' : 'OPEN WINDOW'}</button><button data-action="copy-overlay-url" data-url="${escapeHtml(urlFor(output))}">COPY URL</button></footer></article>`).join('')}</div>
@@ -1361,6 +1612,9 @@ function renderSettings() {
       <div class="companion-fields">
         <label class="field"><span>FILL SCREEN</span><select data-output-display-prop="fillDisplayId">${renderDisplayOptions(outputDisplaySettings.fillDisplayId, 'Primary display')}</select><small>Used by Fill and the left side of Paired dual output.</small></label>
         <label class="field"><span>KEY SCREEN</span><select data-output-display-prop="keyDisplayId">${renderDisplayOptions(outputDisplaySettings.keyDisplayId, 'Second display')}</select><small>Used by Key and the right side of Paired dual output.</small></label>
+        <label class="field"><span>GAME OVERLAY SCREEN</span><select data-output-display-prop="gameOverlayDisplayId">${renderDisplayOptions(outputDisplaySettings.gameOverlayDisplayId, 'Primary display')}</select><small>Used by the transparent Valorant alignment overlay.</small></label>
+        <label class="field compact-setting"><span>GAME OVERLAY SIZE</span><select data-output-display-prop="gameOverlayResolution"><option value="1080" ${outputDisplaySettings.gameOverlayResolution === '1440' ? '' : 'selected'}>1920 x 1080</option><option value="1440" ${outputDisplaySettings.gameOverlayResolution === '1440' ? 'selected' : ''}>2560 x 1440</option></select><small>Choose the resolution of the game display you are aligning over.</small></label>
+        <label class="away-roster-toggle companion-toggle"><div><strong>Start Program outputs</strong><small>${outputDisplaySettings.autoOpenProgramOutput !== false ? 'Open Fill and Key when the controller starts' : 'Projectors stay closed until opened manually'}</small></div><input type="checkbox" data-output-display-prop="autoOpenProgramOutput" ${outputDisplaySettings.autoOpenProgramOutput !== false ? 'checked' : ''}><i></i></label>
         <label class="field compact-setting"><span>PROGRAM FADE OUT</span><input type="number" min="0.1" max="5" step="0.1" data-program-transition value="${Number(state.programTransitionSeconds || 1).toFixed(1)}"><small>Seconds. Applies when switching Scoreboard, Roster, Map Pool, or Clean.</small></label>
       </div>
       <footer><strong>Output scale</strong><span>Each app output window is created as a 1920 &times; 1080 source and then fullscreened on the selected display.</span><span>Use Preview for setup checks; Open Dual takes over both selected screens.</span></footer>
@@ -1495,6 +1749,174 @@ function applyRocketLeagueScores(game) {
   rl.live.teamScores.forEach((score, teamNum) => {
     game.teams[mapRocketLeagueTeam(teamNum, rl)].detailScore = Number(score) || 0;
   });
+}
+
+function liveValorantScore(snapshot, side) {
+  const value = snapshot?.teams?.[side]?.score ?? snapshot?.fields?.[`${side}Score`]?.value;
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 0 && score <= 24 ? Math.round(score) : null;
+}
+
+function emptyValorantTimelineRound(round) {
+  return {
+    round,
+    winnerRow: null,
+    winnerRole: null,
+    method: null,
+    current: false,
+    locked: false,
+    manual: false,
+    confidence: 0,
+    updatedAt: null
+  };
+}
+
+function ensureValorantRoundTimeline() {
+  const ocr = state.games.valorant.valorantOcr;
+  const live = ocr.live || {};
+  const observer3 = live.observer3 || {};
+  const existing = observer3.roundTimeline || {};
+  const rounds = Array.from({ length: 24 }, (_item, index) => ({
+    ...emptyValorantTimelineRound(index + 1),
+    ...(existing.rounds?.[index] || {})
+  }));
+  ocr.live = {
+    ...live,
+    observer3: {
+      ...observer3,
+      roundTimeline: {
+        currentRound: existing.currentRound ?? null,
+        topRole: existing.topRole || 'defense',
+        bottomRole: existing.bottomRole || 'attack',
+        sideSwapAfter: existing.sideSwapAfter || 12,
+        rounds
+      }
+    }
+  };
+  return ocr.live.observer3.roundTimeline;
+}
+
+function refreshValorantTimelineCurrentRound(homeScore, awayScore) {
+  const timeline = ensureValorantRoundTimeline();
+  const currentRound = Math.max(1, Math.min(24, homeScore + awayScore + 1));
+  timeline.currentRound = currentRound;
+  timeline.rounds = timeline.rounds.map((round, index) => ({
+    ...emptyValorantTimelineRound(index + 1),
+    ...(round || {}),
+    current: currentRound === index + 1 && !round?.winnerRole
+  }));
+}
+
+function resetValorantRoundHistory() {
+  const timeline = ensureValorantRoundTimeline();
+  timeline.currentRound = 1;
+  timeline.rounds = Array.from({ length: 24 }, (_item, index) => ({
+    ...emptyValorantTimelineRound(index + 1),
+    current: index === 0
+  }));
+}
+
+function mergeValorantObserver3Snapshot(previous = {}, incoming = {}) {
+  const previousTimeline = previous.roundTimeline || {};
+  const incomingTimeline = incoming.roundTimeline || {};
+  const rounds = Array.from({ length: 24 }, (_item, index) => {
+    const existing = previousTimeline.rounds?.[index] || {};
+    const next = incomingTimeline.rounds?.[index] || {};
+    return existing.winnerRole || existing.manual
+      ? {
+        ...emptyValorantTimelineRound(index + 1),
+        ...next,
+        ...existing,
+        current: false
+      }
+      : {
+        ...emptyValorantTimelineRound(index + 1),
+        ...next
+      };
+  });
+  return {
+    ...previous,
+    ...incoming,
+    roundTimeline: {
+      ...previousTimeline,
+      ...incomingTimeline,
+      rounds,
+      currentRound: incomingTimeline.currentRound ?? previousTimeline.currentRound ?? null
+    }
+  };
+}
+
+function markValorantRoundWinner(roundNumber, winnerRole) {
+  const timeline = ensureValorantRoundTimeline();
+  const index = Math.max(0, Math.min(23, Math.round(Number(roundNumber) || 1) - 1));
+  const existing = {
+    ...emptyValorantTimelineRound(index + 1),
+    ...(timeline.rounds[index] || {})
+  };
+  if (existing.manual) return;
+  const winnerRow = winnerRole === 'defense' ? 'top' : winnerRole === 'attack' ? 'bottom' : null;
+  timeline.rounds[index] = {
+    ...existing,
+    winnerRow,
+    winnerRole,
+    method: null,
+    current: false,
+    locked: Boolean(winnerRole),
+    confidence: winnerRole ? 1 : 0,
+    updatedAt: Date.now()
+  };
+}
+
+function syncValorantRoundHistoryFromScore(previousHome, previousAway, nextHome, nextAway) {
+  const previousTotal = previousHome + previousAway;
+  const nextTotal = nextHome + nextAway;
+  const homeDelta = nextHome - previousHome;
+  const awayDelta = nextAway - previousAway;
+  if (nextTotal <= previousTotal) {
+    refreshValorantTimelineCurrentRound(nextHome, nextAway);
+    return;
+  }
+  const winnerRole = homeDelta > 0 && awayDelta === 0
+    ? 'defense'
+    : awayDelta > 0 && homeDelta === 0
+      ? 'attack'
+      : null;
+  if (winnerRole) {
+    for (let round = previousTotal + 1; round <= nextTotal; round += 1) {
+      markValorantRoundWinner(round, winnerRole);
+    }
+  }
+  refreshValorantTimelineCurrentRound(nextHome, nextAway);
+}
+
+function syncValorantOcrScores(snapshot) {
+  const game = state.games.valorant;
+  const homeScore = liveValorantScore(snapshot, 'home');
+  const awayScore = liveValorantScore(snapshot, 'away');
+  if (homeScore === null || awayScore === null) return false;
+
+  const currentHome = Number(game.teams[0]?.detailScore) || 0;
+  const currentAway = Number(game.teams[1]?.detailScore) || 0;
+  const currentTotal = currentHome + currentAway;
+  const liveTotal = homeScore + awayScore;
+  if (currentTotal === 0 && liveTotal > 2) return false;
+  if (homeScore < currentHome || awayScore < currentAway) return false;
+
+  let changed = false;
+  if (game.teams[0].detailScore !== homeScore) {
+    game.teams[0].detailScore = homeScore;
+    changed = true;
+  }
+  if (game.teams[1].detailScore !== awayScore) {
+    game.teams[1].detailScore = awayScore;
+    changed = true;
+  }
+  if (changed) {
+    syncValorantRoundHistoryFromScore(currentHome, currentAway, homeScore, awayScore);
+  } else {
+    refreshValorantTimelineCurrentRound(homeScore, awayScore);
+  }
+  return changed;
 }
 
 function rocketLeaguePlayerId(player) {
@@ -1673,7 +2095,7 @@ window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 window.isuDesktop?.onValorantOcrState((snapshot) => {
   const ocr = state.games.valorant.valorantOcr;
   const nextObserver3 = snapshot?.observer3 && typeof snapshot.observer3 === 'object'
-    ? snapshot.observer3
+    ? mergeValorantObserver3Snapshot(ocr.live.observer3, snapshot.observer3)
     : ocr.live.observer3;
   ocr.live = {
     ...ocr.live,
@@ -1682,6 +2104,7 @@ window.isuDesktop?.onValorantOcrState((snapshot) => {
     metrics: snapshot?.metrics || ocr.live.metrics,
     observer3: nextObserver3
   };
+  syncValorantOcrScores(snapshot);
   scheduleValorantOcrUpdate();
 });
 
@@ -1712,6 +2135,10 @@ async function executeCompanionAction(request = {}) {
 }
 
 window.isuDesktop?.onCompanionAction(executeCompanionAction);
+window.isuDesktop?.onStageDisplayStatus((status) => {
+  stageDisplayStatus = status || stageDisplayStatus;
+  if (state.activeView === 'stage') render();
+});
 
 root.addEventListener('scroll', (event) => {
   if (event.target.classList?.contains('content-scroll')) lastUserScrollAt = performance.now();
@@ -1744,6 +2171,160 @@ root.addEventListener('click', async (event) => {
   const index = Number(button.dataset.index);
   const game = current();
   const config = GAME_CONFIGS[state.selectedGame];
+  if (button.dataset.action === 'refresh-stage-displays') {
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-clear-previews') {
+    const result = await window.isuDesktop?.clearStagePreviews?.();
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? 'Stage previews cleared' : result?.error || 'Could not clear stage previews');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-publish-client-update') {
+    const result = await window.isuDesktop?.publishStageClientUpdate?.({});
+    if (result?.ok) {
+      stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+      toast(`Published Stage Client ${result.update?.version || ''}`);
+    } else if (result?.error) {
+      toast(result.error);
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-send-client-update') {
+    const target = button.dataset.updateTarget || 'outdated';
+    const result = await window.isuDesktop?.sendStageClientUpdate?.({
+      target,
+      station: button.dataset.station ? Number(button.dataset.station) : null
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Update sent to ${result.sent || 0} station${Number(result.sent || 0) === 1 ? '' : 's'}` : result?.error || 'Could not send client update');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-global-mode') {
+    const result = await window.isuDesktop?.setStageDisplayMode({ mode: button.dataset.stageMode });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Stage mode: ${stageModeLabel(result.mode)}` : result?.error || 'Stage mode unavailable');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-station-mode') {
+    const result = await window.isuDesktop?.setStageStationMode({
+      station: Number(button.dataset.station),
+      mode: button.dataset.stageMode
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Station ${String(result.station).padStart(2, '0')}: ${stageModeLabel(result.mode)}` : result?.error || 'Station unavailable');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-import-preset') {
+    const result = await window.isuDesktop?.importStagePreset?.({});
+    if (result?.ok) {
+      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
+      toast(`Imported stage preset: ${result.preset?.title || result.preset?.name || 'Preset'}`);
+    } else if (result?.error) {
+      toast(result.error);
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-delete-preset') {
+    const presetName = button.dataset.preset || '';
+    const preset = stagePresets.find((item) => item.name === presetName);
+    if (!presetName || !window.confirm(`Delete imported stage preset "${preset?.title || presetName}"?`)) return;
+    const result = await window.isuDesktop?.deleteStagePreset?.({ name: presetName });
+    if (result?.ok) {
+      stagePresets = await window.isuDesktop?.listStagePresets?.() || [];
+      stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+      toast(`Deleted stage preset: ${preset?.title || presetName}`);
+    } else {
+      toast(result?.error || 'Could not delete stage preset');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-rename-preset') {
+    const presetName = button.dataset.preset || '';
+    const preset = stagePresets.find((item) => item.name === presetName);
+    const title = window.prompt('Preset display name', preset?.title || presetName);
+    if (!title) return;
+    const result = await window.isuDesktop?.updateStagePreset?.({ name: presetName, title });
+    if (result?.ok) {
+      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
+      toast('Preset renamed');
+    } else {
+      toast(result?.error || 'Could not rename preset');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-category-preset') {
+    const presetName = button.dataset.preset || '';
+    const preset = stagePresets.find((item) => item.name === presetName);
+    const category = window.prompt('Preset category', preset?.category || 'General');
+    if (!category) return;
+    const result = await window.isuDesktop?.updateStagePreset?.({ name: presetName, category });
+    if (result?.ok) {
+      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
+      toast('Preset category updated');
+    } else {
+      toast(result?.error || 'Could not update category');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-replace-preset') {
+    const presetName = button.dataset.preset || '';
+    const result = await window.isuDesktop?.replaceStagePreset?.({ name: presetName });
+    if (result?.ok) {
+      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
+      toast('Preset media replaced');
+    } else if (result?.error) {
+      toast(result.error);
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-prepare-preset') {
+    const result = await window.isuDesktop?.prepareStagePreset?.({
+      preset: button.dataset.preset,
+      mode: button.dataset.stageMode || 'graphic',
+      wallTotal: Number(button.dataset.wallTotal) || 10,
+      wallGroup: button.dataset.wallGroup || ''
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Prepared: ${result.title || result.preset}` : result?.error || 'Stage preset unavailable');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-play-prepared') {
+    const result = await window.isuDesktop?.playPreparedStagePreset?.({
+      executeAt: (Date.now() / 1000) + 1.0,
+      prepareTimeoutMs: 3500
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Fired prepared preset: ${result.preset}` : result?.error || 'No prepared preset ready');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-play-preset') {
+    const result = await window.isuDesktop?.playStagePreset({
+      preset: button.dataset.preset,
+      mode: button.dataset.stageMode || 'graphic',
+      wallTotal: Number(button.dataset.wallTotal) || 10,
+      wallGroup: button.dataset.wallGroup || '',
+      executeAt: (Date.now() / 1000) + 1.5
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Stage preset: ${result.preset}` : result?.error || 'Stage preset unavailable');
+    render();
+    return;
+  }
   if (button.dataset.action === 'pick-team-logo') {
     const selected = await window.isuDesktop?.pickImage({
       gameKey: state.selectedGame,
@@ -1832,6 +2413,14 @@ root.addEventListener('click', async (event) => {
   if (button.dataset.action === 'open-program-output') {
     const opened = await window.isuDesktop?.openProgramOutput({ name: state.activeOutputOverlay || button.dataset.overlay || 'scoreboard' });
     toast(opened ? 'Program output opened' : 'Program output unavailable');
+    return;
+  }
+  if (button.dataset.action === 'open-game-overlay-setup') {
+    const result = await window.isuDesktop?.openOverlayOutput({
+      name: 'scoreboard',
+      query: { output: 'fill', setup: 'game' }
+    });
+    toast(result?.closed ? 'Game alignment overlay closed' : result ? 'Game alignment overlay opened' : 'Game alignment overlay unavailable');
     return;
   }
   if (button.dataset.action === 'take-program-output') {
@@ -1945,6 +2534,61 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  if (button.dataset.action === 'save-valorant-score-template') {
+    try {
+      const selectedValue = root.querySelector('[data-vo-score-template="value"]')?.value || valorantScoreTemplateValue;
+      const selectedField = root.querySelector('[data-vo-score-template="field"]')?.value || valorantScoreTemplateField;
+      valorantScoreTemplateValue = String(Math.max(0, Math.min(99, Math.round(Number(selectedValue) || 0))));
+      valorantScoreTemplateField = selectedField === 'awayScore' ? 'awayScore' : 'homeScore';
+      const result = await window.isuDesktop?.saveValorantScoreTemplate?.({
+        value: valorantScoreTemplateValue,
+        fieldId: valorantScoreTemplateField
+      });
+      const info = await window.isuDesktop?.getValorantOcrInfo?.();
+      if (info?.state) state.games.valorant.valorantOcr.live = info.state;
+      toast(`Saved score ${result?.value || valorantScoreTemplateValue} ${result?.scope === 'shared' ? 'shared ' : ''}template`);
+    } catch (error) {
+      toast(error?.message || 'Could not save score template');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'start-valorant-timer-dataset') {
+    try {
+      const result = await window.isuDesktop?.startValorantTimerDataset?.({
+        startTime: valorantTimerDatasetStart,
+        fps: valorantTimerDatasetFps
+      });
+      const info = await window.isuDesktop?.getValorantOcrInfo?.();
+      if (info?.state) state.games.valorant.valorantOcr.live = info.state;
+      toast(`Timer dataset capture started at ${result?.timerDataset?.currentValue || valorantTimerDatasetStart}`);
+    } catch (error) {
+      toast(error?.message || 'Could not start timer dataset capture');
+    }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'pause-valorant-timer-dataset') {
+    await window.isuDesktop?.pauseValorantTimerDataset?.();
+    const info = await window.isuDesktop?.getValorantOcrInfo?.();
+    if (info?.state) state.games.valorant.valorantOcr.live = info.state;
+    toast('Timer dataset capture paused');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stop-valorant-timer-dataset') {
+    await window.isuDesktop?.stopValorantTimerDataset?.();
+    const info = await window.isuDesktop?.getValorantOcrInfo?.();
+    if (info?.state) state.games.valorant.valorantOcr.live = info.state;
+    toast('Timer dataset capture stopped');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'review-valorant-timer-dataset') {
+    const result = await window.isuDesktop?.reviewValorantTimerDataset?.();
+    toast(`Timer dataset: ${Number(result?.samples || 0)} samples across ${Object.keys(result?.samplesByValue || {}).length} values`);
+    return;
+  }
   if (button.dataset.action === 'clear-valorant-ocr') {
     await window.isuDesktop?.clearValorantOcrState();
     toast('OCR locks and history cleared');
@@ -1973,16 +2617,21 @@ root.addEventListener('click', async (event) => {
     'detail-plus': () => commit(() => { game.teams[index].detailScore += 1; }),
     'detail-minus': () => commit(() => { game.teams[index].detailScore = Math.max(0, game.teams[index].detailScore - 1); }),
     'swap-teams': () => commit(() => {
-      swapGameTeams(game);
+      if (state.selectedGame === 'valorant') swapGameTeamsPreservingSideScores(game);
+      else swapGameTeams(game);
       state.activeRosterSide = state.activeRosterSide === 'away' ? 'home' : 'away';
     }, 'Team sides swapped'),
     'reset-scores': () => commit(() => {
       game.teams.forEach((team) => { team.score = 0; team.detailScore = state.selectedGame === 'smash' ? 12 : 0; });
       if (state.selectedGame === 'valorant' || state.selectedGame === 'rocketleague') clearSeriesMapResults(game, state.selectedGame);
+      if (state.selectedGame === 'valorant') resetValorantRoundHistory();
     }, 'Scores reset'),
     'next-match': () => {
       const nextIndex = (game.activeMap + 1) % visibleMapRows(game, config).length;
-      commit(() => advanceGameMatch(game, state.selectedGame), `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
+      commit(() => {
+        advanceGameMatch(game, state.selectedGame);
+        if (state.selectedGame === 'valorant') resetValorantRoundHistory();
+      }, `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
     },
     'activate-map': () => commit(() => { game.activeMap = index; game.mapRows.forEach((row, i) => { if (row.winner === null) row.status = i === index ? 'ready' : 'upcoming'; }); }, `Map ${index + 1} active`),
     'map-winner': () => commit(() => {
@@ -1994,6 +2643,7 @@ root.addEventListener('click', async (event) => {
     'clear-maps': () => commit(() => {
       clearSeriesMapResults(game, state.selectedGame);
       game.teams.forEach((team) => { team.score = 0; });
+      if (state.selectedGame === 'valorant') resetValorantRoundHistory();
     }, 'Map results cleared'),
     'reset-veto': () => commit(() => {
       game.veto.bans = game.veto.bans.map(() => '');
@@ -2008,6 +2658,7 @@ root.addEventListener('click', async (event) => {
       });
       game.activeMap = 0;
       game.teams.forEach((team) => { team.score = 0; });
+      resetValorantRoundHistory();
     }, 'Veto map selections reset'),
     'add-player': () => commit(() => { const roster = activeRosterCollection(game)[state.activeRoster]; roster.push(createPlayer(config, roster.length)); }, 'Roster slot added'),
     'remove-player': () => commit(() => { activeRosterCollection(game)[state.activeRoster].splice(index, 1); }, 'Player removed'),
@@ -2099,7 +2750,7 @@ root.addEventListener('change', async (event) => {
   }
   if (target.dataset.outputDisplayProp) {
     const prop = target.dataset.outputDisplayProp;
-    outputDisplaySettings[prop] = target.value;
+    outputDisplaySettings[prop] = target.type === 'checkbox' ? target.checked : target.value;
     window.isuDesktop?.configureOutputDisplays(outputDisplaySettings).then((result) => {
       outputDisplays = result?.displays || outputDisplays;
       outputDisplaySettings = result?.settings || outputDisplaySettings;
@@ -2148,6 +2799,43 @@ root.addEventListener('change', async (event) => {
     if (target.dataset.voTemplate === 'weapon') valorantLoadoutTemplateWeapon = target.value;
     if (target.dataset.voTemplate === 'side') valorantLoadoutTemplateSide = target.value === 'away' ? 'away' : 'home';
     if (target.dataset.voTemplate === 'row') valorantLoadoutTemplateRow = Math.max(0, Math.min(4, Math.round(Number(target.value) || 0)));
+    render();
+    return;
+  }
+  if (target.dataset.voScoreTemplate) {
+    if (target.dataset.voScoreTemplate === 'value') {
+      valorantScoreTemplateValue = String(Math.max(0, Math.min(99, Math.round(Number(target.value) || 0))));
+    }
+    if (target.dataset.voScoreTemplate === 'field') {
+      valorantScoreTemplateField = target.value === 'awayScore' ? 'awayScore' : 'homeScore';
+    }
+    render();
+    return;
+  }
+  if (target.dataset.voTimerDataset) {
+    if (target.dataset.voTimerDataset === 'start') {
+      valorantTimerDatasetStart = target.value.trim() || '1:40';
+    }
+    if (target.dataset.voTimerDataset === 'fps') {
+      valorantTimerDatasetFps = Math.max(1, Math.min(15, Math.round(Number(target.value) || 8)));
+    }
+    render();
+    return;
+  }
+  if (target.dataset.voTimelineRound) {
+    const round = Math.max(1, Math.min(24, Math.round(Number(target.dataset.voTimelineRound) || 1)));
+    const winnerRole = target.value;
+    const snapshot = await window.isuDesktop?.setValorantTimelineRound?.({ round, winnerRole, method: '' });
+    if (snapshot) {
+      const ocr = state.games.valorant.valorantOcr;
+      ocr.live = {
+        ...ocr.live,
+        ...snapshot,
+        fields: snapshot.fields || ocr.live.fields,
+        metrics: snapshot.metrics || ocr.live.metrics,
+        observer3: snapshot.observer3 || ocr.live.observer3
+      };
+    }
     render();
     return;
   }
@@ -2247,6 +2935,14 @@ function initialize() {
     companionStatus = status || companionStatus;
     if (state.activeView === 'settings') render();
   });
+  window.isuDesktop?.getStageDisplayStatus().then((status) => {
+    stageDisplayStatus = status || stageDisplayStatus;
+    if (state.activeView === 'stage') render();
+  });
+  window.isuDesktop?.listStagePresets?.().then((presets) => {
+    stagePresets = Array.isArray(presets) ? presets : [];
+    if (state.activeView === 'stage') render();
+  });
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
     if ((state.selectedGame === 'rocketleague' && state.activeView === 'control') || state.activeView === 'settings') render();
@@ -2256,6 +2952,7 @@ function initialize() {
     outputDisplaySettings = result?.settings || outputDisplaySettings;
     if (state.activeView === 'settings') render();
     // Open once during controller initialization, not on live-state updates.
+    if (outputDisplaySettings.autoOpenProgramOutput === false) return null;
     return window.isuDesktop.openProgramOutput({ name: state.activeOutputOverlay || 'scoreboard' });
   }).then((opened) => {
     if (opened === false) toast('Program outputs could not open. Use Open Program to retry.');

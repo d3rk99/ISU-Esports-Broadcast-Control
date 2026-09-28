@@ -29,6 +29,18 @@ export function swapGameTeams(game) {
   game.veto?.picks?.forEach((pick) => { pick.attackers = Number(pick.attackers) === 0 ? 1 : 0; });
 }
 
+export function swapGameTeamsPreservingSideScores(game) {
+  const sideScores = game.teams.map((team) => ({
+    score: Number(team.score) || 0,
+    detailScore: Number(team.detailScore) || 0
+  }));
+  swapGameTeams(game);
+  game.teams.forEach((team, index) => {
+    team.score = sideScores[index].score;
+    team.detailScore = sideScores[index].detailScore;
+  });
+}
+
 function resetDetailScores(game, gameKey) {
   const resetValue = gameKey === 'smash' ? 12 : 0;
   game.teams.forEach((team) => { team.detailScore = resetValue; });
@@ -161,7 +173,7 @@ export function applyCompanionAction(state, request = {}) {
       if (typeof request.value !== 'boolean') throw actionError('value must be true or false');
       game.match.live = request.value;
     },
-    'teams.swap': () => swapGameTeams(game),
+    'teams.swap': () => gameKey === 'valorant' ? swapGameTeamsPreservingSideScores(game) : swapGameTeams(game),
     'map.activate': () => {
       const index = wholeNumber(request.number, 'number', { min: 1, max: visibleMapRows(game).length }) - 1;
       game.activeMap = index;

@@ -52,6 +52,27 @@ test('team swap preserves the selected first roster team', () => {
   assert.equal(game.awayRosters.varsity[0].handle, 'ISU PLAYER');
 });
 
+test('Valorant team swap preserves left and right side scores', () => {
+  const state = createInitialState();
+  state.selectedGame = 'valorant';
+  const game = state.games.valorant;
+  game.teams[0].detailScore = 8;
+  game.teams[1].detailScore = 4;
+  game.teams[0].score = 1;
+  game.teams[1].score = 0;
+  const originalHomeName = game.teams[0].name;
+  const originalAwayName = game.teams[1].name;
+
+  applyCompanionAction(state, { action: 'teams.swap' });
+
+  assert.equal(game.teams[0].name, originalAwayName);
+  assert.equal(game.teams[1].name, originalHomeName);
+  assert.equal(game.teams[0].detailScore, 8);
+  assert.equal(game.teams[1].detailScore, 4);
+  assert.equal(game.teams[0].score, 1);
+  assert.equal(game.teams[1].score, 0);
+});
+
 test('map winner and reset actions keep series score in sync', () => {
   const state = createInitialState();
   applyCompanionAction(state, { action: 'map.winner.set', number: 1, team: 'home' });
@@ -102,6 +123,21 @@ test('Valorant score reset clears map results without clearing veto selections',
   assert.equal(game.mapRows[0].winner, null);
   assert.equal(game.mapRows[0].status, 'ready');
   assert.equal(game.teams[0].score, 0);
+});
+
+test('Valorant next-match saves live round score and resets the current score', () => {
+  const state = createInitialState();
+  state.selectedGame = 'valorant';
+  const game = state.games.valorant;
+  applyCompanionAction(state, { action: 'detail_score.set', team: 'home', value: 13 });
+  applyCompanionAction(state, { action: 'detail_score.set', team: 'away', value: 11 });
+  applyCompanionAction(state, { action: 'match.next' });
+  assert.deepEqual(game.mapRows[0].score, ['13', '11']);
+  assert.equal(game.mapRows[0].winner, 0);
+  assert.equal(game.teams[0].score, 1);
+  assert.equal(game.teams[0].detailScore, 0);
+  assert.equal(game.teams[1].detailScore, 0);
+  assert.equal(game.activeMap, 1);
 });
 
 test('next-match leaves tied map scores without an automatic winner', () => {

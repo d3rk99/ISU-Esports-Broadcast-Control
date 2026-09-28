@@ -128,6 +128,10 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		) {
 			this.checkFeedbacks('team_leading')
 		}
+		if (Object.keys(changed).some((id) => id.startsWith('stage_station_'))) {
+			this.checkFeedbacks('stage_station_online', 'stage_station_mode', 'stage_station_outdated', 'stage_station_updating')
+		}
+		if (Object.hasOwn(changed, 'stage_pending_all_ready')) this.checkFeedbacks('stage_prepared_ready')
 	}
 
 	private updateActions(): void {

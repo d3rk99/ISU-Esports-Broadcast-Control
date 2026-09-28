@@ -40,6 +40,17 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		rl_spectated_player: { name: 'Rocket League: Spectated player' },
 		rl_packet_rate: { name: 'Rocket League: Packet rate' },
 		rl_packets: { name: 'Rocket League: Packets received' },
+		stage_enabled: { name: 'Stage Displays: Manager enabled' },
+		stage_online_count: { name: 'Stage Displays: Online station count' },
+		stage_expected_client_version: { name: 'Stage Displays: Expected client version' },
+		stage_update_available: { name: 'Stage Displays: Client update available' },
+		stage_update_version: { name: 'Stage Displays: Published update version' },
+		stage_update_size: { name: 'Stage Displays: Published update size bytes' },
+		stage_pending_preset: { name: 'Stage Displays: Prepared preset' },
+		stage_pending_mode: { name: 'Stage Displays: Prepared mode' },
+		stage_pending_ready_count: { name: 'Stage Displays: Prepared ready count' },
+		stage_pending_online_count: { name: 'Stage Displays: Prepared online count' },
+		stage_pending_all_ready: { name: 'Stage Displays: Prepared cue all ready' },
 	}
 
 	for (let number = 1; number <= 7; number += 1) {
@@ -59,6 +70,18 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		definitions[`rl_player_${number}_assists`] = { name: `Rocket League player ${number}: Assists` }
 		definitions[`rl_player_${number}_saves`] = { name: `Rocket League player ${number}: Saves` }
 		definitions[`rl_player_${number}_shots`] = { name: `Rocket League player ${number}: Shots` }
+	}
+
+	for (let number = 1; number <= 10; number += 1) {
+		definitions[`stage_station_${number}_online`] = { name: `Stage station ${number}: Online` }
+		definitions[`stage_station_${number}_mode`] = { name: `Stage station ${number}: Mode` }
+		definitions[`stage_station_${number}_hostname`] = { name: `Stage station ${number}: Hostname` }
+		definitions[`stage_station_${number}_client_version`] = { name: `Stage station ${number}: Client version` }
+		definitions[`stage_station_${number}_outdated`] = { name: `Stage station ${number}: Outdated` }
+		definitions[`stage_station_${number}_updating`] = { name: `Stage station ${number}: Updating` }
+		definitions[`stage_station_${number}_update_status`] = { name: `Stage station ${number}: Update status` }
+		definitions[`stage_station_${number}_preset`] = { name: `Stage station ${number}: Preset` }
+		definitions[`stage_station_${number}_ready`] = { name: `Stage station ${number}: Ready` }
 	}
 
 	for (let number = 1; number <= 4; number += 1) {

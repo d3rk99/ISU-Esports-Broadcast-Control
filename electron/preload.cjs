@@ -13,6 +13,20 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   getNetworkAddresses: () => ipcRenderer.invoke('network:get-addresses'),
   configureCompanion: (settings) => ipcRenderer.invoke('companion:configure', settings),
   getCompanionStatus: () => ipcRenderer.invoke('companion:get-status'),
+  getStageDisplayStatus: () => ipcRenderer.invoke('stage-displays:get-status'),
+  listStagePresets: () => ipcRenderer.invoke('stage-displays:list-presets'),
+  importStagePreset: (details) => ipcRenderer.invoke('stage-displays:import-preset', details),
+  deleteStagePreset: (details) => ipcRenderer.invoke('stage-displays:delete-preset', details),
+  updateStagePreset: (details) => ipcRenderer.invoke('stage-displays:update-preset', details),
+  replaceStagePreset: (details) => ipcRenderer.invoke('stage-displays:replace-preset', details),
+  publishStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:publish-client-update', details),
+  sendStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:send-client-update', details),
+  clearStagePreviews: () => ipcRenderer.invoke('stage-displays:clear-previews'),
+  setStageDisplayMode: (details) => ipcRenderer.invoke('stage-displays:set-global-mode', details),
+  setStageStationMode: (details) => ipcRenderer.invoke('stage-displays:set-station-mode', details),
+  prepareStagePreset: (details) => ipcRenderer.invoke('stage-displays:prepare-preset', details),
+  playPreparedStagePreset: (details) => ipcRenderer.invoke('stage-displays:play-prepared', details),
+  playStagePreset: (details) => ipcRenderer.invoke('stage-displays:play-preset', details),
   pickImage: (details) => ipcRenderer.invoke('assets:pick-image', details),
   openOverlayPreview: (details) => ipcRenderer.invoke('overlay:preview', details),
   openOverlayOutput: (details) => ipcRenderer.invoke('overlay:open-output', details),
@@ -30,8 +44,14 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   listValorantWindows: () => ipcRenderer.invoke('valorant-ocr:list-windows'),
   captureValorantOcrSnapshot: () => ipcRenderer.invoke('valorant-ocr:capture-snapshot'),
   saveValorantLoadoutTemplate: (details) => ipcRenderer.invoke('valorant-ocr:save-loadout-template', details),
+  saveValorantScoreTemplate: (details) => ipcRenderer.invoke('valorant-ocr:save-score-template', details),
+  startValorantTimerDataset: (details) => ipcRenderer.invoke('valorant-ocr:start-timer-dataset', details),
+  pauseValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:pause-timer-dataset'),
+  stopValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:stop-timer-dataset'),
+  reviewValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:review-timer-dataset'),
   clearValorantOcrState: () => ipcRenderer.invoke('valorant-ocr:clear'),
   setValorantObserverName: (details) => ipcRenderer.invoke('valorant-ocr:set-observer-name', details),
+  setValorantTimelineRound: (details) => ipcRenderer.invoke('valorant-ocr:set-timeline-round', details),
   startValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:start-simulator'),
   stopValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:stop-simulator'),
   onRocketLeagueEvent: (callback) => {
@@ -53,6 +73,11 @@ contextBridge.exposeInMainWorld('isuDesktop', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('valorant-ocr:status', listener);
     return () => ipcRenderer.removeListener('valorant-ocr:status', listener);
+  },
+  onStageDisplayStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('stage-displays:status', listener);
+    return () => ipcRenderer.removeListener('stage-displays:status', listener);
   },
   onCompanionAction: (callback) => {
     const listener = async (_event, payload = {}) => {

@@ -2,8 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { WebSocket } = require('ws');
 const net = require('node:net');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { ValorantOcrService, chooseOcrConsensus, normalizeSettings } = require('../electron/valorant-ocr-service.cjs');
 const { getValorantOcrProfile } = require('../electron/valorant-ocr-profiles.cjs');
+const { ValorantTimerStateService } = require('../electron/valorant-timer-state.cjs');
 
 function fakeFrame(now = Date.now()) {
   return { sourceName: 'VALORANT', capturedAt: now, width: 1920, height: 1080, image: {} };
@@ -15,6 +19,94 @@ test('Bandit is accepted as a training weapon while unknown weapons are rejected
   await assert.rejects(service.saveLoadoutTemplate({ weapon: 'not-a-weapon' }), /Choose a valid weapon/);
   const appSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/app.js'), 'utf8');
   assert.match(appSource, /VALORANT_LOADOUT_TEMPLATE_WEAPONS = \[[\s\S]*?'bandit'/);
+});
+
+test('score templates save into the selected score folder', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'valorant-score-templates-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const transparentPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8BQDwAFgwJ/l0v5xQAAAABJRU5ErkJggg==';
+  const service = new ValorantOcrService({
+    sharedScoreTemplateRoot: root,
+    capture: {
+      capture: async () => fakeFrame(1000),
+      crop: () => ({ processedDataUrl: `data:image/png;base64,${transparentPng}` })
+    }
+  });
+  const result = await service.saveScoreTemplate({ value: '12', fieldId: 'awayScore' });
+  assert.equal(result.value, '12');
+  assert.equal(result.fieldId, 'awayScore');
+  assert.equal(path.basename(path.dirname(result.path)), '12');
+  assert.equal(fs.existsSync(result.path), true);
+  await assert.rejects(() => service.saveScoreTemplate({ value: 'abc' }), /valid score value/);
+});
+
+test('Valorant round timeline manual winners use fixed color lanes', () => {
+  const service = new ValorantOcrService({});
+  service.setObserverTimelineRound({ round: 12, winnerRole: 'defense' });
+  service.setObserverTimelineRound({ round: 13, winnerRole: 'attack' });
+  const rounds = service.observer3.roundTimeline.rounds;
+  assert.equal(rounds[11].winnerRole, 'defense');
+  assert.equal(rounds[11].winnerRow, 'top');
+  assert.equal(rounds[12].winnerRole, 'attack');
+  assert.equal(rounds[12].winnerRow, 'bottom');
+  assert.equal(rounds[12].locked, true);
+  assert.equal(rounds[12].method, null);
+});
+
+test('internal Valorant timer continues through OCR gaps and rejects impossible jumps', () => {
+  let wallNow = 1000;
+  let monoNow = 100;
+  const timer = new ValorantTimerStateService({
+    now: () => wallNow,
+    monotonicNow: () => monoNow,
+    config: { confidenceThreshold: 0.7, highConfidenceThreshold: 0.85 }
+  });
+  timer.observe({ text: '1:23', confidence: 0.96 }, wallNow, monoNow);
+  monoNow += 2100;
+  wallNow += 2100;
+  const ticking = timer.snapshot(wallNow, monoNow);
+  assert.ok(ticking.secondsRemaining < 82);
+  assert.ok(ticking.secondsRemaining > 80);
+  timer.observe({ text: '1:29', confidence: 0.99 }, wallNow, monoNow);
+  const rejected = timer.snapshot(wallNow, monoNow);
+  assert.equal(rejected.lastRejectionReason, 'impossible-backward-jump');
+  assert.notEqual(Math.round(rejected.secondsRemaining), 89);
+  timer.observe({ text: '3:43', confidence: 0.99 }, wallNow, monoNow);
+  const overMax = timer.snapshot(wallNow, monoNow);
+  assert.equal(overMax.lastRejectionReason, 'above-round-timer-maximum');
+  assert.notEqual(Math.round(overMax.secondsRemaining), 223);
+});
+
+test('internal Valorant timer waits for round start and keeps ticking through rejected reads', () => {
+  let wallNow = 1000;
+  let monoNow = 100;
+  const timer = new ValorantTimerStateService({
+    now: () => wallNow,
+    monotonicNow: () => monoNow,
+    config: { confidenceThreshold: 0.7, highConfidenceThreshold: 0.85 }
+  });
+  timer.observe({ text: '1:40', confidence: 0.99 }, wallNow, monoNow);
+  let snapshot = timer.snapshot(wallNow, monoNow);
+  assert.equal(snapshot.secondsRemaining, null);
+  assert.equal(snapshot.lastRejectionReason, 'awaiting-round-start');
+
+  timer.observe({ text: '1:39', confidence: 0.99 }, wallNow, monoNow);
+  snapshot = timer.snapshot(wallNow, monoNow);
+  assert.equal(Math.round(snapshot.secondsRemaining), 99);
+
+  monoNow += 2400;
+  wallNow += 2400;
+  timer.observe({ text: '', confidence: 0 }, wallNow, monoNow);
+  snapshot = timer.snapshot(wallNow, monoNow);
+  assert.ok(snapshot.secondsRemaining < 97);
+  assert.ok(snapshot.secondsRemaining > 96);
+  assert.equal(snapshot.source, 'internal_running');
+  assert.equal(snapshot.lastRejectionReason, 'timer-unreadable');
+
+  timer.observe({ text: '1:40', confidence: 0.99 }, wallNow, monoNow);
+  snapshot = timer.snapshot(wallNow, monoNow);
+  assert.equal(snapshot.lastRejectionReason, 'awaiting-round-start');
+  assert.ok(snapshot.secondsRemaining < 97);
 });
 
 test('grid batch runs four cells while score OCR remains available and reset discards pending results', async (t) => {
