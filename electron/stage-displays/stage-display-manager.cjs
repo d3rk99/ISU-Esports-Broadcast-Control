@@ -27,7 +27,7 @@ const PRESET_LAYOUTS = Object.freeze({
   any: 'Any layout'
 });
 
-const EXPECTED_CLIENT_VERSION = '0.1.1';
+const { CLIENT_VERSION: EXPECTED_CLIENT_VERSION, isOlderVersion } = require('./client-version.cjs');
 const CLIENT_UPDATE_FILE = 'ISU-Stage-Display-Client-Update.exe';
 const CLIENT_UPDATE_MANIFEST = 'stage-client-update.json';
 
@@ -39,7 +39,7 @@ function normalizeStageMode(mode = '') {
 
 function stationNumber(value) {
   const station = Math.round(Number(value) || 0);
-  return station >= 1 && station <= 10 ? station : null;
+  return station >= 1 && station <= 11 ? station : null;
 }
 
 function normalizePresetLayout(value = '') {
@@ -128,7 +128,7 @@ class StageDisplayManager {
     this.pendingPreset = null;
     this.presets = new Map();
     this.eventLog = [];
-    for (let station = 1; station <= 10; station += 1) {
+    for (let station = 1; station <= 11; station += 1) {
       this.stations.set(station, this.emptyStation(station));
     }
   }
@@ -213,10 +213,10 @@ class StageDisplayManager {
 
   updateTargetStations(target = 'outdated', stationId = null) {
     if (stationId) return [Number(stationId)].filter((station) => stationNumber(station));
-    const stations = Array.from(this.stations.values()).filter((station) => station.online);
+    const stations = Array.from(this.stations.values()).filter((station) => station.online && station.station <= 10);
     if (target === 'all') return stations.map((station) => station.station);
     return stations
-      .filter((station) => station.clientVersion && station.clientVersion !== EXPECTED_CLIENT_VERSION)
+      .filter((station) => isOlderVersion(station.clientVersion, this.publishedClientUpdate()?.version))
       .map((station) => station.station);
   }
 
@@ -491,7 +491,7 @@ class StageDisplayManager {
       mode: 'offline',
       hostname: '',
       clientVersion: '',
-      wallPosition: station,
+      wallPosition: station === 11 ? 1 : station,
       lastSeen: null,
       connectedAt: null,
       ready: false,
@@ -562,7 +562,7 @@ class StageDisplayManager {
         current.mode = normalizeStageMode(message.mode) || current.mode || 'hold';
         current.hostname = String(message.hostname || '');
         current.clientVersion = String(message.clientVersion || '');
-        current.outdated = Boolean(current.clientVersion && current.clientVersion !== EXPECTED_CLIENT_VERSION);
+        current.outdated = isOlderVersion(current.clientVersion, this.publishedClientUpdate()?.version);
         current.wallPosition = stationNumber(message.wallPosition) || station;
         current.connectedAt = this.now();
         current.lastSeen = this.now();
@@ -774,6 +774,7 @@ class StageDisplayManager {
     const mode = normalizeStageMode(options.mode) || 'graphic';
     const wallTotal = Math.max(1, Math.min(10, Number(options.wallTotal) || 10));
     const targetStations = this.targetStationsForOptions(options);
+    if (targetStations.includes(11)) return { ok: false, error: 'Use Test Station 11 playback; test clients cannot join a prepared stage cue' };
     const playId = `${details.name}-${this.now()}-${Math.round(Math.random() * 100000)}`;
     this.lastGlobalMode = mode;
     this.pendingPreset = {
@@ -857,6 +858,18 @@ class StageDisplayManager {
   }
 
   async playPreset(preset = '', options = {}) {
+    // Test playback never alters the live stage's prepared cue or global mode.
+    if (Array.isArray(options.targetStations) && options.targetStations.length === 1 && Number(options.targetStations[0]) === 11) {
+      const details = this.presetDetails(preset);
+      if (!details) return { ok: false, error: 'Preset not found' };
+      if (!this.stations.get(11)?.online) return { ok: false, error: 'Test Station 11 is offline' };
+      const wallTotal = Math.max(1, Math.min(10, Math.round(Number(options.wallTotal) || 1)));
+      const wallPosition = Math.max(1, Math.min(wallTotal, Math.round(Number(options.wallPosition) || 1)));
+      const result = this.setStationMode(11, options.mode || 'graphic', {
+        preset: details.name, assetPath: details.assetPath, wallTotal, wallPosition
+      });
+      return { ...result, preset: details.name };
+    }
     const prepared = this.preparePreset(preset, options);
     if (!prepared.ok) return prepared;
     return this.playPreparedPreset({
@@ -866,11 +879,12 @@ class StageDisplayManager {
   }
 
   status() {
+    const update = this.publishedClientUpdate();
     const stations = Array.from(this.stations.values())
       .sort((left, right) => left.station - right.station)
       .map((station) => {
         const { socket: _socket, ...publicStation } = station;
-        return publicStation;
+        return { ...publicStation, outdated: isOlderVersion(publicStation.clientVersion, update?.version) };
       });
     return {
       enabled: Boolean(this.wss),
@@ -879,16 +893,17 @@ class StageDisplayManager {
       wsPath: '/stage',
       modes: Object.values(STAGE_DISPLAY_MODES),
       lastGlobalMode: this.lastGlobalMode,
-      onlineCount: stations.filter((station) => station.online).length,
+      onlineCount: stations.filter((station) => station.online && station.station <= 10).length,
+      testOnline: Boolean(stations.find((station) => station.station === 11)?.online),
       pendingPreset: this.pendingPreset ? {
         ...this.pendingPreset,
         readiness: this.readinessForPlay(this.pendingPreset.playId, this.pendingPreset.targetStations)
       } : null,
       expectedClientVersion: EXPECTED_CLIENT_VERSION,
-      clientUpdate: this.publishedClientUpdate() || { available: false, version: EXPECTED_CLIENT_VERSION },
+      clientUpdate: update || { available: false, version: EXPECTED_CLIENT_VERSION },
       warnings: stations
-        .filter((station) => station.online && station.clientVersion && station.clientVersion !== EXPECTED_CLIENT_VERSION)
-        .map((station) => `Station ${String(station.station).padStart(2, '0')} client ${station.clientVersion} does not match expected ${EXPECTED_CLIENT_VERSION}`),
+        .filter((station) => station.online && station.outdated)
+        .map((station) => `Station ${String(station.station).padStart(2, '0')} client ${station.clientVersion} has a newer published update available`),
       eventLog: this.eventLog.slice(-40),
       stations
     };

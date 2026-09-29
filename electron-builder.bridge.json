@@ -15,6 +15,7 @@
     "electron/valorant-ocr-profiles.json",
     "electron/valorant-ocr-service.cjs",
     "electron/valorant-ocr-state.cjs",
+    "electron/valorant-timer-state.cjs",
     "package.json"
   ],
   "asarUnpack": [

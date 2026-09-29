@@ -304,7 +304,10 @@ class CompanionApiService {
       const payload = `event: variables\ndata: ${JSON.stringify(variables)}\n\n`;
       this.pendingState = null;
       for (const client of this.clients) {
-        if (!client.writableEnded && !client.writableNeedDrain) client.write(payload);
+        if (!client.writableEnded && !client.writableNeedDrain && client.lastVariablePayload !== payload) {
+          client.write(payload);
+          client.lastVariablePayload = payload;
+        }
       }
     }, 33);
   }

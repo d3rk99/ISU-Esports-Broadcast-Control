@@ -9,6 +9,7 @@ const configOpen = document.querySelector('#config-open');
 const configClose = document.querySelector('#config-close');
 const configForm = document.querySelector('#config-form');
 const configStatus = document.querySelector('#config-status');
+const settingsOnly = new URLSearchParams(window.location.search).get('settings') === '1';
 
 let config = null;
 let activeStream = null;
@@ -225,24 +226,34 @@ function displayLabel(display) {
 
 function populateConfigForm() {
   if (!configForm || !config) return;
-  setOptions(configForm.elements.stationId, Array.from({ length: 10 }, (_item, index) => index + 1), config.stationId);
+  setOptions(configForm.elements.stationId, [...Array.from({ length: 10 }, (_item, index) => index + 1), { value: 11, label: '11 - TEST ONLY' }], config.stationId);
   setOptions(configForm.elements.wallPosition, Array.from({ length: 10 }, (_item, index) => index + 1), config.wallPosition);
   const displayOptions = (config.displays || []).map((display) => ({ value: display.index, label: displayLabel(display) }));
   setOptions(configForm.elements.playerDisplay, displayOptions, config.playerDisplay);
   setOptions(configForm.elements.stageDisplay, displayOptions, config.stageDisplay);
   configForm.elements.controller.value = config.controller || '';
   configForm.elements.cursorLockEnabled.checked = Boolean(config.cursorLockEnabled);
+  configForm.elements.startWithWindows.checked = Boolean(config.startWithWindows);
+  configForm.elements.startWithWindows.disabled = !config.startupSupported;
   const lockText = config.cursorLockEnabled ? 'Cursor lock enabled' : 'Cursor lock disabled';
   configStatus.textContent = `Station ${config.stationId} on ${config.hostname || 'this PC'} - ${lockText}`;
 }
 
 function openConfigPanel() {
+  if (!settingsOnly) {
+    window.stageClient.openSettings();
+    return;
+  }
   populateConfigForm();
   document.body.classList.add('config-open');
   document.querySelector('#config-panel')?.setAttribute('aria-hidden', 'false');
 }
 
 function closeConfigPanel() {
+  if (settingsOnly) {
+    window.stageClient.closeSettings();
+    return;
+  }
   document.body.classList.remove('config-open');
   document.querySelector('#config-panel')?.setAttribute('aria-hidden', 'true');
 }
@@ -274,7 +285,8 @@ async function saveClientConfig(event) {
       playerDisplay: Number(configForm.elements.playerDisplay.value),
       stageDisplay: Number(configForm.elements.stageDisplay.value),
       wallPosition: Number(configForm.elements.wallPosition.value),
-      cursorLockEnabled: Boolean(configForm.elements.cursorLockEnabled.checked)
+      cursorLockEnabled: Boolean(configForm.elements.cursorLockEnabled.checked),
+      startWithWindows: Boolean(configForm.elements.startWithWindows.checked)
     });
     populateConfigForm();
     setSceneText(currentMode, { stationId: config.stationId, wallPosition: config.wallPosition });
@@ -288,7 +300,7 @@ async function saveClientConfig(event) {
 async function initialize() {
   config = await window.stageClient.getConfig();
   setSceneText('hold', { stationId: config.stationId, wallPosition: config.wallPosition });
-  reportStatus('');
+  if (!settingsOnly) reportStatus('');
   populateConfigForm();
   configOpen?.addEventListener('click', openConfigPanel);
   configClose?.addEventListener('click', closeConfigPanel);
@@ -307,6 +319,15 @@ async function initialize() {
     if (event.key === 'Escape' && document.body.classList.contains('config-open')) closeConfigPanel();
     if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 's') openConfigPanel();
   });
+  window.stageClient.onConfigChanged(async () => {
+    config = await window.stageClient.getConfig();
+    if (settingsOnly) populateConfigForm();
+  });
+  if (settingsOnly) {
+    document.body.classList.add('settings-only');
+    openConfigPanel();
+    return;
+  }
   window.stageClient.onPrepare(preparePreset);
   window.stageClient.onMode(scheduleMode);
   window.stageClient.onOpenSettings(openConfigPanel);

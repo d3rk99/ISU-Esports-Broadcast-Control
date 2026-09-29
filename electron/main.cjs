@@ -849,13 +849,35 @@ app.whenReady().then(async () => {
     dispatchStageAction: dispatchCompanionStageAction,
     onDiagnostic: recordDiagnostic
   });
+  let stageStatusTimer = null;
+  let latestStageStatus = null;
+  let previewRecipient = null;
+  const sentStagePreviews = new Map();
   stageDisplayManager = new StageDisplayManager({
     assetRoot: writableStageAssetRoot(),
     bundledAssetRoot: bundledStageAssetRoot(),
     updateRoot: writableStageClientUpdateRoot(),
     onStatus: (status) => {
-      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('stage-displays:status', status);
-      companionApiService?.publish(broadcastState);
+      latestStageStatus = status;
+      if (stageStatusTimer) return;
+      stageStatusTimer = setTimeout(() => {
+        stageStatusTimer = null;
+        const controller = getControllerWindow();
+        if (controller && !controller.isDestroyed()) {
+          if (previewRecipient !== controller.webContents) {
+            sentStagePreviews.clear();
+            previewRecipient = controller.webContents;
+          }
+          const stations = latestStageStatus.stations.map((station) => {
+            const { preview, ...metadata } = station;
+            if (sentStagePreviews.get(station.station) === preview) return metadata;
+            sentStagePreviews.set(station.station, preview);
+            return { ...metadata, preview };
+          });
+          controller.webContents.send('stage-displays:status', { ...latestStageStatus, stations });
+        }
+        companionApiService?.publish(broadcastState);
+      }, 100);
     }
   });
   rocketLeagueService = new RocketLeagueService({

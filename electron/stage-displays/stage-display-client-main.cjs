@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, nativeImage, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, nativeImage, ipcMain, screen, dialog } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -8,8 +8,10 @@ const os = require('node:os');
 const path = require('node:path');
 const WebSocket = require('ws');
 
-const CLIENT_VERSION = '0.1.1';
+const { CLIENT_VERSION } = require('./client-version.cjs');
+const { createUpdaterScript } = require('./client-updater.cjs');
 let clientWindow = null;
+let settingsWindow = null;
 let socket = null;
 let reconnectTimer = null;
 let heartbeatTimer = null;
@@ -42,7 +44,7 @@ function clientConfigPath() {
 }
 
 function normalizeClientConfig(saved = {}) {
-  const stationId = Math.max(1, Math.min(10, Math.round(Number(saved.stationId) || 1)));
+  const stationId = Math.max(1, Math.min(11, Math.round(Number(saved.stationId) || 1)));
   const playerDisplay = Math.max(1, Math.round(Number(saved.playerDisplay) || 1));
   const stageDisplay = Math.max(1, Math.round(Number(saved.stageDisplay) || 2));
   return {
@@ -51,8 +53,9 @@ function normalizeClientConfig(saved = {}) {
     managerWs: String(saved.managerWs || ''),
     playerDisplay,
     stageDisplay,
-    wallPosition: Math.max(1, Math.min(10, Math.round(Number(saved.wallPosition) || stationId))),
-    cursorLockEnabled: saved.cursorLockEnabled === true || String(saved.cursorLockEnabled).toLowerCase() === 'true'
+    wallPosition: Math.max(1, Math.min(10, Math.round(Number(saved.wallPosition) || (stationId === 11 ? 1 : stationId)))),
+    cursorLockEnabled: saved.cursorLockEnabled === true || String(saved.cursorLockEnabled).toLowerCase() === 'true',
+    startWithWindows: saved.startWithWindows === true
   };
 }
 
@@ -275,26 +278,42 @@ function updateTargetExecutable() {
   return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
 }
 
+function startupSettings() {
+  const supported = process.platform === 'win32' && app.isPackaged;
+  return {
+    startupSupported: supported,
+    startWithWindows: supported && app.getLoginItemSettings({ path: updateTargetExecutable(), args: [] }).executableWillLaunchAtLogin
+  };
+}
+
+function setStartWithWindows(enabled) {
+  if (!startupSettings().startupSupported) {
+    if (enabled) throw new Error('Start with Windows is available in the packaged Windows client.');
+    return false;
+  }
+  app.setLoginItemSettings({
+    name: 'ISUStageDisplayClient',
+    openAtLogin: Boolean(enabled),
+    enabled: Boolean(enabled),
+    path: updateTargetExecutable(),
+    args: []
+  });
+  const actual = Boolean(startupSettings().startWithWindows);
+  if (actual !== Boolean(enabled)) throw new Error('Windows did not apply the startup setting. Check Startup apps in Windows Settings.');
+  return actual;
+}
+
 function writeUpdaterScript(downloadedFile, targetFile) {
-  const scriptPath = path.join(app.getPath('userData'), 'stage-client-update', 'apply-stage-client-update.ps1');
+  const scriptPath = path.join(app.getPath('userData'), 'stage-client-update', `apply-${Date.now()}.ps1`);
   fs.mkdirSync(path.dirname(scriptPath), { recursive: true });
-  const escapedDownloaded = downloadedFile.replace(/'/g, "''");
-  const escapedTarget = targetFile.replace(/'/g, "''");
-  const script = `
-$ErrorActionPreference = 'Stop'
-$pidToWait = ${process.pid}
-$downloaded = '${escapedDownloaded}'
-$target = '${escapedTarget}'
-try {
-  Wait-Process -Id $pidToWait -Timeout 30 -ErrorAction SilentlyContinue
-} catch {}
-Start-Sleep -Milliseconds 600
-Copy-Item -LiteralPath $downloaded -Destination $target -Force
-Unblock-File -LiteralPath $target -ErrorAction SilentlyContinue
-Start-Process -FilePath $target
-`;
+  const readyFile = `${scriptPath}.ready`;
+  const script = createUpdaterScript({
+    downloadedFile, targetFile, processId: process.pid,
+    launcherId: process.env.PORTABLE_EXECUTABLE_FILE ? process.ppid : 0,
+    readyFile, logFile: path.join(path.dirname(scriptPath), 'update.log')
+  });
   fs.writeFileSync(scriptPath, script.trim(), 'utf8');
-  return scriptPath;
+  return { scriptPath, readyFile };
 }
 
 async function installUpdate(update = {}) {
@@ -314,13 +333,30 @@ async function installUpdate(update = {}) {
       }
     }
     const target = updateTargetExecutable();
-    const scriptPath = writeUpdaterScript(downloadedFile, target);
-    reportUpdate('relaunching', { version: update.version, message: 'Installing client update and relaunching' });
-    spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
+    const { scriptPath, readyFile } = writeUpdaterScript(downloadedFile, target);
+    const helper = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
       detached: true,
       windowsHide: true,
-      stdio: 'ignore'
-    }).unref();
+      stdio: 'ignore',
+      cwd: path.dirname(scriptPath)
+    });
+    await new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      let timer;
+      const fail = (error) => { clearInterval(timer); reject(error); };
+      helper.once('error', fail);
+      timer = setInterval(() => {
+        if (fs.existsSync(readyFile)) {
+          clearInterval(timer);
+          resolve();
+        } else if (helper.exitCode !== null || Date.now() - startedAt > 15000) {
+          helper.kill();
+          fail(new Error('Update helper did not start. Client remains open; check stage-client-update/update.log.'));
+        }
+      }, 100);
+    });
+    helper.unref();
+    reportUpdate('relaunching', { version: update.version, message: 'Installing client update and relaunching' });
     app.quit();
   } catch (error) {
     updateInProgress = false;
@@ -355,15 +391,55 @@ function createClientWindow() {
 }
 
 function createTrayImage() {
-  return nativeImage.createFromDataURL('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAk0lEQVR4AWP4//8/AyWYYXAZAAOOHDnCwMDA8J+BgYGBiYEhDC7AxsYGwNQwMDAw/J+BgeE/Dw8PjDpw4AADBwcHwyZMmMDAwMAgJiamAqgCKBgYGBhkZGT8Z2ZmZthw4cIFBhYWFkYjIyMMGzZsgwEDAwODBTY2Nhh0dHRYtWrVBoYPHz4w6tSpDYwZM2Yw2traGwwAqygjFSUd1LIAAAAASUVORK5CYII=');
+  // Opaque orange tile with white pixel lettering, readable at tray sizes.
+  const pixels = Buffer.alloc(32 * 32 * 4);
+  const letters = ['11101110101', '01001000101', '01001110101', '01000010101', '11101110111'];
+  for (let y = 0; y < 32; y += 1) {
+    for (let x = 0; x < 32; x += 1) {
+      const glyph = letters[Math.floor((y - 11) / 2)]?.[Math.floor((x - 5) / 2)] === '1';
+      const offset = (y * 32 + x) * 4;
+      pixels[offset] = glyph ? 255 : 32;
+      pixels[offset + 1] = glyph ? 255 : 121;
+      pixels[offset + 2] = glyph ? 255 : 244;
+      pixels[offset + 3] = 255;
+    }
+  }
+  return nativeImage.createFromBitmap(pixels, { width: 32, height: 32, scaleFactor: 1 });
 }
 
 function openClientSettings() {
-  if (!clientWindow || clientWindow.isDestroyed()) return;
-  clientWindow.show();
-  clientWindow.focus();
-  clientWindow.webContents.send('stage-client:open-settings');
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = Math.min(760, area.width);
+  const height = Math.min(820, area.height);
+  const bounds = { x: area.x + Math.floor((area.width - width) / 2), y: area.y + Math.floor((area.height - height) / 2), width, height };
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    if (settingsWindow.isMinimized()) settingsWindow.restore();
+    settingsWindow.setBounds(bounds);
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    ...bounds,
+    title: 'ISU Stage Display Client - Station Setup',
+    backgroundColor: '#0b0b0c',
+    autoHideMenuBar: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'stage-display-client-preload.cjs'),
+      contextIsolation: true, nodeIntegration: false, sandbox: true
+    }
+  });
+  const window = settingsWindow;
+  window.once('ready-to-show', () => { window.show(); window.focus(); });
+  window.on('closed', () => { settingsWindow = null; });
+  window.loadFile(path.join(__dirname, 'client', 'index.html'), { query: { settings: '1' } });
 }
+
+ipcMain.on('stage-client:open-settings', openClientSettings);
+ipcMain.on('stage-client:close-settings', (event) => {
+  if (event.sender === settingsWindow?.webContents) settingsWindow.close();
+});
 
 function updateTray() {
   if (!tray) return;
@@ -374,6 +450,17 @@ function updateTray() {
     { type: 'separator' },
     { label: 'Open Settings', click: openClientSettings },
     { label: 'Reconnect to Controller', click: restartConnection },
+    {
+      label: 'Start with Windows', type: 'checkbox',
+      checked: Boolean(startupSettings().startWithWindows),
+      enabled: startupSettings().startupSupported,
+      click: (item) => {
+        try { saveConfig({ startWithWindows: setStartWithWindows(item.checked) }); }
+        catch (error) { dialog.showErrorBox('Windows startup setting', error.message); }
+        updateTray();
+        settingsWindow?.webContents.send('stage-client:config-changed');
+      }
+    },
     { type: 'separator' },
     {
       label: 'Lock Cursor to Player Display',
@@ -566,6 +653,7 @@ async function screenSourceForPlayerDisplay() {
 
 ipcMain.handle('stage-client:get-config', () => ({
   ...config,
+  ...startupSettings(),
   clientVersion: CLIENT_VERSION,
   hostname: os.hostname(),
   cursorLockActive,
@@ -585,6 +673,7 @@ ipcMain.handle('stage-client:get-player-source', () => screenSourceForPlayerDisp
 ipcMain.handle('stage-client:save-config', (_event, details = {}) => {
   const previousStageDisplay = Number(config.stageDisplay);
   const previousCursorLock = Boolean(config.cursorLockEnabled);
+  if (typeof details.startWithWindows === 'boolean') setStartWithWindows(details.startWithWindows);
   const saved = saveConfig(details);
   if (Number(saved.stageDisplay) !== previousStageDisplay && clientWindow && !clientWindow.isDestroyed()) {
     const targetDisplay = displayByIndex(saved.stageDisplay, 1);
@@ -596,8 +685,10 @@ ipcMain.handle('stage-client:save-config', (_event, details = {}) => {
   }
   restartConnection();
   updateTray();
+  clientWindow?.webContents.send('stage-client:config-changed');
   return {
     ...saved,
+    ...startupSettings(),
     clientVersion: CLIENT_VERSION,
     hostname: os.hostname(),
     cursorLockActive,

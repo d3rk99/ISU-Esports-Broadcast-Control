@@ -180,6 +180,8 @@ body.config-open #config-open {
 }
 
 body.config-open #config-panel { display: grid; }
+body.settings-only #config-panel { overflow-y: auto; }
+body.settings-only #scene { display: none; }
 body.config-open #config-open { display: none; }
 
 #config-form {

@@ -1,4 +1,5 @@
 import './styles.css';
+import { patchStageStatus } from './stage-status-view.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
@@ -263,7 +264,7 @@ function renderStageModeButtons(scope, station = '') {
 
 function stageStationList() {
   const byStation = new Map((stageDisplayStatus.stations || []).map((station) => [Number(station.station), station]));
-  return Array.from({ length: 10 }, (_item, index) => byStation.get(index + 1) || {
+  return Array.from({ length: 11 }, (_item, index) => byStation.get(index + 1) || {
     station: index + 1,
     online: false,
     mode: 'offline',
@@ -376,7 +377,7 @@ function renderStageDisplays() {
         </div>
       </article>
       <article class="panel stage-global-panel">
-        <div class="panel-title compact"><div><h2>Global mode</h2><p>Send the same state to every connected station.</p></div></div>
+        <div class="panel-title compact"><div><h2>Global mode</h2><p>Controls stage stations 1–10. Test Station 11 is controlled separately.</p></div></div>
         <div class="stage-mode-grid">${renderStageModeButtons('global')}</div>
       </article>
       <article class="panel stage-ready-panel ${pending ? 'armed' : ''}">
@@ -405,6 +406,9 @@ function renderStageDisplays() {
               <small>${escapeHtml(preset.category || 'General')} &middot; ${escapeHtml(preset.name)} &middot; ${escapeHtml(preset.layoutLabel || preset.layout || 'any')} &middot; ${escapeHtml(preset.kind || 'html')} &middot; ${preset.width && preset.height ? `${preset.width}x${preset.height} &middot; ` : ''}${escapeHtml(preset.source || 'built-in')}</small>
               <div class="stage-preset-actions">
                 ${stagePresetActionButtons(preset)}
+                <button data-action="stage-test-preset" data-preset="${escapeHtml(preset.name)}" data-stage-mode="graphic">Test 11: Full graphic</button>
+                <label>Test slice <select data-test-slice>${Array.from({ length: preset.layout === 'wall-5' ? 5 : 10 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}</select></label>
+                <button data-action="stage-test-preset" data-preset="${escapeHtml(preset.name)}" data-stage-mode="wall" data-wall-total="${preset.layout === 'wall-5' ? 5 : 10}">Test 11: Wall slice</button>
                 ${preset.source === 'library' ? `<button data-action="stage-rename-preset" data-preset="${escapeHtml(preset.name)}">Rename</button><button data-action="stage-category-preset" data-preset="${escapeHtml(preset.name)}">Category</button><button data-action="stage-replace-preset" data-preset="${escapeHtml(preset.name)}">Replace</button><button class="danger" data-action="stage-delete-preset" data-preset="${escapeHtml(preset.name)}">Delete</button>` : ''}
               </div>
             </section>`).join('')}
@@ -412,8 +416,8 @@ function renderStageDisplays() {
       </article>
       <div class="stage-station-grid">
         ${stations.map((station) => `
-          <article class="stage-station-card ${station.online ? 'online' : 'offline'}">
-            <header><span>${String(station.station).padStart(2, '0')}</span><strong>${station.online ? 'ONLINE' : 'OFFLINE'}</strong></header>
+          <article data-station-card="${station.station}" class="stage-station-card ${station.online ? 'online' : 'offline'}">
+            <header><span>${station.station === 11 ? '11 — TEST ONLY' : String(station.station).padStart(2, '0')}</span><strong>${station.online ? 'ONLINE' : 'OFFLINE'}</strong></header>
             <div class="stage-station-preview ${station.preview ? 'has-preview' : ''}">
               ${station.preview ? `<img src="${escapeHtml(station.preview)}" alt="Station ${String(station.station).padStart(2, '0')} live preview">` : '<span>NO PREVIEW</span>'}
             </div>
@@ -2136,8 +2140,11 @@ async function executeCompanionAction(request = {}) {
 
 window.isuDesktop?.onCompanionAction(executeCompanionAction);
 window.isuDesktop?.onStageDisplayStatus((status) => {
-  stageDisplayStatus = status || stageDisplayStatus;
-  if (state.activeView === 'stage') render();
+  if (!status) return;
+  const previous = new Map((stageDisplayStatus.stations || []).map((station) => [station.station, station]));
+  stageDisplayStatus = { ...status, stations: (status.stations || []).map((station) => ({ ...previous.get(station.station), ...station })) };
+  const view = root.querySelector('.stage-display-view');
+  if (state.activeView === 'stage' && view) patchStageStatus(view, renderStageDisplays());
 });
 
 root.addEventListener('scroll', (event) => {
@@ -2310,6 +2317,17 @@ root.addEventListener('click', async (event) => {
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? `Fired prepared preset: ${result.preset}` : result?.error || 'No prepared preset ready');
     render();
+    return;
+  }
+  if (button.dataset.action === 'stage-test-preset') {
+    const result = await window.isuDesktop?.playStagePreset({
+      preset: button.dataset.preset,
+      mode: button.dataset.stageMode,
+      targetStations: [11],
+      wallTotal: Number(button.dataset.wallTotal) || 1,
+      wallPosition: Number(button.closest('.stage-preset-card')?.querySelector('[data-test-slice]')?.value) || 1
+    });
+    toast(result?.ok ? `Test Station 11: ${result.preset}` : result?.error || 'Test client unavailable');
     return;
   }
   if (button.dataset.action === 'stage-play-preset') {

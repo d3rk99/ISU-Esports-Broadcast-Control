@@ -1,6 +1,13 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('stageClient', {
+  openSettings: () => ipcRenderer.send('stage-client:open-settings'),
+  closeSettings: () => ipcRenderer.send('stage-client:close-settings'),
+  onConfigChanged: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('stage-client:config-changed', listener);
+    return () => ipcRenderer.removeListener('stage-client:config-changed', listener);
+  },
   getConfig: () => ipcRenderer.invoke('stage-client:get-config'),
   saveConfig: (details) => ipcRenderer.invoke('stage-client:save-config', details),
   setCursorLock: (details) => ipcRenderer.invoke('stage-client:set-cursor-lock', details),
