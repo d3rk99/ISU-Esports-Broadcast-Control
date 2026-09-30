@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { applyBodyPaint } from './rl-car-paint.js';
 
 export function disposeObject(object) {
   object?.traverse((child) => {
@@ -57,23 +58,6 @@ function textureScore(materialName, texture) {
   return textureParts.reduce((score, part) => score + (materialParts.some((materialPart) => materialPart === part || materialPart.includes(part) || part.includes(materialPart)) ? 8 : 0), 0);
 }
 
-function teamPaint(asset = {}) {
-  if (asset.useTeamPaint === false) return null;
-  if (asset.paintMode === 'custom' && asset.primaryColor && asset.secondaryColor) {
-    return { primary: new THREE.Color(asset.primaryColor), secondary: new THREE.Color(asset.secondaryColor) };
-  }
-  return asset.teamNum === 1
-    ? { primary: new THREE.Color('#f47920'), secondary: new THREE.Color('#ffd35a') }
-    : { primary: new THREE.Color('#1597ff'), secondary: new THREE.Color('#82fff7') };
-}
-
-function decalTextureScore(materialName, texture) {
-  const baseScore = textureScore(materialName, texture);
-  const file = fileBase(texture.path);
-  const decalBonus = /skin|decal|flame|stripe|lines|block|paint/i.test(file) ? 40 : 0;
-  return baseScore + decalBonus;
-}
-
 function texturePathKey(path = '') {
   return String(path).replace(/\\/g, '/').toLowerCase();
 }
@@ -90,7 +74,8 @@ function bindingForMaterial(asset = {}, materialName = '') {
   return match?.[1] || null;
 }
 
-function bindingTextureName(binding = {}) {
+function bindingTextureName(binding) {
+  if (!binding) return '';
   return compactKey([binding.diffuse, binding.normal, binding.mask, ...(binding.other || [])].join(' '));
 }
 
@@ -129,20 +114,6 @@ function bestTexture(materialName, textures, role, scorer = textureScore) {
     .sort((a, b) => scorer(materialName, b) - scorer(materialName, a))[0] || null;
 }
 
-function bestPaintMask(textures = []) {
-  return textures
-    .filter((texture) => texture.role === 'mask')
-    .map((texture) => {
-      const file = fileBase(texture.path);
-      let score = 0;
-      if (/body|paint|skin|bevel|blank/.test(file)) score += 60;
-      if (/rgb/.test(file)) score += 20;
-      if (/part|chassis|chasis|trim|wheel/.test(file)) score -= 80;
-      return { texture, score };
-    })
-    .sort((a, b) => b.score - a.score)[0]?.texture || null;
-}
-
 function boundOrBestTexture(asset, materialName, meshName, role, texturesByPath, scorer = textureScore) {
   const textures = Array.isArray(asset.textures) ? asset.textures : [];
   const binding = fallbackBindingForMaterial(asset, materialName, meshName);
@@ -151,98 +122,141 @@ function boundOrBestTexture(asset, materialName, meshName, role, texturesByPath,
   return bestTexture(materialName, textures, role, scorer);
 }
 
-function isPaintableMaterial(asset, materialName, meshName, binding) {
-  const hint = materialHint(materialName, meshName);
-  const key = compactKey(`${materialName} ${meshName} ${bindingTextureName(binding)}`);
-  if (/chassis|chasis|parts|trim|glass|window|wheel|tire|tyre/.test(key)) return false;
-  return hint === 'body' || /body|paint|skin|premium|blankskin/.test(key);
+// ---- Paint & decal composition -------------------------------------------------
+// Texture roles, verified channel-by-channel on the extracted pack (see rl-car-paint.js):
+// body BlankSkin R = paintable area; decal *_RGB: R = paintable area, A = pattern.
+
+function materialSlot(name = '') {
+  const match = String(name).match(/(\d+)$/);
+  return match ? Number(match[1]) : -1;
 }
 
-function decalDiffuseFromBindings(decal = {}, materialName = '', meshName = '', texturesByPath) {
-  const bindings = decal.materialBindings || {};
-  const preferredBindings = [
-    fallbackBindingForMaterial(decal, materialName, meshName),
-    ...Object.values(bindings)
-  ].filter(Boolean);
-  for (const binding of preferredBindings) {
-    const paths = [binding.decal, ...(binding.other || [])].filter(Boolean);
-    for (const pathValue of paths) {
-      const texture = textureFromPath(texturesByPath, pathValue);
-      if (texture?.role === 'diffuse' && /skin|decal|flame|stripe|paint/i.test(texture.path)) return texture;
-    }
-  }
-  return null;
+function isChassisName(value = '') {
+  return /chassis|chasis|parts|trim|glass|window|lens|headlight|wheel|tire|tyre/.test(compactKey(value));
 }
 
-function patchPaintShader(material, maskMap, paint) {
-  material.userData.rlPaint = { maskMap, paint };
-  material.onBeforeCompile = (shader) => {
-    shader.uniforms.rlMaskMap = { value: maskMap };
-    shader.uniforms.rlPrimary = { value: paint.primary };
-    shader.uniforms.rlSecondary = { value: paint.secondary };
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <map_pars_fragment>', '#include <map_pars_fragment>\nuniform sampler2D rlMaskMap;\nuniform vec3 rlPrimary;\nuniform vec3 rlSecondary;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-        vec4 rlMask = texture2D(rlMaskMap, vMapUv);
-        diffuseColor.rgb = mix(diffuseColor.rgb, rlPrimary, clamp(rlMask.r * 0.72, 0.0, 1.0));
-        diffuseColor.rgb = mix(diffuseColor.rgb, rlSecondary, clamp(rlMask.g * 0.58, 0.0, 1.0));
-      `);
-  };
+function findTexture(textures, predicate) {
+  return textures.find((texture) => predicate(fileBase(texture.path), texture)) || null;
 }
 
-async function applyAssetTextures(root, asset = {}) {
-  const baseTextures = (Array.isArray(asset.textures) ? asset.textures : []).filter((texture) => texture?.url);
-  const decalTextures = (Array.isArray(asset.decal?.textures) ? asset.decal.textures.map((texture) => ({ ...texture, decal: true })) : []).filter((texture) => texture?.url);
-  if (!baseTextures.length && !decalTextures.length) return;
-  const loader = new THREE.TextureLoader();
+// The body's paint-area map: BlankSkin role first, then *_BlankSkin*_RGB-ish masks.
+function bodySkinTexture(textures, binding) {
+  const bound = (binding?.other || []).map((pathValue) => textures.find((t) => texturePathKey(t.path) === texturePathKey(pathValue))).find((t) => t?.role === 'blankskin');
+  if (bound) return bound;
+  return findTexture(textures, (name, t) => t.role === 'blankskin')
+    || findTexture(textures, (name, t) => t.role === 'mask' && /blankskin/.test(name))
+    || findTexture(textures, (name, t) => t.role === 'mask' && /body/.test(name) && !/chassis|chasis|part|fx|grad|sphere/.test(name));
+}
+
+// The decal's pattern map: its *_RGB texture that isn't a shared body/chassis mask.
+function decalPatternTexture(decal) {
+  const textures = Array.isArray(decal?.textures) ? decal.textures : [];
+  const bound = Object.values(decal?.materialBindings || {})
+    .flatMap((binding) => [binding.mask, ...(binding.other || [])])
+    .filter(Boolean)
+    .map((pathValue) => textures.find((t) => texturePathKey(t.path) === texturePathKey(pathValue)))
+    .find((t) => t && /_rgb$/.test(fileBase(t.path)) && !/blankskin|chassis|chasis/.test(fileBase(t.path)));
+  if (bound) return bound;
+  return findTexture(textures, (name) => /_rgb$/.test(name) && !/blankskin|chassis|chasis|curv/.test(name));
+}
+
+// Some decals ship their own diffuse (e.g. printed liveries); use it when present.
+function decalDiffuseTexture(decal, body) {
+  const textures = Array.isArray(decal?.textures) ? decal.textures : [];
+  const bodyFiles = new Set((body?.textures || []).map((t) => fileBase(t.path)));
+  return findTexture(textures, (name, t) => t.role === 'diffuse' && !bodyFiles.has(name) && !/thumb|curv/.test(name));
+}
+
+async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
+  const textures = (Array.isArray(asset.textures) ? asset.textures : []).filter((texture) => texture?.url);
+  const decal = isWheel ? null : asset.decal;
+  const paint = isWheel ? null : paintColors(asset);
+  if (!textures.length && !decal) return { painted: 0 };
+  // RL mask textures keep their channel data in pixels whose alpha is 0. An <img>
+  // load premultiplies alpha and wipes that RGB, so masks are decoded as raw bitmaps.
+  const loader = new THREE.ImageBitmapLoader();
+  loader.setOptions({ imageOrientation: 'none', premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
   const loaded = new Map();
-  const loadTexture = async (texture) => {
+  const loadTexture = async (texture, color = false) => {
+    if (!texture?.url) return null;
     if (!loaded.has(texture.url)) {
-      loaded.set(texture.url, loader.loadAsync(texture.url).then((map) => {
+      loaded.set(texture.url, loader.loadAsync(texture.url).then((bitmap) => {
+        const map = new THREE.Texture(bitmap);
         map.flipY = false;
-        if (texture.role === 'diffuse') map.colorSpace = THREE.SRGBColorSpace;
+        map.premultiplyAlpha = false;
+        map.anisotropy = 4;
+        map.needsUpdate = true;
         return map;
-      }));
+      }).catch(() => null));
     }
-    return loaded.get(texture.url);
+    const map = await loaded.get(texture.url);
+    if (map && color) map.colorSpace = THREE.SRGBColorSpace;
+    return map;
   };
-  const baseTexturesByPath = textureMap(baseTextures);
-  const decalTexturesByPath = textureMap(decalTextures);
-  const paint = teamPaint(asset);
+  const texturesByPath = textureMap(textures);
+  const skinTextureFor = (binding) => bodySkinTexture(textures, binding);
+  const patternTexture = decalPatternTexture(decal);
+  const decalDiffuse = decalDiffuseTexture(decal, asset);
+  let painted = 0;
   const jobs = [];
+  let namedChassisExists = false;
+  root.traverse((child) => {
+    for (const material of [child.material].flat().filter(Boolean)) if (isChassisName(material.name || '')) namedChassisExists = true;
+  });
   root.traverse((child) => {
     if (!child.isMesh) return;
-    const materials = [child.material].flat().filter(Boolean);
-    for (const material of materials) jobs.push({ meshName: child.name || '', material });
+    for (const material of [child.material].flat().filter(Boolean)) jobs.push({ mesh: child, meshName: child.name || '', material });
   });
-  await Promise.all(jobs.map(async ({ meshName, material }) => {
+  await Promise.all(jobs.map(async ({ mesh, meshName, material }) => {
     const binding = fallbackBindingForMaterial(asset, material.name, meshName);
-    const boundDiffuse = textureFromPath(baseTexturesByPath, binding?.diffuse);
-    const boundNormal = textureFromPath(baseTexturesByPath, binding?.normal);
-    const boundMask = textureFromPath(baseTexturesByPath, binding?.mask);
-    const paintable = isPaintableMaterial(asset, material.name, meshName, binding);
-    const diffuse = boundDiffuse || boundOrBestTexture(asset, material.name, meshName, 'diffuse', baseTexturesByPath);
-    const decalDiffuse = paintable && asset.decal
-      ? (decalDiffuseFromBindings(asset.decal, material.name, meshName, decalTexturesByPath)
-        || bestTexture(material.name, decalTextures, 'diffuse', decalTextureScore))
+    const nameText = `${material.name} ${meshName}`;
+    let chassis = isChassisName(`${nameText} ${bindingTextureName(binding)}`);
+    // Generic names (material_0, ...) say nothing. Across the extracted pack, the chassis
+    // is material slot 0 on 67 of 70 bodies with named materials, so slot 0 = chassis.
+    const genericName = /^material_?\d+$/i.test(material.name || '') || !material.name;
+    if (!isWheel && genericName) chassis = materialSlot(material.name) === 0 && !namedChassisExists;
+    // Generic chassis slots have no binding; take the chassis diffuse/normal by name instead of the body's.
+    // For generic names the fallback binding is a guess (usually the body's), so for a
+    // chassis slot prefer the binding whose name says chassis, then chassis-named textures.
+    const chassisBinding = chassis && genericName
+      ? Object.entries(asset.materialBindings || {}).find(([name]) => isChassisName(name))?.[1] || null
       : null;
-    const normal = boundNormal || boundOrBestTexture(asset, material.name, meshName, 'normal', baseTexturesByPath);
-    const mask = boundMask || (paintable ? bestPaintMask(baseTextures) : boundOrBestTexture(asset, material.name, meshName, 'mask', baseTexturesByPath));
-    if (diffuse && (boundDiffuse || textureScore(material.name, diffuse) > 0)) {
-      material.map = await loadTexture(diffuse);
-      material.color?.set?.(0xffffff);
+    const chassisDiffuse = chassis && genericName
+      ? textureFromPath(texturesByPath, chassisBinding?.diffuse) || findTexture(textures, (name, t) => t.role === 'diffuse' && /chassis|chasis/.test(name))
+      : null;
+    const chassisNormal = chassis && genericName
+      ? textureFromPath(texturesByPath, chassisBinding?.normal) || findTexture(textures, (name, t) => t.role === 'normal' && /chassis|chasis/.test(name))
+      : null;
+    const diffuse = chassisDiffuse || textureFromPath(texturesByPath, binding?.diffuse) || boundOrBestTexture(asset, material.name, meshName, 'diffuse', texturesByPath);
+    const normal = chassisNormal || textureFromPath(texturesByPath, binding?.normal) || boundOrBestTexture(asset, material.name, meshName, 'normal', texturesByPath);
+    const useDiffuse = diffuse && !(/^blank_n$/.test(fileBase(diffuse.path)));
+    const map = await loadTexture(!chassis && decalDiffuse ? decalDiffuse : (useDiffuse ? diffuse : null), true);
+    if (map) { material.map = map; material.color?.set?.(0xffffff); }
+    // Generic shared normals (fur / sparkle / blank) belong to paint finishes, not the body shape.
+    if (normal && !/^(fur_n|sparkle_n|blank_n|matte_n|brushedmetal_normal)$/.test(fileBase(normal.path))) {
+      const normalMap = await loadTexture(normal);
+      if (normalMap) { material.normalMap = normalMap; material.normalScale = new THREE.Vector2(1, -1); }
     }
-    if (paintable && decalDiffuse && decalTextureScore(material.name, decalDiffuse) >= Math.max(20, textureScore(material.name, diffuse || {}))) {
-      material.map = await loadTexture(decalDiffuse);
-      material.color?.set?.(0xffffff);
+    material.roughness = chassis ? 0.55 : 0.34;
+    material.metalness = chassis ? 0.25 : 0.12;
+    if (!chassis && paint) {
+      const skin = skinTextureFor(binding);
+      const skinMap = await loadTexture(skin);
+      const decalMap = patternTexture ? await loadTexture(patternTexture) : null;
+      if (applyBodyPaint(material, { skinMap, decalMap, primary: paint.primary, accent: paint.accent })) painted += 1;
+      else if (!material.map) material.color?.set?.(paint.primary); // no paint maps at all: flat team colour
     }
-    if (normal && (boundNormal || textureScore(material.name, normal) > 0)) {
-      material.normalMap = await loadTexture(normal);
-      material.normalScale = new THREE.Vector2(1, -1);
-    }
-    if (paintable && paint && mask && (boundMask || textureScore(material.name, mask) > 0) && material.map) patchPaintShader(material, await loadTexture(mask), paint);
+    if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding)?.path?.split('/').pop() }));
     material.needsUpdate = true;
   }));
+  return { painted };
+}
+
+function paintColors(asset = {}) {
+  if (asset.useTeamPaint === false || asset.paintMode === 'off') return null;
+  if (asset.paintMode === 'custom' && asset.primaryColor && asset.secondaryColor) return { primary: asset.primaryColor, accent: asset.secondaryColor };
+  if (asset.paint?.primary) return { primary: asset.paint.primary, accent: asset.paint.accent || '#111111' };
+  return asset.teamNum === 1 ? { primary: '#ff7a1a', accent: '#3d1a05' } : { primary: '#1873ff', accent: '#0a1d3d' };
 }
 
 function neutralizeSingleMaterialWheel(root) {
@@ -282,30 +296,66 @@ async function loadGltfScene(url) {
   return gltf.scene;
 }
 
+// Wheel hubs come from the car skeleton (manifest wheelAnchors, glTF meters: +Y up,
+// +Z nose, +X = car's left). Radius: the car's own geometry tells us how far the
+// hub sits above the lowest point of the body, so the tyre reaches the ground plane.
+function wheelRadiusFor(bodyScene, anchors) {
+  const box = new THREE.Box3().setFromObject(bodyScene);
+  const hubY = Object.values(anchors).map((p) => Number(p?.[1])).filter(Number.isFinite);
+  if (!hubY.length || !Number.isFinite(box.min.y)) return 0.17;
+  const averageHub = hubY.reduce((a, b) => a + b, 0) / hubY.length;
+  // Tyre bottom a little below the body's lowest point (the body floats over the tyres).
+  const radius = averageHub - box.min.y + 0.035;
+  return Math.max(0.12, Math.min(0.26, radius));
+}
+
 async function addWheels(bodyScene, asset = {}) {
   const wheel = asset.wheel;
   const anchors = asset.wheelAnchors || {};
   if (!wheel?.meshUrl || !Object.keys(anchors).length) return;
   const wheelScene = await loadGltfScene(wheel.meshUrl);
-  await applyAssetTextures(wheelScene, wheel);
+  await applyAssetTextures(wheelScene, wheel, { isWheel: true });
   const wheelMaterials = new Set();
   wheelScene.traverse((child) => {
     for (const material of [child.material].flat().filter(Boolean)) wheelMaterials.add(material);
   });
   if (wheelMaterials.size <= 1) neutralizeSingleMaterialWheel(wheelScene);
+  // Wheel meshes are centred on the hub with the axle along X.
   const wheelBox = new THREE.Box3().setFromObject(wheelScene);
   const wheelSize = wheelBox.getSize(new THREE.Vector3());
-  const wheelDiameter = Math.max(wheelSize.y, wheelSize.z, wheelSize.x);
-  const wheelScale = Number.isFinite(wheelDiameter) && wheelDiameter > 0 ? (0.34 / wheelDiameter) * 0.95 : 0.95;
+  const meshRadius = Math.max(wheelSize.y, wheelSize.z) / 2;
+  const scale = meshRadius > 0 ? wheelRadiusFor(bodyScene, anchors) / meshRadius : 1;
+  // Which X side of the wheel mesh is the rim face: the side whose vertices spread
+  // furthest from the axle in the outer slice (spokes/rim) vs. the plain tyre sidewall.
+  const outwardSign = rimFaceSign(wheelScene);
   for (const [slot, position] of Object.entries(anchors)) {
     if (!Array.isArray(position) || position.length < 3) continue;
     const clone = wheelScene.clone(true);
-    const side = slot.includes('R') ? -1 : 1;
-    clone.scale.setScalar(wheelScale);
-    clone.position.set((Number(position[0]) || 0) * 1.16 + side * 0.035, Number(position[1]) || 0, Number(position[2]) || 0);
-    if (slot.includes('L')) clone.rotation.y = Math.PI;
+    clone.scale.setScalar(scale);
+    clone.position.set(Number(position[0]) || 0, Number(position[1]) || 0, Number(position[2]) || 0);
+    // +X is the car's left. Face the rim away from the car on both sides.
+    const carSide = slot.toUpperCase().includes('L') ? 1 : -1;
+    if (outwardSign !== carSide) clone.rotation.y = Math.PI;
+    clone.name = `wheel-${slot}`;
     bodyScene.add(clone);
   }
+}
+
+function rimFaceSign(wheelScene) {
+  let pos = 0; let neg = 0;
+  const v = new THREE.Vector3();
+  wheelScene.updateMatrixWorld(true);
+  wheelScene.traverse((child) => {
+    const attribute = child.geometry?.attributes?.position;
+    if (!attribute) return;
+    for (let i = 0; i < attribute.count; i += 3) {
+      v.fromBufferAttribute(attribute, i).applyMatrix4(child.matrixWorld);
+      // Spokes/rim detail: vertices near the hub face, not on the tread.
+      const r = Math.hypot(v.y, v.z);
+      if (v.x > 0) pos += 1 / (1 + r * 20); else neg += 1 / (1 + r * 20);
+    }
+  });
+  return pos >= neg ? 1 : -1;
 }
 
 export function createCarRenderer(container) {
@@ -314,16 +364,19 @@ export function createCarRenderer(container) {
   renderer.setPixelRatio(1);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  // Neutral keeps team colours true (ACES pushes saturated blue toward purple).
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1.0;
   renderer.domElement.style.cssText = 'width:100%;height:auto;display:block;touch-action:none';
   container.append(renderer.domElement);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(35, 1.6, 0.01, 100);
+  const camera = new THREE.PerspectiveCamera(30, 1.6, 0.01, 100);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enablePan = false;
   controls.minDistance = 2; controls.maxDistance = 12;
-  scene.add(new THREE.HemisphereLight(0xddeeff, 0x303040, 2.6));
-  for (const [x, y, z, strength] of [[4, 6, 3, 4], [-4, 3, -3, 3]]) {
+  // Studio-style lighting: soft sky/ground fill, a key light front-left, rim from behind.
+  scene.add(new THREE.HemisphereLight(0xe8f0ff, 0x2a2c33, 1.6));
+  for (const [x, y, z, strength] of [[5, 7, 6, 3.2], [-6, 4, -2, 1.6], [0, 3, -7, 2.2]]) {
     const light = new THREE.DirectionalLight(0xffffff, strength);
     light.position.set(x, y, z); scene.add(light);
   }
@@ -332,7 +385,7 @@ export function createCarRenderer(container) {
   let generation = 0;
   const render = () => { if (!disposed) renderer.render(scene, camera); };
   controls.addEventListener('change', render);
-  const resetCamera = () => { camera.position.set(4, 2.4, 4); controls.target.set(0, 0, 0); controls.update(); render(); };
+  const resetCamera = () => { camera.position.set(3.6, 1.45, 4.0); controls.target.set(0, -0.05, 0); controls.update(); render(); };
   const clear = () => { if (object) { scene.remove(object); disposeObject(object); object = null; } render(); };
   const setObject = (next) => {
     clear();

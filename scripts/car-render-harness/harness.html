@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script type="importmap">
+    { "imports": {
+      "three": "/node_modules/three/build/three.module.js",
+      "three/addons/": "/node_modules/three/examples/jsm/"
+    } }
+  </script>
+  <style>html,body{margin:0;background:#1b1d22}#stage{width:800px}</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <script>globalThis.RL_CAR_DEBUG = true;</script>
+  <script type="module">
+    import { createCarRenderer } from '/src/rl-car-renderer.js';
+    import { buildAssetIndex, composeCar } from '/src/rl-car-compose.js';
+    window.harness = { createCarRenderer, buildAssetIndex, composeCar, ready: true };
+  </script>
+</body>
+</html>
