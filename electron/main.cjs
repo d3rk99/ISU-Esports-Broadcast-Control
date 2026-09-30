@@ -17,7 +17,11 @@ const { StageDisplayManager } = require('./stage-displays/stage-display-manager.
 const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
 const OVERLAY_HOST = '127.0.0.1';
-const overlayClients = new Set();
+const { OverlayEventHub } = require('./overlay-events.cjs');
+// Declared before recordDiagnostic is defined; onDrop only fires at runtime, after startup.
+const overlayClients = new OverlayEventHub({
+  onDrop: ({ buffered }) => recordDiagnostic('overlay-client-dropped', `Dropped a stalled overlay viewer with ${Math.round(buffered / 1024)} KB unsent; it will reconnect`)
+});
 let broadcastState = {};
 const runtimeDiagnostics = [];
 let overlayServer;
@@ -700,8 +704,7 @@ function serveRocketLeagueLoadoutAsset(response, requestPath) {
 function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
-  const message = `data: ${JSON.stringify(broadcastState)}\n\n`;
-  for (const client of overlayClients) client.write(message);
+  overlayClients.publish(broadcastState);
   companionApiService?.publish(broadcastState);
 }
 
@@ -847,15 +850,7 @@ function startOverlayServer() {
       return;
     }
     if (requestUrl.pathname === '/events') {
-      response.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-      response.write(`data: ${JSON.stringify(broadcastState)}\n\n`);
-      overlayClients.add(response);
-      request.on('close', () => overlayClients.delete(response));
+      overlayClients.add(request, response, broadcastState);
       return;
     }
     if (requestUrl.pathname.startsWith('/user-assets/')) {
