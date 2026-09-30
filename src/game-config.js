@@ -441,6 +441,10 @@ export function createPlayer(config, index = 0, includeSample = false) {
     playerImageName: '',
     characterImage: '',
     characterImageName: '',
+    characterImageAuto: false,
+    characterImageLoadout: '',
+    rlPlayerId: '',
+    autoAdded: false,
     stageStation: ''
   };
 }
@@ -505,6 +509,7 @@ export function createGameState(gameKey) {
       syncGoals: true,
       syncClock: true,
       syncPlayers: true,
+      autoRoster: true,
       autoSeriesScore: true,
       autoAdvance: true,
       processedMatches: [],

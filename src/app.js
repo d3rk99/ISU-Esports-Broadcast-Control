@@ -1,5 +1,7 @@
 import './styles.css';
 import { normalizeLoadout, updateCarArt } from './rl-loadout.js';
+import { syncRosterSides } from './rl-roster-sync.js';
+import { requestCarRender } from './rl-auto-car.js';
 import { patchStageStatus } from './stage-status-view.js';
 import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
@@ -1347,6 +1349,7 @@ function renderRocketLeaguePanel(game) {
           ${rlCheckbox('syncGoals', 'Game goals', rl.syncGoals)}
           ${rlCheckbox('syncClock', 'Clock & overtime', rl.syncClock)}
           ${rlCheckbox('syncPlayers', 'Players & boost', rl.syncPlayers)}
+          ${rlCheckbox('autoRoster', 'Auto roster & cars', rl.autoRoster)}
           ${rlCheckbox('autoSeriesScore', 'Series score', rl.autoSeriesScore)}
           ${rlCheckbox('autoAdvance', 'Advance next game', rl.autoAdvance)}
         </div></section>
@@ -2092,6 +2095,56 @@ function updateRocketLeagueRecentEvents(live, players) {
   live.recentEvents = recentEvents.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 }
 
+// Pair live Rocket League players with roster slots, fill blanks (mostly the away team),
+// and auto-render each unset player's car from their loadout. Runs off the live feed when
+// the "Auto roster" automation is on. Renders are async and land through requestCarRender.
+function syncRosterFromLive(game) {
+  const rl = game.rocketLeague;
+  if (!rl.autoRoster || !rl.syncPlayers) return;
+  const players = Array.isArray(rl.live.players) ? rl.live.players.filter((player) => String(player.name || '').trim()) : [];
+  if (!players.length) return;
+  const config = GAME_CONFIGS.rocketleague;
+  const program = state.activeRoster;
+  // teamNum 0/1 -> home(0)/away(1) roster collection, respecting the blue-team mapping.
+  const bucket = (side) => {
+    const collection = side === 'home' ? game.rosters : game.awayRosters;
+    return (collection[program] ||= []);
+  };
+  const sides = ['home', 'away'].map((side, teamIndex) => ({
+    side,
+    roster: bucket(side),
+    players: players.filter((player) => mapRocketLeagueTeam(player.teamNum, rl) === teamIndex)
+  }));
+
+  let result;
+  commit(() => {
+    result = syncRosterSides(sides, (index) => createPlayer(config, index));
+    if (result.added.some((entry) => entry.side === 'away')) game.showAwayRoster = true;
+  }, 'Roster synced from live players');
+  if (!result) return;
+
+  for (const job of result.renders) {
+    const player = job.player;
+    requestCarRender(
+      { player: { id: player.id, name: player.name, loadout: player.loadout, teamNum: player.teamNum }, teams: game.teams },
+      (_job, art) => {
+        commit(() => {
+          const collection = job.side === 'home' ? game.rosters : game.awayRosters;
+          const entry = collection[program]?.[job.index];
+          if (!entry || (entry.characterImage && !entry.characterImageAuto)) return; // manual PNG appeared meanwhile
+          entry.characterImage = art.url;
+          entry.characterImageName = art.name;
+          entry.characterImageAuto = true;
+          entry.characterImageLoadout = art.loadoutKey;
+        }, 'Player car rendered');
+        render();
+      },
+      (_job, error) => console.warn('[rl-auto-car] render failed:', error?.message || error)
+    );
+  }
+  if (result.changed) render();
+}
+
 function handleRocketLeagueEvent(envelope) {
   const game = state.games.rocketleague;
   const rl = game.rocketLeague;
@@ -2116,6 +2169,7 @@ function handleRocketLeagueEvent(envelope) {
       rl.live.players = normalizeLivePlayers(data, rl);
       updateCarArt(game);
       updateRocketLeagueRecentEvents(rl.live, rl.live.players);
+      syncRosterFromLive(game);
     }
     scheduleLiveUpdate();
     return;
