@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   publishStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:publish-client-update', details),
   sendStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:send-client-update', details),
   clearStagePreviews: () => ipcRenderer.invoke('stage-displays:clear-previews'),
+  getStageKey: () => ipcRenderer.invoke('stage-displays:get-key'),
+  setStageKey: (details) => ipcRenderer.invoke('stage-displays:set-key', details),
   setStageDisplayMode: (details) => ipcRenderer.invoke('stage-displays:set-global-mode', details),
   setStageStationMode: (details) => ipcRenderer.invoke('stage-displays:set-station-mode', details),
   assignStageModePreset: (details) => ipcRenderer.invoke('stage-displays:assign-mode-preset', details),

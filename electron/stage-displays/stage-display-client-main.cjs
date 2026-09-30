@@ -10,7 +10,10 @@ const WebSocket = require('ws');
 
 const { CLIENT_VERSION } = require('./client-version.cjs');
 const { createUpdaterScript } = require('./client-updater.cjs');
+const { ClockSync } = require('./clock-sync.cjs');
 let clientWindow = null;
+let timeSyncTimer = null;
+const clockSync = new ClockSync();
 let settingsWindow = null;
 let socket = null;
 let reconnectTimer = null;
@@ -55,7 +58,9 @@ function normalizeClientConfig(saved = {}) {
     stageDisplay,
     wallPosition: Math.max(1, Math.min(10, Math.round(Number(saved.wallPosition) || (stationId === 11 ? 1 : stationId)))),
     cursorLockEnabled: saved.cursorLockEnabled === true || String(saved.cursorLockEnabled).toLowerCase() === 'true',
-    startWithWindows: saved.startWithWindows === true
+    startWithWindows: saved.startWithWindows === true,
+    // Shared stage key; must match the controller's. Empty = connect without a key.
+    stageKey: String(saved.stageKey || '').trim()
   };
 }
 
@@ -251,7 +256,8 @@ function downloadFile(url, destination) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     const client = url.startsWith('https:') ? https : http;
-    const request = client.get(url, (response) => {
+    const headers = config?.stageKey ? { 'X-Stage-Token': config.stageKey } : {};
+    const request = client.get(url, { headers }, (response) => {
       if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
         downloadFile(new URL(response.headers.location, url).toString(), destination).then(resolve, reject);
         return;
@@ -503,6 +509,7 @@ function registerClient() {
   socket.send(JSON.stringify({
     type: 'register',
     station: config.stationId,
+    token: config.stageKey || '',
     hostname: os.hostname(),
     clientVersion: CLIENT_VERSION,
     wallPosition: Math.max(1, Math.round(Number(config.wallPosition) || config.stationId)),
@@ -546,12 +553,21 @@ function connectManager() {
     clearInterval(previewTimer);
     previewTimer = setInterval(sendPreview, 1500);
     setTimeout(sendPreview, 500);
+    clockSync.reset();
+    clearInterval(timeSyncTimer);
+    // Burst a few pings right away for a quick estimate, then keep it fresh.
+    for (const delay of [50, 250, 500, 1000]) setTimeout(sendTimeSync, delay);
+    timeSyncTimer = setInterval(sendTimeSync, 15000);
   });
   socket.on('message', (data) => {
     let message = null;
     try {
       message = JSON.parse(String(data));
     } catch {
+      return;
+    }
+    if (message.command === 'time_sync') {
+      clockSync.addSample(message.clientSentAt, message.serverAt, Date.now());
       return;
     }
     if (message.command === 'set_mode') {
@@ -570,7 +586,19 @@ function connectManager() {
       installUpdate(message.update || {});
     }
   });
-  socket.on('close', scheduleReconnect);
+  const thisSocket = socket;
+  socket.on('close', (code, reason) => {
+    // Ignore close events from sockets we already replaced, or they'd tear down the live connection.
+    if (socket !== thisSocket) return;
+    const text = reason?.toString() || '';
+    if (code === 1008 || code === 4009) {
+      // Rejected (wrong stage key or station number already taken): show why instead of silently retrying.
+      lastError = text || (code === 4009 ? 'Station number already in use' : 'Connection rejected');
+      console.error(`[stage-client] station ${config.stationId} rejected: ${lastError}`);
+      clientWindow?.webContents.send('stage-client:mode', { mode: 'hold', stationId: config.stationId, error: lastError });
+    }
+    scheduleReconnect(code === 1008 || code === 4009 ? 10000 : 2500);
+  });
   socket.on('error', (error) => {
     lastError = error?.message || String(error);
     console.error(`[stage-client] connection error station ${config.stationId}: ${lastError}`);
@@ -580,6 +608,8 @@ function connectManager() {
 function restartConnection() {
   clearInterval(heartbeatTimer);
   heartbeatTimer = null;
+  clearInterval(timeSyncTimer);
+  timeSyncTimer = null;
   clearInterval(previewTimer);
   previewTimer = null;
   clearTimeout(reconnectTimer);
@@ -590,13 +620,32 @@ function restartConnection() {
   connectManager();
 }
 
-function scheduleReconnect() {
+function scheduleReconnect(delayMs = 2500) {
   clearInterval(heartbeatTimer);
   heartbeatTimer = null;
   clearInterval(previewTimer);
   previewTimer = null;
+  clearInterval(timeSyncTimer);
+  timeSyncTimer = null;
   clearTimeout(reconnectTimer);
-  reconnectTimer = setTimeout(connectManager, 2500);
+  reconnectTimer = setTimeout(connectManager, Number(delayMs) || 2500);
+}
+
+function sendTimeSync() {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({
+    type: 'time_sync',
+    station: config.stationId,
+    clientSentAt: Date.now(),
+    offsetMs: clockSync.ready ? Math.round(clockSync.offsetMs) : null,
+    rttMs: clockSync.rttMs
+  }));
+}
+
+// executeAt from the controller is on the controller's clock; the renderer schedules on ours.
+function localExecuteAt(executeAt) {
+  const local = clockSync.toLocalSeconds(executeAt);
+  return local === null ? null : local;
 }
 
 function setMode(mode = 'hold', details = {}) {
@@ -609,7 +658,7 @@ function setMode(mode = 'hold', details = {}) {
     playId: details.playId || '',
     preset: details.preset || '',
     assetPath: details.assetPath || '',
-    executeAt: Number(details.executeAt) || null,
+    executeAt: localExecuteAt(details.executeAt),
     wallPosition: Math.max(1, Math.round(Number(details.wallPosition) || config.wallPosition)),
     wallTotal: Number(details.wallTotal) || 10,
     stationId: config.stationId

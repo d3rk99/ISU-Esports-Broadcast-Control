@@ -79,13 +79,27 @@ function safeCategory(value = '') {
   return String(value || 'General').trim().replace(/[<>:"/\\|?*]+/g, '').slice(0, 40) || 'General';
 }
 
+function safeTokenEqual(expected = '', provided = '') {
+  const left = Buffer.from(String(expected));
+  const right = Buffer.from(String(provided));
+  return left.length > 0 && left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function requestToken(request, requestUrl) {
+  const header = String(request.headers?.['x-stage-token'] || '').trim();
+  if (header) return header;
+  const bearer = String(request.headers?.authorization || '').match(/^Bearer\s+(.+)$/i);
+  if (bearer) return bearer[1].trim();
+  return String(requestUrl.searchParams.get('token') || '').trim();
+}
+
 function writeJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+    'Access-Control-Allow-Headers': 'Content-Type, X-Stage-Token, Authorization',
+    'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS'
   });
   response.end(JSON.stringify(payload));
 }
@@ -93,11 +107,19 @@ function writeJson(response, statusCode, payload) {
 function readRequestBody(request) {
   return new Promise((resolve) => {
     let body = '';
+    let tooLarge = false;
     request.on('data', (chunk) => {
+      if (tooLarge) return;
       body += chunk;
-      if (body.length > 1024 * 1024) request.destroy();
+      if (body.length > 1024 * 1024) {
+        // Resolve instead of destroying the socket so the caller still answers the request.
+        tooLarge = true;
+        body = '';
+        resolve({ __tooLarge: true });
+      }
     });
     request.on('end', () => {
+      if (tooLarge) return;
       if (!body.trim()) {
         resolve({});
         return;
@@ -113,8 +135,10 @@ function readRequestBody(request) {
 }
 
 class StageDisplayManager {
-  constructor({ port = 3178, host = '0.0.0.0', assetRoot = '', bundledAssetRoot = '', updateRoot = '', onStatus = () => {}, now = () => Date.now() } = {}) {
+  constructor({ port = 3178, host = '0.0.0.0', assetRoot = '', bundledAssetRoot = '', updateRoot = '', token = '', onStatus = () => {}, now = () => Date.now() } = {}) {
     this.port = Number(port) || 3178;
+    // Shared stage key. Empty = open (legacy behaviour) so existing stations keep working until a key is set.
+    this.token = String(token || '').trim();
     this.host = host || '0.0.0.0';
     this.assetRoot = assetRoot;
     this.bundledAssetRoot = bundledAssetRoot;
@@ -132,6 +156,17 @@ class StageDisplayManager {
     for (let station = 1; station <= 11; station += 1) {
       this.stations.set(station, this.emptyStation(station));
     }
+  }
+
+  setToken(token = '') {
+    this.token = String(token || '').trim();
+    this.recordEvent('stage_key_changed', { enabled: Boolean(this.token) });
+    this.emitStatus();
+    return { ok: true, keyRequired: Boolean(this.token) };
+  }
+
+  tokenAccepted(provided = '') {
+    return !this.token || safeTokenEqual(this.token, provided);
   }
 
   updateManifestPath() {
@@ -580,6 +615,9 @@ class StageDisplayManager {
       events: [],
       updating: false,
       updateStatus: '',
+      clockOffsetMs: null,
+      clockRttMs: null,
+      conflict: null,
       error: ''
     };
   }
@@ -631,12 +669,34 @@ class StageDisplayManager {
           socket.close(1008, 'Invalid station');
           return;
         }
-        registeredStation = station;
+        if (!this.tokenAccepted(message.token)) {
+          this.recordEvent('client_rejected', { station, reason: 'bad stage key', hostname: String(message.hostname || '') });
+          this.emitStatus();
+          socket.close(1008, 'Stage key rejected');
+          return;
+        }
         const current = this.stations.get(station) || this.emptyStation(station);
+        const hostname = String(message.hostname || '');
+        const existing = current.socket;
+        if (existing && existing !== socket && existing.readyState === 1 && current.hostname && hostname && current.hostname !== hostname) {
+          // Another PC already owns this station number. Refuse instead of letting the two kick each other off.
+          current.conflict = { hostname, at: this.now() };
+          this.stations.set(station, current);
+          this.recordEvent('station_conflict', { station, owner: current.hostname, rejected: hostname });
+          this.emitStatus();
+          socket.close(4009, `Station ${station} is already in use by ${current.hostname}`);
+          return;
+        }
+        if (existing && existing !== socket && existing.readyState === 1) {
+          // Same PC reconnecting (e.g. network blip): replace its stale socket cleanly.
+          try { existing.close(4000, 'Replaced by a new connection from the same station'); } catch {}
+        }
+        registeredStation = station;
+        current.conflict = null;
         current.socket = socket;
         current.online = true;
         current.mode = normalizeStageMode(message.mode) || current.mode || 'hold';
-        current.hostname = String(message.hostname || '');
+        current.hostname = hostname;
         current.clientVersion = String(message.clientVersion || '');
         current.outdated = isOlderVersion(current.clientVersion, this.publishedClientUpdate()?.version);
         current.wallPosition = stationNumber(message.wallPosition) || station;
@@ -649,8 +709,7 @@ class StageDisplayManager {
         this.sendToStation(station, {
           command: 'registered',
           station,
-          heartbeatMs: 2500,
-          serverTime: this.now() / 1000
+          heartbeatMs: 2500
         });
         this.emitStatus();
         return;
@@ -679,6 +738,14 @@ class StageDisplayManager {
   handleClientMessage(stationId, message) {
     const station = this.stations.get(stationId) || this.emptyStation(stationId);
     station.lastSeen = this.now();
+    if (message.type === 'time_sync') {
+      // Echo the client's send time with ours so it can compute its clock offset (NTP-style, ms).
+      this.sendToStation(stationId, { command: 'time_sync', clientSentAt: Number(message.clientSentAt) || 0, serverAt: this.now() });
+      if (Number.isFinite(Number(message.offsetMs))) station.clockOffsetMs = Math.round(Number(message.offsetMs));
+      if (Number.isFinite(Number(message.rttMs))) station.clockRttMs = Math.round(Number(message.rttMs));
+      this.stations.set(stationId, station);
+      return;
+    }
     if (message.type === 'heartbeat' || message.type === 'status') {
       const mode = normalizeStageMode(message.mode);
       if (mode) station.mode = mode;
@@ -1008,9 +1075,18 @@ class StageDisplayManager {
       },
       expectedClientVersion: EXPECTED_CLIENT_VERSION,
       clientUpdate: update || { available: false, version: EXPECTED_CLIENT_VERSION },
-      warnings: stations
-        .filter((station) => station.online && station.outdated)
-        .map((station) => `Station ${String(station.station).padStart(2, '0')} client ${station.clientVersion} has a newer published update available`),
+      keyRequired: Boolean(this.token),
+      warnings: [
+        ...stations
+          .filter((station) => station.online && station.outdated)
+          .map((station) => `Station ${String(station.station).padStart(2, '0')} client ${station.clientVersion} has a newer published update available`),
+        ...stations
+          .filter((station) => station.conflict && this.now() - Number(station.conflict.at || 0) < 60000)
+          .map((station) => `Station ${String(station.station).padStart(2, '0')} is set on two PCs: ${station.hostname || 'this PC'} kept it, ${station.conflict.hostname} was refused`),
+        ...stations
+          .filter((station) => station.online && Math.abs(Number(station.clockOffsetMs) || 0) > 2000)
+          .map((station) => `Station ${String(station.station).padStart(2, '0')} clock is ${Math.round(Number(station.clockOffsetMs) / 1000)}s off the controller (corrected automatically)`)
+      ],
       eventLog: this.eventLog.slice(-40),
       stations
     };
@@ -1024,6 +1100,10 @@ class StageDisplayManager {
     if (!requestUrl.pathname.startsWith('/api/stage')) return false;
     if (request.method === 'OPTIONS') {
       writeJson(response, 204, {});
+      return true;
+    }
+    if (!this.tokenAccepted(requestToken(request, requestUrl))) {
+      writeJson(response, 401, { ok: false, error: 'Stage key required (X-Stage-Token header or ?token=)' });
       return true;
     }
     if (request.method === 'GET' && requestUrl.pathname === '/api/stage/status') {
@@ -1054,6 +1134,10 @@ class StageDisplayManager {
       return true;
     }
     const body = await readRequestBody(request);
+    if (body.__tooLarge) {
+      writeJson(response, 413, { ok: false, error: 'Request body too large' });
+      return true;
+    }
     if (requestUrl.pathname === '/api/stage/prepared/play') {
       const result = await this.playPreparedPreset(body);
       writeJson(response, result.ok ? 200 : 409, result);
@@ -1120,6 +1204,7 @@ class StageDisplayManager {
 
 module.exports = {
   StageDisplayManager,
+  safeTokenEqual,
   STAGE_DISPLAY_MODES,
   normalizeStageMode
 };

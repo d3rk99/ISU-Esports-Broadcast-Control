@@ -268,6 +268,7 @@ function populateConfigForm() {
   setOptions(configForm.elements.playerDisplay, displayOptions, config.playerDisplay);
   setOptions(configForm.elements.stageDisplay, displayOptions, config.stageDisplay);
   configForm.elements.controller.value = config.controller || '';
+  configForm.elements.stageKey.value = config.stageKey || '';
   configForm.elements.cursorLockEnabled.checked = Boolean(config.cursorLockEnabled);
   configForm.elements.startWithWindows.checked = Boolean(config.startWithWindows);
   configForm.elements.startWithWindows.disabled = !config.startupSupported;
@@ -318,6 +319,7 @@ async function saveClientConfig(event) {
     config = await window.stageClient.saveConfig({
       stationId: Number(configForm.elements.stationId.value),
       controller: configForm.elements.controller.value.trim(),
+      stageKey: configForm.elements.stageKey.value.trim(),
       playerDisplay: Number(configForm.elements.playerDisplay.value),
       stageDisplay: Number(configForm.elements.stageDisplay.value),
       wallPosition: Number(configForm.elements.wallPosition.value),

@@ -28,7 +28,8 @@ Each station needs a config based on:
 ```json
 {
   "stationId": 1,
-  "controller": "http://CONTROL-PC-IP:3178",
+  "controller": "http://CONTROL-PC-IP:3174",
+  "stageKey": "SAME-KEY-AS-CONTROLLER",
   "playerDisplay": 1,
   "stageDisplay": 2,
   "wallPosition": 1,
@@ -39,7 +40,8 @@ Each station needs a config based on:
 Set these per station:
 
 - `stationId`: 1 through 10
-- `controller`: controller PC address, using port `3178`
+- `controller`: controller PC address, using port `3174` (the client derives the `3178` WebSocket address from it)
+- `stageKey`: the Stage Key set on the controller's Stage Displays page. Stations with a wrong or missing key are refused. Leave blank only if the controller has no key set.
 - `playerDisplay`: normally `1`
 - `stageDisplay`: normally `2`
 - `wallPosition`: normally same as `stationId`
@@ -50,7 +52,7 @@ Set these per station:
 1. Start the main controller on the broadcast/control PC.
 2. Start the Stage Display Client on the station PC.
 3. Open the Stage Displays page in the controller.
-4. Confirm the station appears online with the correct station number.
+4. Confirm the station appears online with the correct station number. If two PCs are set to the same station number, the controller keeps the first, refuses the second, and shows a Stage warning.
 5. Send Blackout.
 6. Send Test Graphic or Mirror Graphic.
 7. Send Gameplay Mirror.

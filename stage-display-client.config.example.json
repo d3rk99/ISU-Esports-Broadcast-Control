@@ -2,6 +2,7 @@
   "stationId": 1,
   "controller": "http://CONTROL-PC-IP:3174",
   "managerWs": "",
+  "stageKey": "",
   "playerDisplay": 1,
   "stageDisplay": 2,
   "wallPosition": 1

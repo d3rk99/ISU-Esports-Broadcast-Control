@@ -417,8 +417,23 @@ function renderStageDisplays() {
           </div>
         </div>
       </article>
+      <article class="panel stage-key-panel">
+        <div class="panel-title compact">
+          <div>
+            <h2>Stage key</h2>
+            <p>${stageDisplayStatus.keyRequired
+              ? 'Key required: stations and HTTP/REST calls must send it (station config <code>stageKey</code>, or header <code>X-Stage-Token</code>).'
+              : '<strong>No key set:</strong> anyone on the network can control the stage. Set a key, then enter the same key on every station.'}</p>
+          </div>
+          <div class="heading-actions">
+            <input type="password" id="stage-key-input" placeholder="New stage key" autocomplete="off">
+            <button class="secondary-button" data-action="stage-set-key">SAVE KEY</button>
+            ${stageDisplayStatus.keyRequired ? '<button class="secondary-button" data-action="stage-clear-key">REMOVE KEY</button>' : ''}
+          </div>
+        </div>
+      </article>
       <article class="panel stage-api-panel">
-        <div class="panel-title compact"><div><h2>Companion-ready API</h2><p>Use these from HTTP/REST buttons later.</p></div></div>
+        <div class="panel-title compact"><div><h2>Companion-ready API</h2><p>Use these from HTTP/REST buttons later.${stageDisplayStatus.keyRequired ? ' Add header <code>X-Stage-Token: &lt;stage key&gt;</code> (or <code>?token=</code>).' : ''}</p></div></div>
         <div class="stage-api-grid">
           <code>GET ${escapeHtml(baseUrl)}</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/gameplay</code>
@@ -2259,6 +2274,21 @@ root.addEventListener('click', async (event) => {
   }
   if (button.dataset.action === 'refresh-stage-displays') {
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-set-key' || button.dataset.action === 'stage-clear-key') {
+    const clearing = button.dataset.action === 'stage-clear-key';
+    const input = document.querySelector('#stage-key-input');
+    const stageKey = clearing ? '' : String(input?.value || '').trim();
+    if (!clearing && stageKey.length < 8) {
+      toast('Stage key must be at least 8 characters');
+      return;
+    }
+    if (clearing && !window.confirm('Remove the stage key? Anyone on the network will be able to control the stage again.')) return;
+    const result = await window.isuDesktop?.setStageKey?.({ stageKey });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? (clearing ? 'Stage key removed' : 'Stage key saved. Stations without it will be refused') : result?.error || 'Could not save stage key');
     render();
     return;
   }

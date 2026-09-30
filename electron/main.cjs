@@ -69,6 +69,23 @@ function writableStageClientUpdateRoot() {
   return path.join(app.getPath('userData'), 'stage-client-updates');
 }
 
+// Shared Stage Display key (stations must send the same key). Stored like the other connection settings.
+function stageKeyPath() {
+  return path.join(app.getPath('userData'), 'stage-key.json');
+}
+
+function readStageKey() {
+  try {
+    return String(JSON.parse(fs.readFileSync(stageKeyPath(), 'utf8')).stageKey || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function saveStageKey(stageKey = '') {
+  fs.writeFileSync(stageKeyPath(), JSON.stringify({ stageKey: String(stageKey || '').trim() }, null, 2), 'utf8');
+}
+
 function bundledStageAssetRoot() {
   return path.join(__dirname, '..', 'stage-assets');
 }
@@ -1011,6 +1028,12 @@ function registerIpc() {
   });
   ipcMain.handle('stage-displays:send-client-update', (_event, details = {}) => stageDisplayManager.sendClientUpdate(details.target || 'outdated', details.station || null));
   ipcMain.handle('stage-displays:clear-previews', () => stageDisplayManager.clearStationPreviews());
+  ipcMain.handle('stage-displays:get-key', () => ({ stageKey: stageDisplayManager.token || '' }));
+  ipcMain.handle('stage-displays:set-key', (_event, details = {}) => {
+    const stageKey = String(details.stageKey || '').trim();
+    saveStageKey(stageKey);
+    return stageDisplayManager.setToken(stageKey);
+  });
   ipcMain.handle('stage-displays:set-global-mode', (_event, details = {}) => stageDisplayManager.setGlobalMode(details.mode, details));
   ipcMain.handle('stage-displays:set-station-mode', (_event, details = {}) => stageDisplayManager.setStationMode(details.station, details.mode, details));
   ipcMain.handle('stage-displays:assign-mode-preset', (_event, details = {}) => stageDisplayManager.assignModePreset(details.mode, details.preset, details));
@@ -1265,6 +1288,7 @@ app.whenReady().then(async () => {
     assetRoot: writableStageAssetRoot(),
     bundledAssetRoot: bundledStageAssetRoot(),
     updateRoot: writableStageClientUpdateRoot(),
+    token: readStageKey(),
     onStatus: (status) => {
       latestStageStatus = status;
       if (stageStatusTimer) return;
