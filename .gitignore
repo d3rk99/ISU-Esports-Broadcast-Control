@@ -11,3 +11,4 @@ Thumbs.db
 # Keep it local and document its expected path/hash in docs/rocket-league-loadout-assets.md.
 assests/rl-loadout-assets.zip
 assests/rl-loadout-assets/
+rl-app.bundle

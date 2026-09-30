@@ -7,6 +7,8 @@
     "electron/bridge-main.cjs",
     "electron/bridge-preload.cjs",
     "electron/game-bridge.cjs",
+    "electron/bridge-link.cjs",
+    "electron/valorant-observer-consensus.cjs",
     "electron/rocket-league-service.cjs",
     "electron/valorant-capture.cjs",
     "electron/valorant-native-capture.cjs",

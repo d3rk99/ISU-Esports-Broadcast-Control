@@ -31,6 +31,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "assests/rocket-league-items.csv",
       "stage-assets/**/*",
       "stage-display-client.config.example.json",
       "package.json"

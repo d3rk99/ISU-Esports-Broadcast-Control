@@ -13,11 +13,15 @@ assests/rl-loadout-assets.zip
 Current local file:
 
 ```text
-Size:   7,559,451,151 bytes
-SHA256: 31BB61D57C5F9EA3385A8F4672E80159215CB957958508040835738D685813C9
+Size:   7,559,450,645 bytes
+SHA256: 1CEEAD3689694DC7344DC8065B7D221DC7624ECC01598D2F4A172E7315B0F68C
 ```
 
 This zip is intentionally ignored by git. It exceeds normal GitHub file limits and should be shared by external storage or recreated from the extraction workflow.
+
+These values describe the September 30, 2026 transfer ZIP, which passed a full 7-Zip integrity test. They replace the earlier local archive checksum.
+
+For portable Windows builds, put an `assests` folder next to the portable EXE and place `rl-loadout-assets.zip` inside it, or run the EXE from `release/<build-name>` inside this repository so its parent lookup finds the repository's `assests` folder. The item-name CSV is bundled with the controller; the ZIP remains external and is read without unpacking it.
 
 The renderer can also use an extracted folder at:
 

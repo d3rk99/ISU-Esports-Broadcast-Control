@@ -370,7 +370,12 @@ function rocketLeagueLoadoutPackLocations() {
   const roots = [
     path.join(__dirname, '..', 'assests'),
     path.join(process.cwd(), 'assests'),
+    ...(process.env.PORTABLE_EXECUTABLE_DIR ? [
+      path.join(process.env.PORTABLE_EXECUTABLE_DIR, 'assests'),
+      path.join(process.env.PORTABLE_EXECUTABLE_DIR, '..', '..', 'assests')
+    ] : []),
     path.join(path.dirname(process.execPath || ''), 'assests'),
+    path.join(path.dirname(process.execPath || ''), '..', '..', '..', 'assests'),
     path.join(path.dirname(process.execPath || ''), '..', '..', 'assests')
   ];
   const uniqueRoots = [...new Set(roots.map((item) => path.resolve(item)))];
