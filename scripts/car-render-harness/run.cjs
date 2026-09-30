@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
     const wheel = details(find(summary.wheels, composed.wheel));
     let ok = false; let error = '';
     if (body) {
-      const asset = { name: body.displayName, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
+      const asset = { name: body.displayName, bodyId: body.id, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
       try {
         ok = await win.webContents.executeJavaScript(`(async () => {
           // One renderer for the whole run: creating/disposing WebGL contexts per car
@@ -119,7 +119,7 @@ app.whenReady().then(async () => {
     }
     report.push({ name: c.name, ok, error, ...composed });
   }
-  fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({ report, logs: logs.slice(-40) }, null, 2));
+  fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({ report, logs: logs.filter((l) => l.includes("rl-car-debug")) }, null, 2));
   console.log(JSON.stringify(report.map((r) => ({ n: r.name, ok: r.ok, b: r.body, d: r.decal, w: r.wheel, miss: r.missing.map((m) => m.slot + ':' + m.name), err: r.error }))));
   app.exit(0);
 });
