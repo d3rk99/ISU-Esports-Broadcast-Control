@@ -297,10 +297,17 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
     const exactBinding = bindingForMaterial(asset, material.name);
     const ownNames = [material.name, asset.bodyId || ''];
     const ownDiffuse = !exactBinding?.diffuse && !chassisDiffuse && !genericName
-      ? ownedTexture(textures, 'diffuse', ownNames, (name) => !/blank_?skin|chassis|chasis|thumb/.test(name) || chassis)
+      ? ownedTexture(textures, 'diffuse', ownNames, (name) => !/blank_?skin|thumb/.test(name) && (chassis ? /chassis|chasis|parts/.test(name) : !/chassis|chasis/.test(name)))
       : null;
     const diffuse = chassisDiffuse || textureFromPath(texturesByPath, exactBinding?.diffuse) || ownDiffuse || textureFromPath(texturesByPath, binding?.diffuse) || boundOrBestTexture(asset, material.name, meshName, 'diffuse', texturesByPath);
-    const normal = chassisNormal || textureFromPath(texturesByPath, binding?.normal) || boundOrBestTexture(asset, material.name, meshName, 'normal', texturesByPath);
+    // Normal maps are UV-layout specific: never borrow another material's (the body taking the
+    // chassis normal drew chassis grooves across Back to the Future's body). Own .mat -> its
+    // Normal only; no .mat -> a normal named for this material/body, same body/chassis side.
+    const normal = chassisNormal || (exactBinding
+      ? textureFromPath(texturesByPath, exactBinding.normal)
+      : (genericName
+        ? textureFromPath(texturesByPath, binding?.normal) || boundOrBestTexture(asset, material.name, meshName, 'normal', texturesByPath)
+        : ownedTexture(textures, 'normal', ownNames, (name) => (chassis ? /chassis|chasis|parts/.test(name) : !/chassis|chasis/.test(name)))));
     // Glass / lens materials have their own small UV layout; a body diffuse on them is garbage.
     const glass = /glass|lens|window/.test(compactKey(material.name || ''));
     const useDiffuse = !glass && diffuse && !/^blank_n$|blank_?skin/.test(fileBase(diffuse.path));
@@ -329,7 +336,7 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
       if (applyBodyPaint(material, { skinMap, decalMap, decalGray, primary: paint.primary, accent: paint.accent })) painted += 1;
       else if (!material.map) material.color?.set?.(paint.primary); // no paint maps at all: flat team colour
     }
-    if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding, material.name)?.path?.split('/').pop() }));
+    if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), normal: material.normalMap ? normal?.path?.split('/').pop() : null, painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding, material.name)?.path?.split('/').pop() }));
     material.needsUpdate = true;
   }));
   return { painted };
