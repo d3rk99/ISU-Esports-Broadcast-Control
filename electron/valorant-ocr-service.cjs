@@ -1914,6 +1914,8 @@ class ValorantOcrService {
       });
       const value = parseObserverCredits(result.text);
       if (value !== null) results.push({ ...result, value, variantIndex: index });
+      // Early exit: two confident variants already agree, so the rest can't outvote them.
+      if (value !== null && results.filter((item) => item.value === value && (Number(item.confidence) || 0) >= 0.6).length >= 2) break;
     }
     const grouped = Array.from(results.reduce((groups, result) => {
       const group = groups.get(result.value) || {

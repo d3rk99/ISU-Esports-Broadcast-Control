@@ -744,3 +744,17 @@ test('observer 3 kills never go down unless the lower value is read four times',
   assert.equal(service.observer3.teams.away.players[2].kda.kills, 3, 'four in a row is treated as a real correction');
 });
 
+
+test('observer 3 credits stop reading variants once two confident reads agree', async (t) => {
+  let calls = 0;
+  const capture = { crop: () => ({ image: Buffer.from('test') }) };
+  const ocr = { recognize: async () => { calls += 1; return { text: '3,900', confidence: 0.9, latencyMs: 1 }; } };
+  const service = new ValorantOcrService({ capture, ocr });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard' });
+  const profile = getValorantOcrProfile(service.settings.profileId, { scoreboardTable: service.settings.scoreboardTableOverrides });
+  const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 1 && item.columnId === 'credits');
+  const result = await service.recognizeObserverCell(fakeFrame(), 'observer3-home-1-credits', service.observerCellRoi(profile, cell), cell.column);
+  assert.equal(result.text, '3,900');
+  assert.equal(calls, 2, 'only 2 of 5 variants were needed');
+});
