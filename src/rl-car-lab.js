@@ -1,5 +1,6 @@
 import { createCarRenderer } from './rl-car-renderer.js';
 import { normalizeLoadout, loadoutKey } from './rl-loadout.js';
+import { BLUE_PRIMARY, ORANGE_PRIMARY, ACCENT, garagePaint } from './rl-car-palette.js';
 import './rl-car-lab.css';
 
 function assetMatchKey(value) {
@@ -42,14 +43,19 @@ export function openCarLab(getGame, saveLibrary) {
         </div>
         <label>DECAL<select id="car-pack-decal"></select></label>
         <label>WHEEL<select id="car-pack-wheel"></select></label>
-        <label>PAINT MODE<select id="car-paint-mode"><option value="team">Team blue/orange fallback</option><option value="custom">Custom lab colors</option><option value="off">No paint recolor</option></select></label>
+        <label>PAINT MODE<select id="car-paint-mode"><option value="team">Team colors (from the match)</option><option value="garage">Player's garage colors</option><option value="custom">Custom hex colors</option><option value="off">No paint recolor</option></select></label>
         <div class="car-color-row">
           <label>PRIMARY<input id="car-primary-color" type="color" value="#1597ff"></label>
           <label>SECONDARY<input id="car-secondary-color" type="color" value="#82fff7"></label>
         </div>
+        <div id="car-garage" class="car-garage" hidden>
+          <small>PRIMARY (garage grid, team side of the selected player)</small><div id="car-garage-primary" class="car-swatches"></div>
+          <small>ACCENT</small><div id="car-garage-accent" class="car-swatches"></div>
+          <small id="car-garage-pick"></small>
+        </div>
         <button id="car-pack-load" disabled>LOAD SELECTED BODY</button>
       </div>
-      <p class="car-warning">The API does not document every paint color. The extracted pack now supplies body, wheel, decal, material and texture links, but unknown player-selected colors may still use the blue/orange fallback.</p>
+      <p class="car-warning">The Stats API only sends team colors, not each player's own garage paint. Pick a player's garage colors here once (from their garage, a replay or a BakkesMod code); they are saved per player and reused.</p>
       <button id="car-import">IMPORT GLB FOR SELECTED MAPPING</button>
       <button id="car-saved">LOAD SAVED MODEL</button>
       <button id="car-demo">TEST WITH DEMO CAR</button>
@@ -74,6 +80,26 @@ export function openCarLab(getGame, saveLibrary) {
   let pack = { available: false, bodies: [] };
   const library = () => getGame().rocketLeague.carRenderer || { enabled: false, models: {}, renders: {} };
   const status = (message) => { $('car-status').textContent = message; };
+  const garageFor = () => library().playerPaint?.[selected?.id] || {};
+  let garage = {};
+  const garageTeam = () => Number(selected?.teamNum) === 1 ? 1 : 0;
+  const drawSwatches = () => {
+    const make = (list, which) => list.map((hex, id) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'car-swatch'; b.style.background = hex; b.title = `#${id} ${hex}`;
+      if (garage[which] === id) b.classList.add('is-picked');
+      b.onclick = () => { garage = { ...garage, [which]: id }; drawSwatches(); invalidatePackPreview(); };
+      return b;
+    });
+    $('car-garage-primary').replaceChildren(...make(garageTeam() === 1 ? ORANGE_PRIMARY : BLUE_PRIMARY, 'primaryId'));
+    $('car-garage-accent').replaceChildren(...make(ACCENT, 'accentId'));
+    const p = garagePaint({ teamNum: garageTeam(), ...garage });
+    $('car-garage-pick').textContent = `Primary #${garage.primaryId ?? 'default'} ${p.primary} / Accent #${garage.accentId ?? 'default'} ${p.accent}`;
+  };
+  const syncPaintMode = () => {
+    $('car-garage').hidden = $('car-paint-mode').value !== 'garage';
+    if (!$('car-garage').hidden) drawSwatches();
+  };
   const selectedBody = () => pack.bodies?.[Number($('car-pack-body').value)] || null;
   const selectedDecal = () => {
     if ($('car-pack-decal').value === 'auto') return loadoutDecal();
@@ -124,6 +150,9 @@ export function openCarLab(getGame, saveLibrary) {
     selected = snapshot[Number($('car-player').value)] || null;
     $('car-loadout').value = selected ? normalizeLoadout(selected.loadout).map((item, index) => `${index}: ${item || '(empty)'}`).join('\n') || 'No Loadout field received.' : 'No live players. Start the RL test feed or connect a match.';
     syncPackSelectionToLoadout();
+    garage = { ...garageFor() };
+    if (garage.primaryId !== undefined || garage.accentId !== undefined) $('car-paint-mode').value = 'garage';
+    syncPaintMode();
     status(key() ? (library().renders?.[key()] ? 'Saved artwork exists for this mapping. Load the saved model to adjust it.' : 'Unmapped: import or load an asset-pack body. Existing preview is not assigned to this selection.') : 'Missing body data: live artwork remains unchanged.');
   };
   const refresh = () => {
@@ -183,7 +212,7 @@ export function openCarLab(getGame, saveLibrary) {
   $('car-pack-body').onchange = () => { syncPackThumbnail(); invalidatePackPreview(); };
   $('car-pack-decal').onchange = invalidatePackPreview;
   $('car-pack-wheel').onchange = invalidatePackPreview;
-  $('car-paint-mode').onchange = invalidatePackPreview;
+  $('car-paint-mode').onchange = () => { syncPaintMode(); invalidatePackPreview(); };
   $('car-primary-color').onchange = invalidatePackPreview;
   $('car-secondary-color').onchange = invalidatePackPreview;
   $('car-refresh').onclick = refresh;
@@ -192,7 +221,17 @@ export function openCarLab(getGame, saveLibrary) {
     if (!body?.meshUrl) throw Error('Choose a body from the asset pack.');
     const decal = await assetDetails('decal', selectedDecal());
     const wheel = await assetDetails('wheel', selectedWheel());
-    const paintMode = $('car-paint-mode').value;
+    let paintMode = $('car-paint-mode').value;
+    let primaryColor = $('car-primary-color').value;
+    let secondaryColor = $('car-secondary-color').value;
+    if (paintMode === 'garage') {
+      const p = garagePaint({ teamNum: garageTeam(), ...garage });
+      paintMode = 'custom'; primaryColor = p.primary; secondaryColor = p.accent;
+      if (selected?.id) {
+        const current = library();
+        saveLibrary({ ...current, playerPaint: { ...(current.playerPaint || {}), [selected.id]: { primaryId: garage.primaryId, accentId: garage.accentId } } });
+      }
+    }
     await load({
       name: body.displayName,
       url: body.meshUrl,
@@ -201,8 +240,8 @@ export function openCarLab(getGame, saveLibrary) {
       teamNum: Number(selected?.teamNum) || 0,
       paintMode,
       useTeamPaint: paintMode !== 'off',
-      primaryColor: $('car-primary-color').value,
-      secondaryColor: $('car-secondary-color').value,
+      primaryColor,
+      secondaryColor,
       textures: body.textures || [],
       decal,
       wheel,

@@ -37,6 +37,24 @@ test('compose: "None" slots are empty, not missing', () => {
 
 test('paint: team colours come from the packet, with blue/orange defaults', () => {
   assert.deepEqual(teamPaint(0, [{ TeamNum: 0, ColorPrimary: 'F47920', ColorSecondary: '111111' }]), { primary: '#f47920', accent: '#111111' });
-  assert.equal(teamPaint(1, []).primary, '#ff7a1a');
-  assert.equal(teamPaint(0, [{ TeamNum: 0, ColorPrimary: 'bad' }]).primary, '#1873ff');
+  assert.equal(teamPaint(1, []).primary, '#fc7c0c');
+  assert.equal(teamPaint(0, [{ TeamNum: 0, ColorPrimary: 'bad' }]).primary, '#0c88fc');
+});
+
+test('player garage colours override team colours', async () => {
+  const { composeCar: compose, playerPaint } = await import('../src/rl-car-compose.js');
+  const { BLUE_PRIMARY, ORANGE_PRIMARY, ACCENT } = await import('../src/rl-car-palette.js');
+  assert.equal(BLUE_PRIMARY.length, 70);
+  assert.equal(ORANGE_PRIMARY.length, 70);
+  assert.equal(ACCENT.length, 105);
+  assert.deepEqual(playerPaint(0, { primaryId: 5, accentId: 3 }), { primary: BLUE_PRIMARY[5], accent: ACCENT[3] });
+  assert.deepEqual(playerPaint(1, { primaryId: 5 }), { primary: ORANGE_PRIMARY[5], accent: ACCENT[0] });
+  assert.deepEqual(playerPaint(0, { primary: 'FF00AA', accent: '#00ff00' }), { primary: '#ff00aa', accent: '#00ff00' });
+  assert.equal(playerPaint(0, null), null);
+  const car = compose({ Loadout: ['None'], TeamNum: 1, paint: { primaryId: 12, accentId: 40 } }, [{ TeamNum: 1, ColorPrimary: 'FFFFFF' }], {});
+  assert.equal(car.paintSource, 'player');
+  assert.equal(car.paint.primary, ORANGE_PRIMARY[12]);
+  const team = compose({ Loadout: ['None'], TeamNum: 1 }, [{ TeamNum: 1, ColorPrimary: 'FFFFFF', ColorSecondary: '000000' }], {});
+  assert.equal(team.paintSource, 'team');
+  assert.equal(team.paint.primary, '#ffffff');
 });

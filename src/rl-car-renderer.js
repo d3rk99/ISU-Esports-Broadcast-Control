@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { garagePaint } from './rl-car-palette.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { applyBodyPaint } from './rl-car-paint.js';
@@ -141,23 +142,55 @@ function findTexture(textures, predicate) {
 
 // The body's paint-area map: BlankSkin role first, then *_BlankSkin*_RGB-ish masks.
 function bodySkinTexture(textures, binding) {
-  const bound = (binding?.other || []).map((pathValue) => textures.find((t) => texturePathKey(t.path) === texturePathKey(pathValue))).find((t) => t?.role === 'blankskin');
+  const bound = (binding?.other || []).map((pathValue) => textures.find((t) => texturePathKey(t.path) === texturePathKey(pathValue))).find((t) => t && (t.role === 'blankskin' || /blank_?skin|_bs$/.test(fileBase(t.path))));
   if (bound) return bound;
+  // Same map under other names in the pack: *_Blank_Skin_D (tagged diffuse), *_BS (Bone Shaker), *_Default_RGB.
   return findTexture(textures, (name, t) => t.role === 'blankskin')
-    || findTexture(textures, (name, t) => t.role === 'mask' && /blankskin/.test(name))
+    || findTexture(textures, (name) => /blank_?skin/.test(name) && !/chassis|chasis/.test(name))
+    || findTexture(textures, (name) => /_bs$/.test(name) && !/chassis|chasis/.test(name))
+    || findTexture(textures, (name, t) => t.role === 'mask' && /_default_rgb$/.test(name))
     || findTexture(textures, (name, t) => t.role === 'mask' && /body/.test(name) && !/chassis|chasis|part|fx|grad|sphere/.test(name));
 }
 
 // The decal's pattern map: its *_RGB texture that isn't a shared body/chassis mask.
-function decalPatternTexture(decal) {
+function decalPatternTexture(decal, body) {
   const textures = Array.isArray(decal?.textures) ? decal.textures : [];
+  // Textures the body already ships (e.g. Bone Shaker's Car_Bone_Body_RGB, which is the
+  // body's base map, not a pattern) are never the decal pattern.
+  const bodyFiles = new Set((body?.textures || []).map((t) => fileBase(t.path)));
+  const isPattern = (name) => !bodyFiles.has(name) && !/blankskin|chassis|chasis|curv|thumb/.test(name)
+    && (/_rgb$/.test(name) || /skin/.test(name));
   const bound = Object.values(decal?.materialBindings || {})
     .flatMap((binding) => [binding.mask, ...(binding.other || [])])
     .filter(Boolean)
     .map((pathValue) => textures.find((t) => texturePathKey(t.path) === texturePathKey(pathValue)))
-    .find((t) => t && /_rgb$/.test(fileBase(t.path)) && !/blankskin|chassis|chasis/.test(fileBase(t.path)));
+    .find((t) => t && isPattern(fileBase(t.path)));
   if (bound) return bound;
-  return findTexture(textures, (name) => /_rgb$/.test(name) && !/blankskin|chassis|chasis|curv/.test(name));
+  return findTexture(textures, (name) => isPattern(name));
+}
+
+// Some decal patterns (e.g. Tumbler Camo) are a plain greyscale picture with no alpha:
+// the grey level is the pattern, not the R/A channel layout the rest use. Sampled once.
+const grayCache = new WeakMap();
+function isGrayOpaque(image) {
+  if (!image || typeof OffscreenCanvas === 'undefined') return false;
+  if (grayCache.has(image)) return grayCache.get(image);
+  let result = false;
+  try {
+    const canvas = new OffscreenCanvas(64, 64);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, 64, 64);
+    const px = ctx.getImageData(0, 0, 64, 64).data;
+    let gray = 0; let opaque = 0;
+    for (let i = 0; i < px.length; i += 4) {
+      if (Math.abs(px[i] - px[i + 1]) < 6 && Math.abs(px[i] - px[i + 2]) < 6) gray += 1;
+      if (px[i + 3] > 250) opaque += 1;
+    }
+    const n = px.length / 4;
+    result = gray / n > 0.97 && opaque / n > 0.98;
+  } catch { result = false; }
+  grayCache.set(image, result);
+  return result;
 }
 
 // Some decals ship their own diffuse (e.g. printed liveries); use it when present.
@@ -195,7 +228,7 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
   };
   const texturesByPath = textureMap(textures);
   const skinTextureFor = (binding) => bodySkinTexture(textures, binding);
-  const patternTexture = decalPatternTexture(decal);
+  const patternTexture = decalPatternTexture(decal, asset);
   const decalDiffuse = decalDiffuseTexture(decal, asset);
   let painted = 0;
   const jobs = [];
@@ -209,8 +242,11 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
   });
   await Promise.all(jobs.map(async ({ mesh, meshName, material }) => {
     const binding = fallbackBindingForMaterial(asset, material.name, meshName);
+    // A named material says what it is ("MIC_Body_*" vs "*_Chassis_*"). Bound texture names
+    // are not reliable: body materials often reference shared chassis maps too.
     const nameText = `${material.name} ${meshName}`;
-    let chassis = isChassisName(`${nameText} ${bindingTextureName(binding)}`);
+    const bodyByName = /body|paint|skin/.test(compactKey(material.name || ''));
+    let chassis = !bodyByName && isChassisName(nameText);
     // Generic names (material_0, ...) say nothing. Across the extracted pack, the chassis
     // is material slot 0 on 67 of 70 bodies with named materials, so slot 0 = chassis.
     const genericName = /^material_?\d+$/i.test(material.name || '') || !material.name;
@@ -229,7 +265,7 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
       : null;
     const diffuse = chassisDiffuse || textureFromPath(texturesByPath, binding?.diffuse) || boundOrBestTexture(asset, material.name, meshName, 'diffuse', texturesByPath);
     const normal = chassisNormal || textureFromPath(texturesByPath, binding?.normal) || boundOrBestTexture(asset, material.name, meshName, 'normal', texturesByPath);
-    const useDiffuse = diffuse && !(/^blank_n$/.test(fileBase(diffuse.path)));
+    const useDiffuse = diffuse && !/^blank_n$|blank_?skin/.test(fileBase(diffuse.path));
     const map = await loadTexture(!chassis && decalDiffuse ? decalDiffuse : (useDiffuse ? diffuse : null), true);
     if (map) { material.map = map; material.color?.set?.(0xffffff); }
     // Generic shared normals (fur / sparkle / blank) belong to paint finishes, not the body shape.
@@ -243,7 +279,8 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
       const skin = skinTextureFor(binding);
       const skinMap = await loadTexture(skin);
       const decalMap = patternTexture ? await loadTexture(patternTexture) : null;
-      if (applyBodyPaint(material, { skinMap, decalMap, primary: paint.primary, accent: paint.accent })) painted += 1;
+      const decalGray = decalMap ? isGrayOpaque(decalMap.image) : false;
+      if (applyBodyPaint(material, { skinMap, decalMap, decalGray, primary: paint.primary, accent: paint.accent })) painted += 1;
       else if (!material.map) material.color?.set?.(paint.primary); // no paint maps at all: flat team colour
     }
     if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding)?.path?.split('/').pop() }));
@@ -256,7 +293,7 @@ function paintColors(asset = {}) {
   if (asset.useTeamPaint === false || asset.paintMode === 'off') return null;
   if (asset.paintMode === 'custom' && asset.primaryColor && asset.secondaryColor) return { primary: asset.primaryColor, accent: asset.secondaryColor };
   if (asset.paint?.primary) return { primary: asset.paint.primary, accent: asset.paint.accent || '#111111' };
-  return asset.teamNum === 1 ? { primary: '#ff7a1a', accent: '#3d1a05' } : { primary: '#1873ff', accent: '#0a1d3d' };
+  return garagePaint({ teamNum: asset.teamNum });
 }
 
 function neutralizeSingleMaterialWheel(root) {

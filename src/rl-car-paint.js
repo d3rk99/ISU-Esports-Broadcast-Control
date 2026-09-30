@@ -5,7 +5,7 @@ import * as THREE from 'three';
 //
 //   BlankSkin (body "RGB" / BlankSkin texture)
 //     R = paintable body area (where the team primary colour goes)
-//     B = small fixed accent regions
+//     B = windows / glass (rendered dark tint)
 //   Decal texture (Skin_* "..._RGB")
 //     R = the same paintable body area as BlankSkin R
 //     A = the decal pattern (drawn in the team accent colour)
@@ -19,15 +19,17 @@ import * as THREE from 'three';
 const PAINT_FRAGMENT = `
   vec4 rlSkin = texture2D(rlSkinMap, vMapUv);
   vec4 rlDecal = rlHasDecal > 0.5 ? texture2D(rlDecalMap, vMapUv) : vec4(0.0);
-  float rlBody = rlHasDecal > 0.5 ? max(rlDecal.r, rlSkin.r) : rlSkin.r;
+  // Greyscale opaque patterns: grey level = pattern, paint area from the body skin only.
+  if (rlDecalGray > 0.5) rlDecal = vec4(0.0, 0.0, 0.0, rlDecal.r);
+  float rlBody = (rlHasDecal > 0.5 && rlDecalGray < 0.5) ? max(rlDecal.r, rlSkin.r) : rlSkin.r;
   // Base: team primary where paintable, the diffuse elsewhere.
   vec3 rlPaint = mix(diffuseColor.rgb, rlPrimary, rlBody);
   // Decal pattern in the accent colour.
   rlPaint = mix(rlPaint, rlAccent, rlDecal.a * rlBody);
   rlPaint = mix(rlPaint, rlAccent * 0.8 + rlPrimary * 0.2, rlDecal.g * rlBody);
   rlPaint = mix(rlPaint, vec3(0.06), rlDecal.b * rlBody);
-  // Fixed accent areas from the blank skin.
-  rlPaint = mix(rlPaint, rlAccent, rlSkin.b);
+  // BlankSkin B marks the windows/glass: dark tinted, never team-coloured.
+  rlPaint = mix(rlPaint, vec3(0.018, 0.02, 0.026), rlSkin.b);
   // Keep the diffuse's baked shading (panel lines, AO) on top of the paint.
   // Only borrow the diffuse's darker detail (panel lines, AO); flat areas stay the true
   // team colour so orange stays orange and blue doesn't drift toward purple.
@@ -37,12 +39,13 @@ const PAINT_FRAGMENT = `
   diffuseColor.rgb = mix(rlPaint, rlPaint * rlShade, rlBody * rlShadeAmount);
 `;
 
-export function applyBodyPaint(material, { skinMap, decalMap = null, primary, accent, shadeAmount = 0.8, shadeGain = 1.6 }) {
+export function applyBodyPaint(material, { skinMap, decalMap = null, decalGray = false, primary, accent, shadeAmount = 0.8, shadeGain = 1.6 }) {
   if (!skinMap) return false;
   const uniforms = {
     rlSkinMap: { value: skinMap },
     rlDecalMap: { value: decalMap || skinMap },
     rlHasDecal: { value: decalMap ? 1 : 0 },
+    rlDecalGray: { value: decalGray ? 1 : 0 },
     // THREE.Color already converts hex/CSS input from sRGB to the linear working space.
     rlPrimary: { value: new THREE.Color(primary) },
     rlAccent: { value: new THREE.Color(accent) },
@@ -63,6 +66,7 @@ export function applyBodyPaint(material, { skinMap, decalMap = null, primary, ac
 uniform sampler2D rlSkinMap;
 uniform sampler2D rlDecalMap;
 uniform float rlHasDecal;
+uniform float rlDecalGray;
 uniform vec3 rlPrimary;
 uniform vec3 rlAccent;
 uniform float rlShadeAmount;

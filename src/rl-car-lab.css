@@ -23,3 +23,9 @@
 #car-canvas { background: repeating-conic-gradient(#1f2430 0% 25%, #181c26 0% 50%) 0 / 24px 24px; border-radius: 8px; overflow: hidden; }
 #car-status { min-height: 60px; border-top: 1px solid #454b56; padding-top: 12px; }
 @media (max-width: 850px) { .car-lab-grid { grid-template-columns: 1fr; } }
+
+.car-garage { display: grid; gap: 6px; margin: 8px 0; }
+.car-garage small { opacity: .8; }
+.car-swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.car-swatch { aspect-ratio: 1; min-height: 16px; padding: 0; border: 1px solid #0006; border-radius: 3px; cursor: pointer; }
+.car-swatch.is-picked { outline: 2px solid #fff; outline-offset: 1px; }

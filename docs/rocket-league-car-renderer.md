@@ -18,7 +18,7 @@ Open **Rocket League -> CAR RENDER LAB**. This is an original Three.js implement
 
 No production Rocket League models or textures are bundled with app source by default. `assests/rl-loadout-assets.zip` is a local operator-supplied extraction pack. Keep that pack beside the app when you need the body browser. Manual imports still require models you have permission to use.
 
-The extractor provides real body/decal/wheel assets, but API loadout names are not a complete appearance specification. Rocket League's public stats API does not reliably expose every player-selected paint color, finish, certification, variant or trim value. When the exact color data is missing, the renderer uses the body mask with a blue/orange fallback color set. **Loadout-specific mapping is an operator-supplied illustration unless a packet includes enough cosmetic data to verify it.**
+The official Stats API (checked 2026-09-30) sends each player's `Loadout` (asset names by slot) and each team's `ColorPrimary`/`ColorSecondary`. It does NOT send a player's own garage colours, paint finishes or painted-item colours. Those exist only in replays (`TeamPaint`: primary/accent colour IDs + finishes) and BakkesMod loadout codes. Paint therefore resolves: per-player garage colours saved in the lab (PAINT MODE -> Player's garage colors, stored by player id in `carRenderer.playerPaint`) -> team colours from the packet -> stock garage defaults (blue #35, orange #33, accent #0). Palettes live in `src/rl-car-palette.js` (70 blue / 70 orange / 105 accent, indexed by in-game ID).
 
 The renderer currently prioritizes:
 
@@ -42,7 +42,7 @@ Assets remain on this controller PC; copying source code to another PC does not 
 ## Next
 
 1. Validate exact body/decal/wheel matches against real current-game packets for several cars.
-2. Confirm whether API packets expose paint and finish IDs reliably enough for exact color recreation.
+2. Paint finishes (matte, pearlescent, etc.) are not rendered yet; replay parsing could auto-fill garage colour IDs.
 3. Add body-specific material tuning where the extracted `.mat` links are correct but the original Unreal material logic is more complex than diffuse/normal/mask.
 
 References: https://github.com/Longi94/rl-loadout and https://github.com/Longi94/rl-loadout-lib (research only; no code copied); https://www.rocketleague.com/developer/stats-api; https://threejs.org/ (MIT, license in node_modules/three/LICENSE).
