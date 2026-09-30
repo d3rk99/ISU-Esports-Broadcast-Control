@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { ObserverCellConsensus } = require('./valorant-observer-consensus.cjs');
+const { BRIDGE_MAX_PAYLOAD, bridgeKeyMatches, keepAlive } = require('./bridge-link.cjs');
 let electronNativeImage = null;
 try {
   electronNativeImage = require('electron')?.nativeImage || null;
@@ -2592,7 +2593,7 @@ class ValorantOcrService {
   startReceiver() {
     if (!this.settings.bridgeToken) return this.emitStatus('error', 'Create a bridge key before starting remote mode');
     try {
-      this.server = new WebSocketServer({ host: '0.0.0.0', port: this.settings.bridgePort });
+      this.server = new WebSocketServer({ host: '0.0.0.0', port: this.settings.bridgePort, maxPayload: BRIDGE_MAX_PAYLOAD });
     } catch (error) {
       return this.emitStatus('error', error.message, { transport: 'bridge' });
     }
@@ -2600,11 +2601,15 @@ class ValorantOcrService {
     this.server.on('error', (error) => this.emitStatus('error', `Bridge receiver error: ${error.message}`, { transport: 'bridge' }));
     this.server.on('connection', (client, request) => {
       const requestUrl = new URL(request.url, `ws://${request.headers.host || 'localhost'}`);
-      if (requestUrl.searchParams.get('token') !== this.settings.bridgeToken) {
+      if (!bridgeKeyMatches(this.settings.bridgeToken, requestUrl.searchParams.get('token'))) {
         client.close(1008, 'Invalid bridge key');
         return;
       }
       this.bridgeClients.add(client);
+      keepAlive(client);
+      // A new Bridge connection restarts its packet sequence at 1 (Bridge restart, crash, settings change).
+      // Without this reset every packet after a restart was dropped as "old" and VALORANT froze.
+      this.remoteSequence = 0;
       this.emitStatus('connected', 'Universal Game Bridge connected; waiting for VALORANT data', { transport: 'bridge' });
       client.on('message', (raw) => {
         try {

@@ -1,4 +1,5 @@
 const { WebSocket } = require('ws');
+const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } = require('./rocket-league-service.cjs');
 const { ValorantOcrService, normalizeSettings: normalizeValorantSettings } = require('./valorant-ocr-service.cjs');
 
@@ -119,6 +120,8 @@ class UniversalGameBridge {
     this.remote = socket;
     socket.on('open', () => {
       if (generation !== this.generation) return socket.terminate?.();
+      // Detect a dead link (cable pull / Wi-Fi drop) and fall into the normal 3 s reconnect.
+      keepAlive(socket);
       this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT' : 'Rocket League'}` };
       this.report();
     });

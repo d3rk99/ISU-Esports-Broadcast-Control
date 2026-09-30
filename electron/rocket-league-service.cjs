@@ -1,4 +1,5 @@
 const net = require('node:net');
+const { BRIDGE_MAX_PAYLOAD, bridgeKeyMatches, keepAlive } = require('./bridge-link.cjs');
 const { WebSocket, WebSocketServer } = require('ws');
 
 const DEFAULTS = Object.freeze({
@@ -281,7 +282,7 @@ class RocketLeagueService {
   startReceiver() {
     if (!this.settings.bridgeToken) return this.emitStatus('error', 'Create a bridge key before starting remote mode');
     try {
-      this.server = new WebSocketServer({ host: '0.0.0.0', port: this.settings.bridgePort });
+      this.server = new WebSocketServer({ host: '0.0.0.0', port: this.settings.bridgePort, maxPayload: BRIDGE_MAX_PAYLOAD });
     } catch (error) {
       return this.emitStatus('error', error.message);
     }
@@ -289,11 +290,12 @@ class RocketLeagueService {
     this.server.on('error', (error) => this.emitStatus('error', `Bridge receiver error: ${error.message}`, { transport: 'bridge' }));
     this.server.on('connection', (client, request) => {
       const requestUrl = new URL(request.url, `ws://${request.headers.host || 'localhost'}`);
-      if (requestUrl.searchParams.get('token') !== this.settings.bridgeToken) {
+      if (!bridgeKeyMatches(this.settings.bridgeToken, requestUrl.searchParams.get('token'))) {
         client.close(1008, 'Invalid bridge key');
         return;
       }
       this.bridgeClients.add(client);
+      keepAlive(client);
       this.emitStatus('connected', 'Game PC bridge connected', { transport: 'bridge' });
       client.on('message', (raw) => {
         try {

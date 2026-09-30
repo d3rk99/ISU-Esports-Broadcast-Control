@@ -1,4 +1,5 @@
 const { WebSocket } = require('ws');
+const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings } = require('./rocket-league-service.cjs');
 
 class RocketLeagueForwarder {
@@ -50,6 +51,7 @@ class RocketLeagueForwarder {
     const socket = new WebSocket(url);
     this.remote = socket;
     socket.on('open', () => {
+      keepAlive(socket);
       this.remoteStatus = { state: 'connected', message: 'Connected to Graphics PC' };
       this.report();
     });
