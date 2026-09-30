@@ -39,10 +39,19 @@ Run these before handing off changes:
 npm run check
 npm test
 npm run test:rl-cars
+npm run test:ui
 npm run build
 ```
 
 `npm run test:rl-cars` opens Electron for a WebGL render verification, so it needs a graphical Windows session.
+
+`npm run test:ui` checks in real Chromium that the controller's in-place renderer (`src/dom-patch.js`) keeps focus, typed text, caret, panel scroll, open `<details>` and click targets intact across live re-renders.
+
+## UI rendering
+
+`render()` builds the whole view as an HTML string, but applies it with `patchHtml()` (src/dom-patch.js) instead of `innerHTML`, so live telemetry never steals focus or resets scroll. Elements are matched by id, `data-key`, or `data-action`/`data-view` plus identity attributes (`data-index`, `data-team`, `data-prop`, ...). When adding a repeated row, give it one of those so rows don't swap state. Mark anything that must never be touched after first render with `data-preserve`.
+
+Destructive buttons use `data-confirm="label while armed"`: the first click arms the button for 3 s, and a second click runs it. This is non-blocking on purpose, so no modal ever freezes the controller on air.
 
 ## Important Runtime Ports
 

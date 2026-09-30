@@ -1,6 +1,7 @@
 import './styles.css';
 import { normalizeLoadout, updateCarArt } from './rl-loadout.js';
 import { patchStageStatus } from './stage-status-view.js';
+import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
@@ -29,6 +30,7 @@ let saveTimer;
 let livePublishTimer;
 let liveRenderTimer;
 let lastUserScrollAt = 0;
+let armedConfirm = null; // destructive button waiting for its second click
 let networkAddresses = [];
 let outputDisplays = [];
 let valorantOcrSnapshot = null;
@@ -150,7 +152,10 @@ function render() {
     : null;
   const config = GAME_CONFIGS[state.selectedGame];
   root.style.setProperty('--game-accent', config.accent);
-  root.innerHTML = `
+  root.classList.toggle('is-live', Boolean(config && state.games[state.selectedGame]?.match?.live));
+  // Patch in place instead of replacing innerHTML: keeps focus, caret, typed text,
+  // panel scroll and in-flight clicks intact while live data keeps updating.
+  patchHtml(root, `
     <div class="app-shell">
       ${renderSidebar(config)}
       <main class="workspace">
@@ -159,7 +164,13 @@ function render() {
       </main>
     </div>
     ${valorantDebugFullscreen ? renderValorantDebugFullscreen() : ''}
-  `;
+  `);
+  // Live re-renders would otherwise wipe the armed look off a waiting destructive button.
+  const armedButton = armedConfirmButton();
+  if (armedButton) {
+    armedButton.classList.add('armed');
+    armedButton.textContent = armedButton.dataset.confirm;
+  }
   if (previousScroll) {
     const nextScroller = root.querySelector('.content-scroll');
     if (nextScroller) {
@@ -417,7 +428,7 @@ function renderStageDisplays() {
           </div>
         </div>
       </article>
-      <article class="panel stage-key-panel">
+      <article class="panel stage-key-panel ${stageDisplayStatus.keyRequired ? '' : 'open'}">
         <div class="panel-title compact">
           <div>
             <h2>Stage key</h2>
@@ -537,7 +548,7 @@ function renderControl(config) {
           <button class="swap-button" data-action="swap-teams" title="Swap team sides">
             <svg viewBox="0 0 24 24"><path d="m7 7-4 4 4 4M3 11h14M17 17l4-4-4-4M21 13H7"/></svg>SWAP SIDES
           </button>
-          <button class="reset-button" data-action="reset-scores">RESET SCORES</button>
+          <button class="reset-button" data-action="reset-scores" data-confirm="Click again to reset scores">RESET SCORES</button>
           <button class="next-match-button" data-action="next-match"><span>NEXT MATCH</span><small>TO ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'GAME' : 'MAP'} ${nextMapIndex + 1}</small></button>
         </div>
         ${renderTeamControl(game.teams[1], 1, config, game)}
@@ -1485,7 +1496,7 @@ function renderMaps(config) {
       : `<div><span>FORMAT</span><strong>${escapeHtml(game.match.format)}</strong></div>`;
   return `<section class="view-stack">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Series map order</h2><p>${escapeHtml(game.match.format)} &middot; select, score, and advance maps</p></div></div>
-      <button class="secondary-button" data-action="clear-maps">Clear results</button>
+      <button class="secondary-button" data-action="clear-maps" data-confirm="Click again to clear results">Clear results</button>
     </div>
     <div class="map-summary">
       <div><span>SERIES</span><strong>${escapeHtml(game.teams[0].shortName)} ${game.teams[0].score} <i>&mdash;</i> ${game.teams[1].score} ${escapeHtml(game.teams[1].shortName)}</strong></div>
@@ -1511,7 +1522,7 @@ function renderValorantVetoEditor(config, game) {
     return `<option value="" ${currentValue ? '' : 'selected'}>Select map&hellip;</option>${availableMaps.map((option) => `<option value="${escapeHtml(option)}" ${option === currentValue ? 'selected' : ''}>${escapeHtml(option)}</option>`).join('')}`;
   };
   return `<article class="panel veto-editor">
-    <div class="veto-editor-heading"><div><span>VALORANT VETO</span><h3>Map picks & bans</h3></div><div class="veto-heading-actions"><button data-action="reset-veto">RESET MAP SELECTIONS</button><button data-action="preview-overlay" data-overlay="map-pool">OPEN PREVIEW</button></div></div>
+    <div class="veto-editor-heading"><div><span>VALORANT VETO</span><h3>Map picks & bans</h3></div><div class="veto-heading-actions"><button data-action="reset-veto" data-confirm="Click again to reset picks &amp; bans">RESET MAP SELECTIONS</button><button data-action="preview-overlay" data-overlay="map-pool">OPEN PREVIEW</button></div></div>
     <div class="veto-ban-grid">
       ${game.veto.bans.map((map, index) => `<label><span>BAN ${index + 1}</span><select data-veto-ban="${index}">${vetoOptions(map, 'ban', index)}</select></label>`).join('')}
     </div>
@@ -1596,11 +1607,11 @@ function renderPlayerEditor(player, index, config, game) {
       <label><span>ROLE</span><select data-player="${index}" data-player-prop="role">${config.roles.map((role) => `<option ${player.role === role ? 'selected' : ''}>${escapeHtml(role)}</option>`).join('')}</select></label>
       <label><span>STATION</span><select data-player="${index}" data-player-prop="stageStation">${stationOptions}</select></label>
       <span class="starter-state ${index < config.rosterSize ? 'on' : ''}">${index < config.rosterSize ? 'STARTER' : 'RESERVE'}</span>
-      <button class="remove-player" data-action="remove-player" data-index="${index}" title="Remove player">&times;</button>
+      <button class="remove-player" data-action="remove-player" data-index="${index}" data-confirm="Remove?" title="Remove player (click twice)">&times;</button>
     </div>
     <div class="player-media-row">
       ${imageTile('playerImage', 'Player portrait', player.playerImage, player.playerImageName)}
-      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()} SELECTOR</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isOverwatch ? 'Hero art is assigned automatically from the selected hero.' : isRocketLeague ? 'Car PNG is unique to this player.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
+      <label class="character-field"><span>${escapeHtml(config.characterLabel).toUpperCase()}</span><select data-player="${index}" data-player-prop="character"><option value="">Select ${escapeHtml(config.characterLabel)}</option>${config.characters.map((character) => `<option value="${escapeHtml(character)}" ${player.character === character ? 'selected' : ''}>${escapeHtml(character)}</option>`).join('')}</select><small>${isOverwatch ? 'Hero art is assigned automatically from the selected hero.' : isRocketLeague ? 'Car PNG is unique to this player.' : `Artwork is shared across every ${escapeHtml(config.name)} roster.`}</small></label>
       ${isOverwatch
         ? automaticArtTile('Hero artwork', selectedArt.url, selectedArt.name, player.character)
         : isRocketLeague
@@ -1686,7 +1697,7 @@ function renderSettings() {
   return `<section class="view-stack settings-view">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Workspace data</h2><p>Local-first settings for a dependable broadcast desk</p></div></div></div>
     <div class="settings-grid">
-      <article class="panel setting-card"><div class="setting-icon">&#8635;</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game">RESET GAME</button></article>
+      <article class="panel setting-card"><div class="setting-icon">&#8635;</div><div><h3>Reset active game</h3><p>Restore ${escapeHtml(GAME_CONFIGS[state.selectedGame].name)} match, map, and roster data to its defaults.</p></div><button class="danger-button" data-action="reset-game" data-confirm="Click again: wipes this game">RESET GAME</button></article>
       <article class="panel setting-card"><div class="setting-icon">&#10003;</div><div><h3>Automatic local save</h3><p>All edits persist on this computer as soon as they are made. No account or network is required.</p></div><span class="setting-on">ENABLED</span></article>
       <article class="panel setting-card"><div class="setting-icon">i</div><div><h3>Application</h3><p>ISU Esports Broadcast Control &middot; Rocket League live telemetry &middot; Companion control API</p></div><span class="version-badge">v0.6.0</span></article>
     </div>
@@ -1797,9 +1808,9 @@ function scheduleValorantOcrUpdate() {
     valorantOcrRenderTimer = null;
     if (valorantRoiDrag) return;
     const activeElement = document.activeElement;
-    const editing = root.contains(activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement?.tagName);
-    const activelyScrolling = performance.now() - lastUserScrollAt < 500;
-    if (!editing && !activelyScrolling) render();
+    // Safe while typing/scrolling: render() patches in place (see dom-patch.js).
+    // Only hold off during an open <select> dropdown, which Chromium closes on DOM changes nearby.
+    if (activeElement?.tagName !== 'SELECT') render();
   }, 240);
 }
 
@@ -1815,9 +1826,7 @@ function scheduleLiveUpdate() {
       liveRenderTimer = window.setTimeout(() => {
         liveRenderTimer = null;
         const activeElement = document.activeElement;
-        const editing = root.contains(activeElement) && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeElement?.tagName);
-        const activelyScrolling = performance.now() - lastUserScrollAt < 450;
-        if (!editing && !activelyScrolling) render();
+        if (activeElement?.tagName !== 'SELECT') render();
       }, 160);
     }
   }
@@ -2231,6 +2240,47 @@ window.isuDesktop?.onStageDisplayStatus((status) => {
 
 root.addEventListener('scroll', (event) => {
   if (event.target.classList?.contains('content-scroll')) lastUserScrollAt = performance.now();
+}, true);
+
+// Two-click confirm for destructive buttons (data-confirm="label while armed").
+// First click arms the button for 3 s; a second click on the same button runs it.
+// Non-blocking on purpose: a modal would freeze the controller mid-broadcast.
+function armedConfirmButton() {
+  if (!armedConfirm) return null;
+  return root.querySelector(`[data-action="${armedConfirm.action}"]${armedConfirm.index !== undefined ? `[data-index="${armedConfirm.index}"]` : ''}`);
+}
+function disarmConfirm() {
+  if (!armedConfirm) return;
+  clearTimeout(armedConfirm.timer);
+  const button = armedConfirmButton();
+  if (button) {
+    button.classList.remove('armed');
+    if (armedConfirm.label !== undefined) button.innerHTML = armedConfirm.label;
+  }
+  armedConfirm = null;
+}
+root.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-confirm]');
+  if (!button) {
+    disarmConfirm();
+    return;
+  }
+  const same = armedConfirm && armedConfirm.action === button.dataset.action && armedConfirm.index === button.dataset.index;
+  if (same) {
+    disarmConfirm(); // restore the label, then let the real handler run
+    return;
+  }
+  disarmConfirm();
+  event.stopImmediatePropagation();
+  event.preventDefault();
+  armedConfirm = {
+    action: button.dataset.action,
+    index: button.dataset.index,
+    label: button.innerHTML,
+    timer: setTimeout(disarmConfirm, 3000)
+  };
+  button.classList.add('armed');
+  button.textContent = button.dataset.confirm;
 }, true);
 
 root.addEventListener('click', async (event) => {
@@ -2808,9 +2858,7 @@ root.addEventListener('click', async (event) => {
     }, 'Veto map selections reset'),
     'add-player': () => commit(() => { const roster = activeRosterCollection(game)[state.activeRoster]; roster.push(createPlayer(config, roster.length)); }, 'Roster slot added'),
     'remove-player': () => commit(() => { activeRosterCollection(game)[state.activeRoster].splice(index, 1); }, 'Player removed'),
-    'reset-game': () => {
-      if (window.confirm(`Reset all saved ${config.name} data? This can be undone once.`)) commit(() => { state.games[state.selectedGame] = createGameState(state.selectedGame); }, 'Active game reset');
-    },
+    'reset-game': () => commit(() => { state.games[state.selectedGame] = createGameState(state.selectedGame); }, 'Active game reset'),
     undo: () => {
       if (!history.length) return;
       state = history.pop();
