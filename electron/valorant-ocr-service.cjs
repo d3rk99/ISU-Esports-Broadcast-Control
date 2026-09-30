@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
+const { ObserverCellConsensus } = require('./valorant-observer-consensus.cjs');
 let electronNativeImage = null;
 try {
   electronNativeImage = require('electron')?.nativeImage || null;
@@ -1015,6 +1016,7 @@ class ValorantOcrService {
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.observer3 = emptyObserver3State();
+    this.observerConsensus = new ObserverCellConsensus();
     this.lastObserverTableScannedAt = 0;
     this.latestFrame = null;
     this.frameTimestamps = [];
@@ -1315,6 +1317,7 @@ class ValorantOcrService {
     this.lastScannedAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.lastScannedFrameAt = Object.fromEntries(FIELD_IDS.map((id) => [id, 0]));
     this.observer3 = emptyObserver3State();
+    this.observerConsensus = new ObserverCellConsensus();
     this.lastObserverTableScannedAt = 0;
     this.frameTimestamps = [];
     this.scanTimestamps = [];
@@ -1911,6 +1914,8 @@ class ValorantOcrService {
       });
       const value = parseObserverCredits(result.text);
       if (value !== null) results.push({ ...result, value, variantIndex: index });
+      // Early exit: two confident variants already agree, so the rest can't outvote them.
+      if (value !== null && results.filter((item) => item.value === value && (Number(item.confidence) || 0) >= 0.6).length >= 2) break;
     }
     const grouped = Array.from(results.reduce((groups, result) => {
       const group = groups.get(result.value) || {
@@ -2174,28 +2179,30 @@ class ValorantOcrService {
         player.nameLocked = confidence >= OBSERVER_NAME_LOCK_CONFIDENCE && Boolean(parsedName.name);
         player.nameManual = false;
       }
+      const cellKey = `${cellInfo.side}-${cellInfo.row}-${cellInfo.columnId}`;
       if (cellInfo.columnId === 'ultimate') {
         const ultimate = parseObserverUltimate(cleaned);
-        if (ultimate) {
+        const shown = player.ultimateState?.status && player.ultimateState.status !== 'unknown' ? player.ultimateState : null;
+        if (ultimate && this.observerConsensus.observe(cellKey, 'ultimate', shown, ultimate).accept) {
           player.ultimate = ultimate.display;
           player.ultimateState = ultimate;
         }
       }
       if (cellInfo.columnId === 'kills') {
         const value = parseObserverInteger(cleaned, 99);
-        if (value !== null) player.kda = { ...player.kda, kills: value };
+        if (value !== null && this.observerConsensus.observe(cellKey, 'kda', player.kda?.kills ?? null, value).accept) player.kda = { ...player.kda, kills: value };
       }
       if (cellInfo.columnId === 'deaths') {
         const value = parseObserverInteger(cleaned, 99);
-        if (value !== null) player.kda = { ...player.kda, deaths: value };
+        if (value !== null && this.observerConsensus.observe(cellKey, 'kda', player.kda?.deaths ?? null, value).accept) player.kda = { ...player.kda, deaths: value };
       }
       if (cellInfo.columnId === 'assists') {
         const value = parseObserverInteger(cleaned, 99);
-        if (value !== null) player.kda = { ...player.kda, assists: value };
+        if (value !== null && this.observerConsensus.observe(cellKey, 'kda', player.kda?.assists ?? null, value).accept) player.kda = { ...player.kda, assists: value };
       }
       if (cellInfo.columnId === 'credits') {
         const value = parseObserverCredits(cleaned);
-        if (value !== null) player.credits = value;
+        if (value !== null && this.observerConsensus.observe(cellKey, 'credits', player.credits ?? null, value).accept) player.credits = value;
       }
       player.updatedAt = this.now();
       player.confidence = Math.max(Number(player.confidence) || 0, confidence);
@@ -2433,6 +2440,7 @@ class ValorantOcrService {
     const snapshot = this.validator.clear(this.now());
     this.timerState.clear();
     this.observer3 = emptyObserver3State();
+    this.observerConsensus = new ObserverCellConsensus();
     this.observerSweepStartedAt = 0;
     this.lastObserverTableScannedAt = 0;
     this.onState(this.normalizedState(snapshot));

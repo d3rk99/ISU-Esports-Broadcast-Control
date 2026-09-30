@@ -1,4 +1,4 @@
-const { preprocessNativeImage, redPixelRatio } = require('./valorant-capture.cjs');
+const { captureSizeCheck, preprocessNativeImage, redPixelRatio } = require('./valorant-capture.cjs');
 
 const NATIVE_BACKEND = 'windows-graphics-capture';
 const FALLBACK_BACKEND = 'electron-desktop-capturer';
@@ -127,10 +127,9 @@ class NativeValorantWindowCapture {
     const sourceWidth = Number(nativeFrame.width) || 0;
     const sourceHeight = Number(nativeFrame.height) || 0;
     if (!sourceWidth || !sourceHeight) throw captureError(`The selected “${target.title}” window returned an empty native frame`, 'CAPTURE_EMPTY');
-    const widthDifference = Math.abs(sourceWidth - this.expectedWidth);
-    const heightDifference = Math.abs(sourceHeight - this.expectedHeight);
-    if (widthDifference > this.sizeTolerancePixels || heightDifference > this.sizeTolerancePixels) {
-      throw captureError(`VALORANT capture is ${sourceWidth}×${sourceHeight}; use 1920×1080 or a source within ${this.sizeTolerancePixels} pixels`, 'CAPTURE_SIZE', {
+    const sizeCheck = captureSizeCheck(sourceWidth, sourceHeight, this.expectedWidth, this.expectedHeight, this.sizeTolerancePixels);
+    if (!sizeCheck.ok) {
+      throw captureError(sizeCheck.message, 'CAPTURE_SIZE', {
         width: sourceWidth,
         height: sourceHeight,
         expectedWidth: this.expectedWidth,
@@ -139,7 +138,7 @@ class NativeValorantWindowCapture {
       });
     }
     let image = this.nativeImage.createFromBitmap(packedBgraBuffer(nativeFrame, sourceWidth, sourceHeight), { width: sourceWidth, height: sourceHeight });
-    const normalized = widthDifference !== 0 || heightDifference !== 0;
+    const normalized = sizeCheck.normalized;
     if (normalized) image = image.resize({ width: this.expectedWidth, height: this.expectedHeight, quality: 'best' });
     return {
       sourceId: `hwnd:${target.handle}`,

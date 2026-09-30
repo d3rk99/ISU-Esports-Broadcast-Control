@@ -1,3 +1,27 @@
+// Captures are normalized to the expected 1920x1080 grid (all ROIs are defined there).
+// Accept any source with the same aspect ratio (e.g. 1280x720, 2560x1440, 3840x2160) and
+// scale it; only reject sources whose shape would stretch the HUD.
+const ASPECT_TOLERANCE = 0.01;
+const MIN_CAPTURE_HEIGHT = 720;
+
+function captureSizeCheck(width, height, expectedWidth, expectedHeight, tolerancePixels) {
+  const widthDifference = Math.abs(width - expectedWidth);
+  const heightDifference = Math.abs(height - expectedHeight);
+  if (widthDifference <= tolerancePixels && heightDifference <= tolerancePixels) {
+    return { ok: true, normalized: widthDifference !== 0 || heightDifference !== 0 };
+  }
+  const expectedAspect = expectedWidth / expectedHeight;
+  const aspect = width / height;
+  const sameShape = Math.abs(aspect - expectedAspect) / expectedAspect <= ASPECT_TOLERANCE;
+  if (sameShape && height >= MIN_CAPTURE_HEIGHT) return { ok: true, normalized: true, scaled: true };
+  return {
+    ok: false,
+    message: sameShape
+      ? `VALORANT capture is ${width}×${height}; below ${MIN_CAPTURE_HEIGHT}p the HUD text is too small to read`
+      : `VALORANT capture is ${width}×${height}; use a 16:9 source (1920×1080 recommended)`
+  };
+}
+
 function otsuThreshold(gray) {
   const histogram = new Uint32Array(256);
   for (const value of gray) histogram[value] += 1;
@@ -108,10 +132,9 @@ class ValorantWindowCapture {
       error.details = { width: size.width, height: size.height, sourceId: source.id, sourceName: source.name };
       throw error;
     }
-    const widthDifference = Math.abs(size.width - this.expectedWidth);
-    const heightDifference = Math.abs(size.height - this.expectedHeight);
-    if (widthDifference > this.sizeTolerancePixels || heightDifference > this.sizeTolerancePixels) {
-      const error = new Error(`VALORANT capture is ${size.width}×${size.height}; use 1920×1080 or a source within ${this.sizeTolerancePixels} pixels`);
+    const sizeCheck = captureSizeCheck(size.width, size.height, this.expectedWidth, this.expectedHeight, this.sizeTolerancePixels);
+    if (!sizeCheck.ok) {
+      const error = new Error(sizeCheck.message);
       error.code = 'CAPTURE_SIZE';
       error.details = {
         width: size.width,
@@ -122,7 +145,7 @@ class ValorantWindowCapture {
       };
       throw error;
     }
-    const normalized = widthDifference !== 0 || heightDifference !== 0;
+    const normalized = sizeCheck.normalized;
     const image = normalized
       ? source.thumbnail.resize({ width: this.expectedWidth, height: this.expectedHeight, quality: 'best' })
       : source.thumbnail;
@@ -177,4 +200,4 @@ class ValorantWindowCapture {
   async close() {}
 }
 
-module.exports = { ValorantWindowCapture, otsuThreshold, preprocessNativeImage, redPixelRatio };
+module.exports = { ValorantWindowCapture, captureSizeCheck, otsuThreshold, preprocessNativeImage, redPixelRatio };

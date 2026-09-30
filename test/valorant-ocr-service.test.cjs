@@ -384,6 +384,7 @@ test('observer 3 credits use numeric crop variants when the icon confuses OCR', 
   });
   const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'credits');
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].credits, 2100);
   assert.ok(service.observer3.teams.home.players[0].confidence >= 0.78);
 });
@@ -402,6 +403,7 @@ test('observer 3 credits remove impossible leading icon digits', async (t) => {
     scoreboardTable: service.settings.scoreboardTableOverrides
   });
   const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'credits');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].credits, 5450);
 });
@@ -426,6 +428,7 @@ test('observer 3 credits prefer repeated small-value reads over icon artifacts',
   });
   const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'credits');
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].credits, 50);
 });
 
@@ -443,6 +446,7 @@ test('observer 3 credits treat tiny non-credit artifacts as zero', async (t) => 
     scoreboardTable: service.settings.scoreboardTableOverrides
   });
   const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'credits');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].credits, 0);
 });
@@ -511,14 +515,17 @@ test('observer 3 ultimate accepts fractions and READY only when confident', asyn
   });
   const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'ultimate');
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].ultimate, '7/8');
   assert.deepEqual(service.observer3.teams.home.players[0].ultimateState, { status: 'charging', current: 7, required: 8, display: '7/8' });
   text = '';
   confidence = 0.1;
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].ultimate, '7/8');
   text = 'READY';
   confidence = 0.98;
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
   await service.scanObserver3Cell(fakeFrame(), profile, cell);
   assert.equal(service.observer3.teams.home.players[0].ultimate, 'READY');
   assert.equal(service.observer3.teams.home.players[0].ultimateState.status, 'ready');
@@ -694,4 +701,60 @@ test('remote receiver accepts current universal bridge state and rejects old seq
   assert.equal(service.status.state, 'reading');
   service.clearState();
   assert.equal(states.at(-1).teams.home.score, null);
+});
+
+test('observer 3 cells need two agreeing reads and resist one-off misreads', async (t) => {
+  let text = '5';
+  const capture = { crop: () => ({ image: Buffer.from('test') }) };
+  const ocr = { recognize: async () => ({ text, confidence: 0.95, latencyMs: 1 }) };
+  const service = new ValorantOcrService({ capture, ocr });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard' });
+  const profile = getValorantOcrProfile(service.settings.profileId, { scoreboardTable: service.settings.scoreboardTableOverrides });
+  const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 0 && item.columnId === 'kills');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.home.players[0].kda.kills, null, 'one read is not enough');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.home.players[0].kda.kills, 5);
+  text = '8';
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.home.players[0].kda.kills, 5, 'a single misread 8 is ignored');
+  text = '6';
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.home.players[0].kda.kills, 6, 'a real change lands after two reads');
+});
+
+test('observer 3 kills never go down unless the lower value is read four times', async (t) => {
+  let text = '9';
+  const capture = { crop: () => ({ image: Buffer.from('test') }) };
+  const ocr = { recognize: async () => ({ text, confidence: 0.95, latencyMs: 1 }) };
+  const service = new ValorantOcrService({ capture, ocr });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard' });
+  const profile = getValorantOcrProfile(service.settings.profileId, { scoreboardTable: service.settings.scoreboardTableOverrides });
+  const cell = service.observerCells(profile).find((item) => item.side === 'away' && item.row === 2 && item.columnId === 'kills');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.away.players[2].kda.kills, 9);
+  text = '3';
+  for (let i = 0; i < 3; i += 1) await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.away.players[2].kda.kills, 9, 'three low reads are not enough to drop kills');
+  await service.scanObserver3Cell(fakeFrame(), profile, cell);
+  assert.equal(service.observer3.teams.away.players[2].kda.kills, 3, 'four in a row is treated as a real correction');
+});
+
+
+test('observer 3 credits stop reading variants once two confident reads agree', async (t) => {
+  let calls = 0;
+  const capture = { crop: () => ({ image: Buffer.from('test') }) };
+  const ocr = { recognize: async () => { calls += 1; return { text: '3,900', confidence: 0.9, latencyMs: 1 }; } };
+  const service = new ValorantOcrService({ capture, ocr });
+  t.after(() => service.stop());
+  service.settings = normalizeSettings({ enabled: true, profileId: '1920x1080-en-observer3-scoreboard' });
+  const profile = getValorantOcrProfile(service.settings.profileId, { scoreboardTable: service.settings.scoreboardTableOverrides });
+  const cell = service.observerCells(profile).find((item) => item.side === 'home' && item.row === 1 && item.columnId === 'credits');
+  const result = await service.recognizeObserverCell(fakeFrame(), 'observer3-home-1-credits', service.observerCellRoi(profile, cell), cell.column);
+  assert.equal(result.text, '3,900');
+  assert.equal(calls, 2, 'only 2 of 5 variants were needed');
 });
