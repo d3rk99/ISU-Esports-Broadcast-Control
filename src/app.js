@@ -26,6 +26,7 @@ if (savedValorantOcrSettings && typeof savedValorantOcrSettings === 'object') {
   };
 }
 let history = [];
+let stageKeyDraft = '';
 let saveTimer;
 let livePublishTimer;
 let liveRenderTimer;
@@ -437,7 +438,9 @@ function renderStageDisplays() {
               : '<strong>No key set:</strong> anyone on the network can control the stage. Set a key, then enter the same key on every station.'}</p>
           </div>
           <div class="heading-actions">
-            <input type="password" id="stage-key-input" placeholder="New stage key" autocomplete="off">
+            <input type="password" id="stage-key-input" value="${escapeHtml(stageKeyDraft)}" placeholder="New stage key" autocomplete="off">
+            <button class="secondary-button" data-action="stage-generate-key">GENERATE KEY</button>
+            <button class="secondary-button" data-action="stage-copy-key">COPY KEY</button>
             <button class="secondary-button" data-action="stage-set-key">SAVE KEY</button>
             ${stageDisplayStatus.keyRequired ? '<button class="secondary-button" data-action="stage-clear-key">REMOVE KEY</button>' : ''}
           </div>
@@ -2327,6 +2330,26 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  if (button.dataset.action === 'stage-generate-key') {
+    const input = document.querySelector('#stage-key-input');
+    if (input) {
+      stageKeyDraft = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      input.value = stageKeyDraft;
+      toast('Random key generated. Copy it, then Save Key to activate it.');
+    }
+    return;
+  }
+  if (button.dataset.action === 'stage-copy-key') {
+    try {
+      const draft = String(document.querySelector('#stage-key-input')?.value || '').trim();
+      const key = draft || (await window.isuDesktop?.getStageKey?.())?.stageKey || '';
+      if (!key) { toast('Generate or enter a stage key first'); return; }
+      if (window.isuDesktop?.copyText) await window.isuDesktop.copyText(key);
+      else await navigator.clipboard.writeText(key);
+      toast(draft ? 'New key copied. Save Key to activate it.' : 'Saved stage key copied');
+    } catch { toast('Could not copy the stage key'); }
+    return;
+  }
   if (button.dataset.action === 'stage-set-key' || button.dataset.action === 'stage-clear-key') {
     const clearing = button.dataset.action === 'stage-clear-key';
     const input = document.querySelector('#stage-key-input');
@@ -2337,6 +2360,7 @@ root.addEventListener('click', async (event) => {
     }
     if (clearing && !window.confirm('Remove the stage key? Anyone on the network will be able to control the stage again.')) return;
     const result = await window.isuDesktop?.setStageKey?.({ stageKey });
+    if (result?.ok) stageKeyDraft = '';
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? (clearing ? 'Stage key removed' : 'Stage key saved. Stations without it will be refused') : result?.error || 'Could not save stage key');
     render();
@@ -2882,6 +2906,7 @@ document.addEventListener('mouseleave', endValorantRoiDrag);
 
 root.addEventListener('input', (event) => {
   const target = event.target;
+  if (target.id === 'stage-key-input') stageKeyDraft = target.value;
   if (target.dataset.voRoi) positionValorantRoiBox(target.dataset.voRoi);
 });
 
