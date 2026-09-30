@@ -135,6 +135,9 @@ function buildStageVariables(status = {}) {
   const pending = status.pendingPreset || {};
   const readiness = pending.readiness || {};
   const update = status.clientUpdate || {};
+  const assignments = status.modeAssignments || {};
+  const wallAssignment = assignments.wall || {};
+  const graphicAssignment = assignments.graphic || {};
   const variables = {
     stage_enabled: Boolean(status.enabled),
     stage_online_count: Number(status.onlineCount) || 0,
@@ -146,7 +149,13 @@ function buildStageVariables(status = {}) {
     stage_pending_mode: scalar(pending.mode),
     stage_pending_ready_count: Number(readiness.ready) || 0,
     stage_pending_online_count: Number(readiness.online) || 0,
-    stage_pending_all_ready: Boolean(readiness.allReady)
+    stage_pending_all_ready: Boolean(readiness.allReady),
+    stage_wall_preset: scalar(wallAssignment.preset),
+    stage_wall_preset_title: scalar(wallAssignment.title || wallAssignment.preset),
+    stage_wall_total: Number(wallAssignment.wallTotal) || 10,
+    stage_wall_group: scalar(wallAssignment.wallGroup || '10'),
+    stage_graphic_preset: scalar(graphicAssignment.preset),
+    stage_graphic_preset_title: scalar(graphicAssignment.title || graphicAssignment.preset)
   };
   const stations = Array.isArray(status.stations) ? status.stations : [];
   for (let index = 1; index <= 10; index += 1) {
@@ -189,6 +198,7 @@ function buildCompanionCapabilities(state = {}) {
   actions.push(
     { id: 'stage.mode.set', label: 'Stage Displays: Set global mode', parameters: ['mode'] },
     { id: 'stage.station.mode.set', label: 'Stage Displays: Set one station mode', parameters: ['station', 'mode'] },
+    { id: 'stage.mode.assign_preset', label: 'Stage Displays: Assign preset to mode', parameters: ['preset', 'mode', 'wallTotal?', 'wallGroup?'] },
     { id: 'stage.preset.prepare', label: 'Stage Displays: Prepare preset', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },
     { id: 'stage.prepared.play', label: 'Stage Displays: Fire prepared preset', parameters: ['executeDelaySeconds?'] },
     { id: 'stage.preset.play', label: 'Stage Displays: Play preset now', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },

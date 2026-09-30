@@ -6,3 +6,8 @@ release-parallel-ocr/
 .DS_Store
 Thumbs.db
 .vite/
+
+# Rocket League extracted asset pack is currently about 7.56 GB.
+# Keep it local and document its expected path/hash in docs/rocket-league-loadout-assets.md.
+assests/rl-loadout-assets.zip
+assests/rl-loadout-assets/

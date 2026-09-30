@@ -255,9 +255,7 @@ function renderStageModeButtons(scope, station = '') {
   const modes = [
     ['gameplay', 'Gameplay'],
     ['wall', 'Wall'],
-    ['graphic', 'Test Graphic'],
     ['individual', 'Individual'],
-    ['hold', 'Hold'],
     ['blackout', 'Blackout']
   ];
   return modes.map(([mode, label]) => `<button data-action="${scope === 'global' ? 'stage-global-mode' : 'stage-station-mode'}" data-stage-mode="${mode}" ${station ? `data-station="${station}"` : ''}>${label}</button>`).join('');
@@ -296,21 +294,36 @@ function stageTargetText(pending = {}) {
   return `${targets[0]}-${targets[targets.length - 1]}`;
 }
 
+function stageAssignmentText(mode = '') {
+  const assignment = stageDisplayStatus.modeAssignments?.[mode];
+  if (!assignment?.preset) {
+    return mode === 'wall' ? 'No Wall preset assigned' : 'No Mirror Graphic preset assigned';
+  }
+  const title = assignment.title || assignment.preset;
+  if (mode !== 'wall') return escapeHtml(title);
+  const total = Number(assignment.wallTotal || 10);
+  const group = assignment.wallGroup || '10';
+  const layout = total === 5
+    ? (group === '1-5' ? 'screens 1-5' : group === '6-10' ? 'screens 6-10' : 'mirrored 5-screen')
+    : '10-screen wall';
+  return `${escapeHtml(title)} &middot; ${layout}`;
+}
+
 function stagePresetActionButtons(preset) {
   const name = escapeHtml(preset.name);
   const layout = preset.layout || 'any';
   const button = (action, label, mode, extra = '') => `<button data-action="${action}" data-preset="${name}" data-stage-mode="${mode}" ${extra}>${label}</button>`;
   if (layout === 'wall-10') {
     return [
-      button('stage-prepare-preset', 'Prepare Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
-      button('stage-play-preset', 'Play Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"')
+      button('stage-assign-mode-preset', 'Use for Wall', 'wall', 'data-wall-total="10" data-wall-group="10"'),
+      button('stage-play-preset', 'Play Now', 'wall', 'data-wall-total="10" data-wall-group="10"')
     ].join('');
   }
   if (layout === 'wall-5') {
     return [
-      button('stage-prepare-preset', 'Prepare 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
-      button('stage-prepare-preset', 'Prepare 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
-      button('stage-prepare-preset', 'Prepare Mirror', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
+      button('stage-assign-mode-preset', 'Use Wall 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
+      button('stage-assign-mode-preset', 'Use Wall 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
+      button('stage-assign-mode-preset', 'Use Mirrored', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
       button('stage-play-preset', 'Play 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
       button('stage-play-preset', 'Play 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
       button('stage-play-preset', 'Play Mirror', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
@@ -318,18 +331,57 @@ function stagePresetActionButtons(preset) {
   }
   if (layout === 'mirror') {
     return [
-      button('stage-prepare-preset', 'Prepare Mirror', 'graphic'),
-      button('stage-play-preset', 'Play Mirror', 'graphic')
+      button('stage-assign-mode-preset', 'Use for Graphic', 'graphic'),
+      button('stage-play-preset', 'Play Now', 'graphic')
     ].join('');
   }
   return [
-    button('stage-prepare-preset', 'Prepare Mirror', 'graphic'),
-    button('stage-prepare-preset', 'Prepare Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
-    button('stage-prepare-preset', 'Prepare Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
+    button('stage-assign-mode-preset', 'Use for Graphic', 'graphic'),
+    button('stage-assign-mode-preset', 'Use Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
+    button('stage-assign-mode-preset', 'Use Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
     button('stage-play-preset', 'Play Mirror', 'graphic'),
     button('stage-play-preset', 'Play Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
     button('stage-play-preset', 'Play Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
   ].join('');
+}
+
+function buildStageIndividualAssignments(game = current(), config = GAME_CONFIGS[state.selectedGame]) {
+  const assignments = {};
+  const collections = [
+    { side: 'home', teamIndex: 0, roster: game.rosters?.[state.activeRoster] || [] },
+    { side: 'away', teamIndex: 1, roster: game.awayRosters?.[state.activeRoster] || [] }
+  ];
+  for (const collection of collections) {
+    const team = game.teams[collection.teamIndex] || {};
+    collection.roster.forEach((player, index) => {
+      const station = Math.round(Number(player.stageStation) || 0);
+      if (station < 1 || station > 10) return;
+      const selectedArt = game.characterArt?.[player.character] || {};
+      const characterImage = state.selectedGame === 'overwatch'
+        ? selectedArt.url
+        : player.characterImage || selectedArt.url || '';
+      assignments[station] = {
+        station,
+        game: state.selectedGame,
+        roster: state.activeRoster,
+        side: collection.side,
+        teamName: team.name || '',
+        teamShortName: team.shortName || '',
+        teamColor: team.color || '#f47920',
+        teamSecondaryColor: team.secondaryColorEnabled ? (team.secondaryColor || team.color) : (team.color || '#f47920'),
+        teamLogo: team.logoImage ? displayAssetUrl(team.logoImage) : '',
+        playerIndex: index,
+        handle: player.handle || player.name || `Player ${index + 1}`,
+        name: player.name || '',
+        role: player.role || '',
+        character: player.character || '',
+        characterLabel: config.characterLabel || 'Character',
+        portrait: player.playerImage ? displayAssetUrl(player.playerImage) : '',
+        characterImage: characterImage ? displayAssetUrl(characterImage) : ''
+      };
+    });
+  }
+  return assignments;
 }
 
 function renderStageDisplays() {
@@ -371,6 +423,8 @@ function renderStageDisplays() {
           <code>GET ${escapeHtml(baseUrl)}</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/gameplay</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/blackout</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/wall</code>
+          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/wall/preset/team-intro</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/station/4/mode/graphic</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepare/team-intro</code>
           <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepared/play</code>
@@ -378,7 +432,11 @@ function renderStageDisplays() {
         </div>
       </article>
       <article class="panel stage-global-panel">
-        <div class="panel-title compact"><div><h2>Global mode</h2><p>Controls stage stations 1–10. Test Station 11 is controlled separately.</p></div></div>
+        <div class="panel-title compact"><div><h2>Global mode</h2><p>Controls stage stations 1-10. Wall uses its assigned preset. Individual is reserved for roster/player station graphics.</p></div></div>
+        <div class="stage-assignment-grid">
+          <section><span>Wall preset</span><strong>${stageAssignmentText('wall')}</strong></section>
+          <section><span>Mirror graphic preset</span><strong>${stageAssignmentText('graphic')}</strong></section>
+        </div>
         <div class="stage-mode-grid">${renderStageModeButtons('global')}</div>
       </article>
       <article class="panel stage-ready-panel ${pending ? 'armed' : ''}">
@@ -394,7 +452,7 @@ function renderStageDisplays() {
         </div>
       </article>
       <article class="panel stage-preset-panel">
-        <div class="panel-title compact"><div><h2>Stage presets</h2><p>Import graphics here, then push them from the controller to every connected station.</p></div>
+        <div class="panel-title compact"><div><h2>Stage presets</h2><p>Assign a preset once, then use Global Wall or Mirror Graphic to bring it back reliably.</p></div>
           <button class="secondary-button" data-action="stage-import-preset">IMPORT GRAPHIC</button>
         </div>
         <div class="stage-preset-grid">
@@ -1490,7 +1548,7 @@ function renderRosters(config) {
     </div>
     <article class="panel roster-panel">
       <div class="active-roster-band" style="--team-color:${escapeHtml(team.color)};--team-secondary:${escapeHtml(team.secondaryColorEnabled ? team.secondaryColor : team.color)}"><span>${state.activeRosterSide.toUpperCase()} LINEUP</span><strong>${escapeHtml(team.name)}</strong><small>${state.activeRoster === 'jv' ? 'JUNIOR VARSITY' : 'VARSITY'}</small></div>
-      <div class="roster-header"><span>#</span><span>GAMERTAG / HANDLE</span><span>PLAYER NAME</span><span>ROLE</span><span>STATUS</span><span></span></div>
+      <div class="roster-header"><span>#</span><span>GAMERTAG / HANDLE</span><span>PLAYER NAME</span><span>ROLE</span><span>STATION</span><span>STATUS</span><span></span></div>
       <div class="roster-body">
         ${roster.map((player, index) => renderPlayerEditor(player, index, config, game)).join('')}
       </div>
@@ -1503,6 +1561,10 @@ function renderPlayerEditor(player, index, config, game) {
   const selectedArt = game.characterArt[player.character] || {};
   const isOverwatch = state.selectedGame === 'overwatch';
   const isRocketLeague = state.selectedGame === 'rocketleague';
+  const stationOptions = ['<option value="">Off</option>', ...Array.from({ length: 10 }, (_item, stationIndex) => {
+    const station = stationIndex + 1;
+    return `<option value="${station}" ${Number(player.stageStation) === station ? 'selected' : ''}>${String(station).padStart(2, '0')}</option>`;
+  })].join('');
   const imageTile = (type, label, value, filename, character = '') => `<div class="roster-asset-tile">
     <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(displayAssetUrl(value))}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>
     <div><b>${label}</b><small>${escapeHtml(filename || (character ? `No ${character} artwork yet` : 'No image selected'))}</small><button data-action="pick-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}" ${type === 'characterArtwork' && !character ? 'disabled' : ''}>${value ? 'REPLACE' : 'CHOOSE PNG'}</button>${value ? `<button class="clear-asset" data-action="clear-player-image" data-image-type="${type}" data-character="${escapeHtml(character)}" data-index="${index}">CLEAR</button>` : ''}</div>
@@ -1517,6 +1579,7 @@ function renderPlayerEditor(player, index, config, game) {
       <label><span>GAMERTAG</span><input data-player="${index}" data-player-prop="handle" value="${escapeHtml(player.handle)}" placeholder="Player tag" maxlength="24"></label>
       <label><span>PLAYER NAME</span><input data-player="${index}" data-player-prop="name" value="${escapeHtml(player.name)}" placeholder="First Last" maxlength="40"></label>
       <label><span>ROLE</span><select data-player="${index}" data-player-prop="role">${config.roles.map((role) => `<option ${player.role === role ? 'selected' : ''}>${escapeHtml(role)}</option>`).join('')}</select></label>
+      <label><span>STATION</span><select data-player="${index}" data-player-prop="stageStation">${stationOptions}</select></label>
       <span class="starter-state ${index < config.rosterSize ? 'on' : ''}">${index < config.rosterSize ? 'STARTER' : 'RESERVE'}</span>
       <button class="remove-player" data-action="remove-player" data-index="${index}" title="Remove player">&times;</button>
     </div>
@@ -2229,16 +2292,23 @@ root.addEventListener('click', async (event) => {
     return;
   }
   if (button.dataset.action === 'stage-global-mode') {
-    const result = await window.isuDesktop?.setStageDisplayMode({ mode: button.dataset.stageMode });
+    const mode = button.dataset.stageMode;
+    const result = await window.isuDesktop?.setStageDisplayMode({
+      mode,
+      individualAssignments: mode === 'individual' ? buildStageIndividualAssignments() : undefined
+    });
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? `Stage mode: ${stageModeLabel(result.mode)}` : result?.error || 'Stage mode unavailable');
     render();
     return;
   }
   if (button.dataset.action === 'stage-station-mode') {
+    const mode = button.dataset.stageMode;
+    const station = Number(button.dataset.station);
     const result = await window.isuDesktop?.setStageStationMode({
-      station: Number(button.dataset.station),
-      mode: button.dataset.stageMode
+      station,
+      mode,
+      individualContent: mode === 'individual' ? buildStageIndividualAssignments()[station] : undefined
     });
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? `Station ${String(result.station).padStart(2, '0')}: ${stageModeLabel(result.mode)}` : result?.error || 'Station unavailable');
@@ -2310,6 +2380,18 @@ root.addEventListener('click', async (event) => {
     } else if (result?.error) {
       toast(result.error);
     }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'stage-assign-mode-preset') {
+    const result = await window.isuDesktop?.assignStageModePreset?.({
+      preset: button.dataset.preset,
+      mode: button.dataset.stageMode || 'graphic',
+      wallTotal: Number(button.dataset.wallTotal) || 10,
+      wallGroup: button.dataset.wallGroup || ''
+    });
+    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+    toast(result?.ok ? `Assigned ${result.title || result.preset} to ${stagePresetModeLabel(result.mode)}` : result?.error || 'Could not assign preset');
     render();
     return;
   }

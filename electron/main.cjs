@@ -1,4 +1,5 @@
 const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, screen, shell } = require('electron');
+const childProcess = require('node:child_process');
 const crypto = require('node:crypto');
 const { MAX_MODEL_BYTES, validateCarGlb } = require('./rl-car-assets.cjs');
 const fs = require('node:fs');
@@ -90,6 +91,7 @@ function findSharedValorantScoreTemplateRoot() {
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
+  '.glb': 'model/gltf-binary',
   '.html': 'text/html; charset=utf-8',
   '.jpeg': 'image/jpeg',
   '.jpg': 'image/jpeg',
@@ -340,6 +342,344 @@ function serveFile(response, filePath) {
   fs.createReadStream(filePath).pipe(response);
 }
 
+let rocketLeagueLoadoutPackCache = null;
+
+function rocketLeagueLoadoutPackLocations() {
+  const names = ['rl-loadout-assets', 'rl-loadout-assets.zip'];
+  const roots = [
+    path.join(__dirname, '..', 'assests'),
+    path.join(process.cwd(), 'assests'),
+    path.join(path.dirname(process.execPath || ''), 'assests'),
+    path.join(path.dirname(process.execPath || ''), '..', '..', 'assests')
+  ];
+  const uniqueRoots = [...new Set(roots.map((item) => path.resolve(item)))];
+  return uniqueRoots.flatMap((root) => names.map((name) => path.join(root, name)));
+}
+
+function rocketLeagueItemsCsvLocations() {
+  return [
+    path.join(__dirname, '..', 'assests', 'rocket-league-items.csv'),
+    path.join(process.cwd(), 'assests', 'rocket-league-items.csv'),
+    path.join(path.dirname(process.execPath || ''), 'assests', 'rocket-league-items.csv'),
+    path.join(path.dirname(process.execPath || ''), '..', '..', 'assests', 'rocket-league-items.csv'),
+    'E:\\Steam\\steamapps\\common\\rocketleague\\Binaries\\Win64\\items.csv'
+  ];
+}
+
+function rocketLeagueItemKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function parseRocketLeagueItemsCsv() {
+  for (const candidate of rocketLeagueItemsCsvLocations()) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const records = [];
+      for (const line of fs.readFileSync(candidate, 'utf8').split(/\r?\n/)) {
+        const match = line.match(/^([^,]*),([^,]*),([^,]*),(.*)$/);
+        if (!match) continue;
+        const productId = match[1].trim();
+        const type = match[2].trim();
+        const objectPath = match[3].trim();
+        const displayName = match[4].trim();
+        const internalName = objectPath.split('.').pop() || '';
+        if (!productId || !type || !internalName) continue;
+        records.push({ productId, type, objectPath, internalName, displayName });
+      }
+      return { path: candidate, records };
+    } catch (error) {
+      recordDiagnostic('rl-items-csv', `${candidate}: ${error.message}`);
+    }
+  }
+  return { path: '', records: [] };
+}
+
+function aliasesForRocketLeagueBody(body, items) {
+  const aliases = new Set([body.id, body.productId, body.displayName]);
+  const bodyIdKey = rocketLeagueItemKey(body.id);
+  const displayKey = rocketLeagueItemKey(body.displayName);
+  for (const item of items) {
+    if (item.type !== 'Body') continue;
+    const internalKey = rocketLeagueItemKey(item.internalName);
+    const itemDisplayKey = rocketLeagueItemKey(item.displayName);
+    if (internalKey === bodyIdKey || itemDisplayKey === displayKey || (displayKey && itemDisplayKey === displayKey)) {
+      aliases.add(item.productId);
+      aliases.add(item.internalName);
+      aliases.add(item.displayName);
+      aliases.add(item.objectPath);
+    }
+  }
+  return [...aliases].filter(Boolean);
+}
+
+function aliasesForRocketLeagueItem(asset, items, type) {
+  const aliases = new Set([asset.id, asset.productId, asset.displayName]);
+  const idKey = rocketLeagueItemKey(asset.id);
+  const displayKey = rocketLeagueItemKey(asset.displayName);
+  for (const item of items) {
+    if (item.type !== type) continue;
+    const internalKey = rocketLeagueItemKey(item.internalName);
+    const itemDisplayKey = rocketLeagueItemKey(item.displayName);
+    if (internalKey === idKey || itemDisplayKey === displayKey || (displayKey && itemDisplayKey === displayKey)) {
+      aliases.add(item.productId);
+      aliases.add(item.internalName);
+      aliases.add(item.displayName);
+      aliases.add(item.objectPath);
+    }
+  }
+  return [...aliases].filter(Boolean);
+}
+
+function findRocketLeagueLoadoutPack() {
+  for (const candidate of rocketLeagueLoadoutPackLocations()) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const stats = fs.statSync(candidate);
+      if (stats.isDirectory() && fs.existsSync(path.join(candidate, 'manifest.json'))) return { type: 'directory', root: candidate };
+      if (stats.isFile() && candidate.toLowerCase().endsWith('.zip')) return { type: 'zip', root: candidate };
+    } catch {}
+  }
+  return null;
+}
+
+function readRocketLeaguePackFile(pack, relativePath) {
+  if (pack.type === 'directory') return fs.readFileSync(path.join(pack.root, relativePath));
+  return childProcess.execFileSync('tar', ['-xOf', pack.root, `rl-loadout-assets/${relativePath}`], { maxBuffer: 96 * 1024 * 1024 });
+}
+
+function normalizeRocketLeaguePackPath(relativePath) {
+  const clean = decodeURIComponent(String(relativePath || '')).replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!clean || clean.includes('\0') || clean.split('/').some((part) => part === '..') || path.isAbsolute(clean)) return '';
+  return clean;
+}
+
+function listRocketLeaguePackPaths(pack) {
+  if (pack.type === 'directory') {
+    const output = [];
+    const walk = (directory, prefix = '') => {
+      for (const name of fs.readdirSync(directory)) {
+        const fullPath = path.join(directory, name);
+        const relative = prefix ? `${prefix}/${name}` : name;
+        const stats = fs.statSync(fullPath);
+        if (stats.isDirectory()) walk(fullPath, relative);
+        else output.push(relative);
+      }
+    };
+    walk(pack.root);
+    return output;
+  }
+  return childProcess.execFileSync('tar', ['-tf', pack.root], { maxBuffer: 160 * 1024 * 1024 })
+    .toString('utf8')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^rl-loadout-assets\//, '').trim())
+    .filter(Boolean);
+}
+
+function rocketLeagueTextureName(pathValue = '') {
+  return String(pathValue).split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
+}
+
+function parseRocketLeagueMaterialText(text = '') {
+  const result = {};
+  for (const rawLine of String(text).split(/\r?\n/)) {
+    const line = rawLine.trim();
+    const match = line.match(/^([A-Za-z]+)(?:\[(\d+)])?=(.+)$/);
+    if (!match) continue;
+    const key = match[1].toLowerCase();
+    const value = match[3].trim();
+    if (!value) continue;
+    if (key === 'diffuse') result.diffuse = value;
+    else if (key === 'normal') result.normal = value;
+    else if (key === 'mask' || key === 'rgb') result.mask = value;
+    else if (key === 'other') {
+      result.other = result.other || [];
+      result.other.push(value);
+    }
+  }
+  return result;
+}
+
+function materialBindingsForAsset(pack, asset, paths = null) {
+  const bindings = {};
+  const textureByName = new Map((asset.textures || []).map((texture) => [rocketLeagueTextureName(texture.path), texture.path]));
+  for (const material of asset.materials || []) {
+    const matPath = `${asset.folder}/${material}.mat`;
+    if (paths && !paths.has(matPath)) continue;
+    try {
+      const parsed = parseRocketLeagueMaterialText(readRocketLeaguePackFile(pack, matPath).toString('utf8'));
+      const binding = {};
+      for (const [role, textureName] of Object.entries(parsed)) {
+        if (role === 'other') continue;
+        const texturePath = textureByName.get(rocketLeagueTextureName(textureName));
+        if (texturePath) binding[role] = texturePath;
+      }
+      for (const other of parsed.other || []) {
+        const texturePath = textureByName.get(rocketLeagueTextureName(other));
+        if (!texturePath) continue;
+        binding.other = binding.other || [];
+        binding.other.push(texturePath);
+        const texture = (asset.textures || []).find((item) => item.path === texturePath);
+        if (texture?.role === 'mask' && !binding.mask) binding.mask = texturePath;
+        if (texture?.role === 'blankskin' && !binding.blankskin) binding.blankskin = texturePath;
+        if (texture?.role === 'diffuse' && /skin|decal|flame|stripe|paint/i.test(texturePath) && !binding.decal) binding.decal = texturePath;
+      }
+      if (Object.keys(binding).length) bindings[material] = binding;
+    } catch (error) {
+      if (paths) recordDiagnostic('rl-loadout-material', `${matPath}: ${error.message}`);
+    }
+  }
+  return bindings;
+}
+
+function rocketLeagueLoadoutPack() {
+  const pack = findRocketLeagueLoadoutPack();
+  if (!pack) return { available: false, bodies: [], wheels: [], decals: [], error: 'rl-loadout-assets.zip was not found in the assests folder.' };
+  if (rocketLeagueLoadoutPackCache?.root === pack.root && rocketLeagueLoadoutPackCache?.type === pack.type) return rocketLeagueLoadoutPackCache.value;
+  try {
+    const manifest = JSON.parse(readRocketLeaguePackFile(pack, 'manifest.json').toString('utf8'));
+    const itemDb = parseRocketLeagueItemsCsv();
+    const knownPaths = new Set(['manifest.json']);
+    const assetUrl = (relativePath) => relativePath ? `http://${OVERLAY_HOST}:${OVERLAY_PORT}/rl-loadout-assets/${relativePath}` : '';
+    const remember = (relativePath) => { if (relativePath) knownPaths.add(normalizeRocketLeaguePackPath(relativePath)); };
+    const bodySummaries = (manifest.bodies || []).map((body) => {
+      remember(body.mesh); remember(body.thumbnail);
+      for (const mesh of body.meshes || []) remember(mesh);
+      for (const texture of body.textures || []) remember(texture.path);
+      return {
+        id: body.id,
+        productId: body.productId,
+        displayName: body.displayName || body.id,
+        folder: body.folder || '',
+        mesh: body.mesh,
+        meshUrl: assetUrl(body.mesh),
+        thumbnail: body.thumbnail || '',
+        thumbnailUrl: assetUrl(body.thumbnail),
+        textureCount: (body.textures || []).length,
+        wheelAnchors: body.wheelAnchors || {},
+        materials: body.materials || [],
+        aliases: aliasesForRocketLeagueBody(body, itemDb.records)
+      };
+    });
+    const wheelSummaries = (manifest.wheels || []).map((wheel) => {
+      remember(wheel.mesh); remember(wheel.thumbnail);
+      for (const mesh of wheel.meshes || []) remember(mesh);
+      for (const texture of wheel.textures || []) remember(texture.path);
+      return {
+        id: wheel.id,
+        productId: wheel.productId,
+        displayName: wheel.displayName || wheel.id,
+        folder: wheel.folder || '',
+        mesh: wheel.mesh,
+        meshUrl: assetUrl(wheel.mesh),
+        thumbnail: wheel.thumbnail || '',
+        thumbnailUrl: assetUrl(wheel.thumbnail),
+        textureCount: (wheel.textures || []).length,
+        materials: wheel.materials || [],
+        aliases: aliasesForRocketLeagueItem(wheel, itemDb.records, 'Wheel')
+      };
+    });
+    const decalSummaries = (manifest.decals || []).map((decal) => {
+      remember(decal.thumbnail);
+      for (const texture of decal.textures || []) remember(texture.path);
+      return {
+        id: decal.id,
+        productId: decal.productId,
+        displayName: decal.displayName || decal.id,
+        folder: decal.folder || '',
+        appliesToBodyId: decal.appliesToBodyId || '',
+        appliesToBodyName: decal.appliesToBodyName || '',
+        universal: Boolean(decal.universal),
+        thumbnail: decal.thumbnail || '',
+        thumbnailUrl: assetUrl(decal.thumbnail),
+        textureCount: (decal.textures || []).length,
+        materials: decal.materials || [],
+        aliases: aliasesForRocketLeagueItem(decal, itemDb.records, 'Skin')
+      };
+    });
+    const value = {
+      available: true,
+      source: pack.type,
+      root: pack.root,
+      itemsCsv: itemDb.path,
+      itemCount: itemDb.records.length,
+      bodies: bodySummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      wheels: wheelSummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      decals: decalSummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      knownPaths: [...knownPaths]
+    };
+    rocketLeagueLoadoutPackCache = { type: pack.type, root: pack.root, value };
+    return value;
+  } catch (error) {
+    rocketLeagueLoadoutPackCache = null;
+    return { available: false, bodies: [], wheels: [], decals: [], error: error.message };
+  }
+}
+
+function rocketLeagueLoadoutAssetDetails(kind, id) {
+  const info = rocketLeagueLoadoutPack();
+  if (!info.available) return { available: false, error: info.error || 'Rocket League asset pack is unavailable.' };
+  const pack = findRocketLeagueLoadoutPack();
+  if (!pack) return { available: false, error: 'Rocket League asset pack is unavailable.' };
+  const groups = {
+    body: ['bodies', info.bodies],
+    wheel: ['wheels', info.wheels],
+    decal: ['decals', info.decals]
+  };
+  const group = groups[String(kind || '')];
+  if (!group) return { available: false, error: 'Unknown Rocket League asset type.' };
+  try {
+    const manifest = JSON.parse(readRocketLeaguePackFile(pack, 'manifest.json').toString('utf8'));
+    const raw = (manifest[group[0]] || []).find((asset) => String(asset.id) === String(id));
+    const summary = (group[1] || []).find((asset) => String(asset.id) === String(id));
+    if (!raw || !summary) return { available: false, error: 'Rocket League asset was not found.' };
+    return {
+      available: true,
+      asset: {
+        ...summary,
+        textures: (raw.textures || []).map((texture) => ({ ...texture, url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/rl-loadout-assets/${texture.path}` })),
+        materials: raw.materials || [],
+        wheelAnchors: raw.wheelAnchors || summary.wheelAnchors || {},
+        materialBindings: materialBindingsForAsset(pack, raw)
+      }
+    };
+  } catch (error) {
+    return { available: false, error: error.message };
+  }
+}
+
+function serveRocketLeagueLoadoutAsset(response, requestPath) {
+  const relativePath = normalizeRocketLeaguePackPath(requestPath);
+  const packInfo = rocketLeagueLoadoutPack();
+  if (!packInfo.available || !relativePath || !packInfo.knownPaths.includes(relativePath)) {
+    writeJson(response, 404, { error: 'Rocket League loadout asset not found' });
+    return;
+  }
+  const pack = { type: packInfo.source, root: packInfo.root };
+  if (pack.type === 'directory') {
+    serveFile(response, safeFilePath(pack.root, `/${relativePath}`));
+    return;
+  }
+  const tar = childProcess.spawn('tar', ['-xOf', pack.root, `rl-loadout-assets/${relativePath}`], { stdio: ['ignore', 'pipe', 'pipe'] });
+  let stderr = '';
+  tar.stderr.on('data', (chunk) => { stderr += chunk.toString('utf8'); });
+  tar.once('error', (error) => {
+    if (!response.headersSent) writeJson(response, 500, { error: error.message });
+    else response.destroy(error);
+  });
+  response.writeHead(200, {
+    'Content-Type': MIME_TYPES[path.extname(relativePath).toLowerCase()] || 'application/octet-stream',
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*'
+  });
+  tar.stdout.pipe(response);
+  tar.once('close', (code) => {
+    if (code !== 0) {
+      recordDiagnostic('rl-loadout-asset-pack', stderr || `tar exited ${code}`);
+      if (!response.destroyed) response.destroy();
+    }
+  });
+}
+
 function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
@@ -513,6 +853,10 @@ function startOverlayServer() {
       else writeJson(response, 404, { error: 'Stage asset not found' });
       return;
     }
+    if (requestUrl.pathname.startsWith('/rl-loadout-assets/')) {
+      serveRocketLeagueLoadoutAsset(response, requestUrl.pathname.slice('/rl-loadout-assets/'.length));
+      return;
+    }
     if (requestUrl.pathname.startsWith('/assets/')) {
       serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
       return;
@@ -547,6 +891,11 @@ async function dispatchCompanionStageAction(action = {}) {
     const result = stageDisplayManager.preparePreset(action.preset, action);
     if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset prepare failed'), { statusCode: 400 });
     return { message: `Prepared stage preset: ${result.title || result.preset}` };
+  }
+  if (actionId === 'stage.mode.assign_preset') {
+    const result = stageDisplayManager.assignModePreset(action.mode, action.preset, action);
+    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset assignment failed'), { statusCode: 400 });
+    return { message: `Assigned ${result.title || result.preset} to ${result.mode}` };
   }
   if (actionId === 'stage.prepared.play') {
     const delay = Math.max(0.2, Number(action.executeDelaySeconds) || 1);
@@ -664,6 +1013,7 @@ function registerIpc() {
   ipcMain.handle('stage-displays:clear-previews', () => stageDisplayManager.clearStationPreviews());
   ipcMain.handle('stage-displays:set-global-mode', (_event, details = {}) => stageDisplayManager.setGlobalMode(details.mode, details));
   ipcMain.handle('stage-displays:set-station-mode', (_event, details = {}) => stageDisplayManager.setStationMode(details.station, details.mode, details));
+  ipcMain.handle('stage-displays:assign-mode-preset', (_event, details = {}) => stageDisplayManager.assignModePreset(details.mode, details.preset, details));
   ipcMain.handle('stage-displays:prepare-preset', (_event, details = {}) => stageDisplayManager.preparePreset(details.preset, details));
   ipcMain.handle('stage-displays:play-prepared', (_event, details = {}) => stageDisplayManager.playPreparedPreset(details));
   ipcMain.handle('stage-displays:play-preset', (_event, details = {}) => stageDisplayManager.playPreset(details.preset, details));
@@ -756,6 +1106,21 @@ function registerIpc() {
     await fs.promises.writeFile(path.join(directory, filename), bytes);
     return { name: path.basename(source), url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/user-assets/${filename}` };
   });
+  ipcMain.handle('rl-car:get-asset-pack', () => {
+    const info = rocketLeagueLoadoutPack();
+    return {
+      available: info.available,
+      source: info.source,
+      root: info.root,
+      itemsCsv: info.itemsCsv,
+      itemCount: info.itemCount,
+      error: info.error,
+      bodies: info.bodies,
+      wheels: info.wheels,
+      decals: info.decals
+    };
+  });
+  ipcMain.handle('rl-car:get-asset-details', (_event, details = {}) => rocketLeagueLoadoutAssetDetails(details.kind, details.id));
   ipcMain.handle('rl-car:save-render', async (_event, dataUrl) => {
     if (typeof dataUrl !== 'string' || dataUrl.length > 6 * 1024 * 1024 || !dataUrl.startsWith('data:image/png;base64,')) throw Error('Expected a PNG render under 6 MB.');
     const raw = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');

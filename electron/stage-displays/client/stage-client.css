@@ -50,11 +50,12 @@ html, body {
 
 #preload-frame {
   position: fixed;
-  left: -10000px;
-  top: -10000px;
-  width: 1920px;
-  height: 1080px;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 100%;
   border: 0;
+  background: #000;
+  transform-origin: top left;
   opacity: 0;
   pointer-events: none;
 }
@@ -65,6 +66,66 @@ html, body {
   gap: 1.8vh;
   text-align: center;
   filter: drop-shadow(0 22px 55px rgba(0,0,0,.55));
+}
+
+.scene-card.individual-card {
+  width: min(78vw, 980px);
+  min-height: 52vh;
+  align-content: center;
+  padding: 5.5vh 5vw;
+  border: 3px solid var(--team-color, #f47920);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--team-color, #f47920) 22%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(13, 16, 22, .94), rgba(2, 3, 5, .96));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    0 0 65px color-mix(in srgb, var(--team-color, #f47920) 38%, transparent);
+}
+
+.scene-card.individual-card #eyebrow {
+  color: var(--team-color, #f47920);
+}
+
+.scene-card.individual-card #headline {
+  display: grid;
+  place-items: center;
+  width: min(34vh, 360px);
+  height: min(34vh, 360px);
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,.16);
+  background: color-mix(in srgb, var(--team-secondary, #101012) 82%, black);
+}
+
+.scene-card.individual-card #headline:empty {
+  display: none;
+}
+
+.scene-card.individual-card #headline img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scene-card.individual-card #subhead {
+  display: grid;
+  gap: 1.4vh;
+}
+
+.scene-card.individual-card #subhead strong {
+  color: #fff;
+  font-size: clamp(48px, 6.5vw, 118px);
+  font-weight: 1000;
+  font-style: italic;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.scene-card.individual-card #subhead span {
+  color: #b8c1d0;
+  font-size: clamp(18px, 2.2vw, 42px);
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
 .isu-mark {
@@ -109,7 +170,9 @@ p, h1, span { margin: 0; }
 body.mode-gameplay #gameplay { opacity: 1; }
 body.mode-gameplay #scene { opacity: 0; pointer-events: none; }
 body.using-preset #preset-shell { opacity: 1; }
+body.using-preloaded-preset #preload-frame { opacity: 1; }
 body.using-preset #scene { opacity: 0; pointer-events: none; }
+body.using-preloaded-preset #scene { opacity: 0; pointer-events: none; }
 body.mode-blackout #gameplay { opacity: 0; }
 body.mode-blackout #scene { opacity: 1; background: #000; }
 body.mode-blackout .scene-card { display: none; }

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 const { validateCarGlb } = createRequire(import.meta.url)('../electron/rl-car-assets.cjs');
 
 test('loadout slots stay aligned and missing data never matches a body', () => {
-  assert.deepEqual(normalizeLoadout(['body_test', null, 'wheels']), ['body_test', '', 'wheels']);
+  assert.deepEqual(normalizeLoadout(['body_test', null, 'wheels', 23]), ['body_test', '', 'wheels', '23']);
   assert.equal(loadoutKey([]), '');
   assert.equal(loadoutKey(['None']), '');
   assert.equal(loadoutKey([' BODY_TEST '], 'body'), 'body:body_test');

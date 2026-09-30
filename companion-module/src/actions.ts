@@ -23,6 +23,7 @@ export type ActionsSchema = {
 	select_program_output: { options: { output: ProgramOutput } }
 	stage_global_mode: { options: { mode: StageMode } }
 	stage_station_mode: { options: { station: string; mode: StageMode } }
+	stage_assign_mode_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
 	stage_prepare_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
 	stage_fire_prepared: { options: { executeDelaySeconds: number } }
 	stage_play_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string; executeDelaySeconds: number } }
@@ -234,6 +235,23 @@ export function UpdateActions(self: ModuleInstance): void {
 					action: 'stage.station.mode.set',
 					station: event.options.station,
 					mode: event.options.mode,
+				}),
+		},
+		stage_assign_mode_preset: {
+			name: 'Stage Displays: Assign preset to mode',
+			options: [
+				{ id: 'preset', type: 'textinput', label: 'Preset name', default: 'starting-soon', useVariables: true },
+				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'wall', choices: STAGE_MODE_CHOICES },
+				{ id: 'wallTotal', type: 'textinput', label: 'Wall total', default: '10', useVariables: true },
+				{ id: 'wallGroup', type: 'dropdown', label: 'Wall group', default: '10', choices: WALL_GROUP_CHOICES },
+			],
+			callback: async (event) =>
+				self.sendControlAction({
+					action: 'stage.mode.assign_preset',
+					preset: event.options.preset,
+					mode: event.options.mode,
+					wallTotal: event.options.wallTotal,
+					wallGroup: event.options.wallGroup,
 				}),
 		},
 		stage_prepare_preset: {

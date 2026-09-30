@@ -53,6 +53,12 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		stage_pending_ready_count: { name: 'Stage Displays: Prepared ready count' },
 		stage_pending_online_count: { name: 'Stage Displays: Prepared online count' },
 		stage_pending_all_ready: { name: 'Stage Displays: Prepared cue all ready' },
+		stage_wall_preset: { name: 'Stage Displays: Assigned Wall preset' },
+		stage_wall_preset_title: { name: 'Stage Displays: Assigned Wall preset title' },
+		stage_wall_total: { name: 'Stage Displays: Assigned Wall screen count' },
+		stage_wall_group: { name: 'Stage Displays: Assigned Wall group' },
+		stage_graphic_preset: { name: 'Stage Displays: Assigned Mirror Graphic preset' },
+		stage_graphic_preset_title: { name: 'Stage Displays: Assigned Mirror Graphic preset title' },
 	}
 
 	for (let number = 1; number <= 7; number += 1) {

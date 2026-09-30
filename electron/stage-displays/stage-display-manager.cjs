@@ -126,6 +126,7 @@ class StageDisplayManager {
     this.stations = new Map();
     this.lastGlobalMode = 'blackout';
     this.pendingPreset = null;
+    this.modeAssignments = this.loadModeAssignments();
     this.presets = new Map();
     this.eventLog = [];
     for (let station = 1; station <= 11; station += 1) {
@@ -139,6 +140,81 @@ class StageDisplayManager {
 
   updateFilePath() {
     return this.updateRoot ? path.join(this.updateRoot, CLIENT_UPDATE_FILE) : '';
+  }
+
+  modeAssignmentsPath() {
+    return this.assetRoot ? path.join(this.assetRoot, 'stage-mode-assignments.json') : '';
+  }
+
+  defaultModeAssignments() {
+    return {
+      wall: { preset: '', wallTotal: 10, wallGroup: '10' },
+      graphic: { preset: '' }
+    };
+  }
+
+  normalizeModeAssignment(mode = '', assignment = {}) {
+    const normalized = normalizeStageMode(mode);
+    if (!['wall', 'graphic'].includes(normalized)) return null;
+    const preset = safePresetName(assignment.preset || '');
+    if (!preset) return normalized === 'wall' ? { preset: '', wallTotal: 10, wallGroup: '10' } : { preset: '' };
+    const wallTotal = Math.max(1, Math.min(10, Math.round(Number(assignment.wallTotal) || 10)));
+    const wallGroup = ['1-5', '6-10', 'mirror-5', '10'].includes(String(assignment.wallGroup || '')) ? String(assignment.wallGroup || '') : (wallTotal === 5 ? 'mirror-5' : '10');
+    return normalized === 'wall'
+      ? { preset, wallTotal, wallGroup }
+      : { preset };
+  }
+
+  loadModeAssignments() {
+    const defaults = this.defaultModeAssignments();
+    const settingsPath = this.modeAssignmentsPath();
+    try {
+      if (!settingsPath || !fs.existsSync(settingsPath)) return defaults;
+      const saved = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      return {
+        wall: this.normalizeModeAssignment('wall', saved.wall) || defaults.wall,
+        graphic: this.normalizeModeAssignment('graphic', saved.graphic) || defaults.graphic
+      };
+    } catch {
+      return defaults;
+    }
+  }
+
+  saveModeAssignments() {
+    const settingsPath = this.modeAssignmentsPath();
+    if (!settingsPath) return;
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(this.modeAssignments, null, 2), 'utf8');
+  }
+
+  assignedPresetForMode(mode = '') {
+    const normalized = normalizeStageMode(mode);
+    const assignment = this.modeAssignments?.[normalized];
+    if (!assignment?.preset) return null;
+    const details = this.presetDetails(assignment.preset);
+    if (!details) return null;
+    return { ...assignment, details };
+  }
+
+  assignModePreset(mode = '', preset = '', options = {}) {
+    const normalized = normalizeStageMode(mode);
+    if (!['wall', 'graphic'].includes(normalized)) return { ok: false, error: 'Only Wall and Mirror Graphic modes can have assigned presets' };
+    const details = this.presetDetails(preset);
+    if (!details) return { ok: false, error: 'Preset not found' };
+    const assignment = this.normalizeModeAssignment(normalized, {
+      preset: details.name,
+      wallTotal: options.wallTotal,
+      wallGroup: options.wallGroup
+    });
+    this.modeAssignments = {
+      ...this.defaultModeAssignments(),
+      ...this.modeAssignments,
+      [normalized]: assignment
+    };
+    this.saveModeAssignments();
+    this.recordEvent('mode_preset_assigned', { mode: normalized, preset: details.name, wallTotal: assignment.wallTotal || null, wallGroup: assignment.wallGroup || '' });
+    this.emitStatus();
+    return { ok: true, mode: normalized, preset: details.name, title: details.title, assignment };
   }
 
   publishedClientUpdate() {
@@ -712,6 +788,7 @@ class StageDisplayManager {
       mode: normalized,
       preset: options.preset || '',
       assetPath: options.assetPath || '',
+      individualContent: options.individualContent || null,
       wallPosition: Number(options.wallPosition) || current.wallPosition || station,
       wallTotal: Number(options.wallTotal) || 10,
       executeAt: options.executeAt || null
@@ -724,11 +801,31 @@ class StageDisplayManager {
   setGlobalMode(mode, options = {}) {
     const normalized = normalizeStageMode(mode);
     if (!normalized) return { ok: false, error: 'Invalid mode' };
+    const assigned = !options.preset ? this.assignedPresetForMode(normalized) : null;
+    if (assigned) {
+      return this.setGlobalMode(normalized, {
+        ...options,
+        preset: assigned.details.name,
+        assetPath: assigned.details.assetPath,
+        wallTotal: assigned.wallTotal || options.wallTotal || 10,
+        wallGroup: assigned.wallGroup || options.wallGroup || ''
+      });
+    }
     this.lastGlobalMode = normalized;
     this.pendingPreset = null;
     const results = [];
-    for (let station = 1; station <= 10; station += 1) {
-      results.push(this.setStationMode(station, normalized, options));
+    const targets = this.targetStationsForOptions(options);
+    for (const station of targets) {
+      const wallPosition = normalized === 'wall' ? this.wallPositionForStation(station, options) : station;
+      const individualContent = normalized === 'individual'
+        ? (options.individualAssignments?.[station] || options.individualAssignments?.[String(station)] || null)
+        : options.individualContent;
+      results.push(this.setStationMode(station, normalized, { ...options, wallPosition, individualContent }));
+      const current = this.stations.get(station);
+      if (current && normalized === 'wall') {
+        current.wallPosition = wallPosition;
+        this.stations.set(station, current);
+      }
     }
     this.emitStatus();
     return { ok: true, mode: normalized, results };
@@ -899,6 +996,16 @@ class StageDisplayManager {
         ...this.pendingPreset,
         readiness: this.readinessForPlay(this.pendingPreset.playId, this.pendingPreset.targetStations)
       } : null,
+      modeAssignments: {
+        wall: this.assignedPresetForMode('wall') ? {
+          ...this.modeAssignments.wall,
+          title: this.assignedPresetForMode('wall').details.title
+        } : this.modeAssignments.wall,
+        graphic: this.assignedPresetForMode('graphic') ? {
+          ...this.modeAssignments.graphic,
+          title: this.assignedPresetForMode('graphic').details.title
+        } : this.modeAssignments.graphic
+      },
       expectedClientVersion: EXPECTED_CLIENT_VERSION,
       clientUpdate: update || { available: false, version: EXPECTED_CLIENT_VERSION },
       warnings: stations
@@ -972,6 +1079,12 @@ class StageDisplayManager {
     const globalMode = requestUrl.pathname.match(/^\/api\/stage\/mode\/([^/]+)$/);
     if (globalMode) {
       const result = this.setGlobalMode(globalMode[1], body);
+      writeJson(response, result.ok ? 200 : 400, result);
+      return true;
+    }
+    const modePreset = requestUrl.pathname.match(/^\/api\/stage\/mode\/([^/]+)\/preset\/([^/]+)$/);
+    if (modePreset) {
+      const result = this.assignModePreset(modePreset[1], decodeURIComponent(modePreset[2]), body);
       writeJson(response, result.ok ? 200 : 400, result);
       return true;
     }

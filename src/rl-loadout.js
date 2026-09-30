@@ -1,6 +1,9 @@
 // Keep slot positions, including unknown/empty slots. No guesses from player names.
 export function normalizeLoadout(value) {
-  return Array.isArray(value) ? value.slice(0, 32).map((item) => typeof item === 'string' ? item.trim().slice(0, 256) : '') : [];
+  return Array.isArray(value) ? value.slice(0, 32).map((item) => {
+    if (typeof item === 'string' || typeof item === 'number') return String(item).trim().slice(0, 256);
+    return '';
+  }) : [];
 }
 
 export function loadoutKey(value, scope = 'loadout') {

@@ -19,6 +19,15 @@ let currentMode = 'hold';
 let activePreset = '';
 let preparedPreset = null;
 
+function escapeHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function stopGameplayStream() {
   if (activeStream) {
     for (const track of activeStream.getTracks()) track.stop();
@@ -57,19 +66,32 @@ async function startGameplayMirror() {
 
 function setSceneText(mode, details = {}) {
   const station = details.stationId || config?.stationId || 1;
-  eyebrow.textContent = mode === 'graphic' ? 'TEST GRAPHIC' : 'IDAHO STATE ESPORTS';
+  const card = document.querySelector('.scene-card');
+  card?.style.removeProperty('--team-color');
+  card?.style.removeProperty('--team-secondary');
+  card?.classList.remove('individual-card');
+  eyebrow.textContent = mode === 'graphic' ? 'MIRROR GRAPHIC' : 'IDAHO STATE ESPORTS';
   if (mode === 'wall') {
     headline.textContent = `WALL ${station}`;
     subhead.textContent = `Virtual canvas segment ${details.wallPosition || station} of 10`;
     return;
   }
   if (mode === 'individual') {
-    headline.textContent = `STATION ${String(station).padStart(2, '0')}`;
-    subhead.textContent = 'Individual stage content';
+    const content = details.individualContent || {};
+    card?.classList.add('individual-card');
+    card?.style.setProperty('--team-color', content.teamColor || '#f47920');
+    card?.style.setProperty('--team-secondary', content.teamSecondaryColor || '#101012');
+    const media = String(content.portrait || content.characterImage || content.teamLogo || '');
+    eyebrow.textContent = content.teamName || `STATION ${String(station).padStart(2, '0')}`;
+    headline.innerHTML = media ? `<img src="${escapeHtml(media)}" alt="">` : '';
+    subhead.innerHTML = `
+      <strong>${escapeHtml(content.handle || `Station ${String(station).padStart(2, '0')}`)}</strong>
+      <span>${escapeHtml(content.name || content.role || content.character ? [content.name, content.role, content.character].filter(Boolean).join(' / ') : 'No roster player assigned')}</span>
+    `;
     return;
   }
   if (mode === 'graphic') {
-    headline.textContent = details.preset ? details.preset.replaceAll('-', ' ') : 'TEST GRAPHIC';
+    headline.textContent = details.preset ? details.preset.replaceAll('-', ' ') : 'MIRROR GRAPHIC';
     subhead.textContent = 'Mirror graphic mode';
     return;
   }
@@ -79,9 +101,12 @@ function setSceneText(mode, details = {}) {
 
 function clearPresetFrame() {
   document.body.classList.remove('using-preset');
+  document.body.classList.remove('using-preloaded-preset');
   presetFrame.removeAttribute('src');
   presetFrame.style.width = '100%';
   presetFrame.style.transform = 'none';
+  preloadFrame.style.width = '100%';
+  preloadFrame.style.transform = 'none';
   activePreset = '';
 }
 
@@ -123,6 +148,17 @@ function loadPresetFrame(mode, details = {}) {
   presetFrame.src = info.url;
   activePreset = info.preset;
   document.body.classList.add('using-preset');
+  document.body.classList.remove('using-preloaded-preset');
+  return true;
+}
+
+function showPreparedPreset(details = {}) {
+  const info = presetInfo(preparedPreset?.mode || details.mode || 'graphic', preparedPreset?.details || details);
+  if (!info) return false;
+  applyPresetGeometry(preloadFrame, preparedPreset?.mode || details.mode || 'graphic', info);
+  document.body.classList.remove('using-preset');
+  document.body.classList.add('using-preloaded-preset');
+  activePreset = preparedPreset?.preset || info.preset;
   return true;
 }
 
@@ -162,7 +198,7 @@ function preparePreset(details = {}) {
     });
   };
 
-  const timeout = setTimeout(() => finish('Preset preload timed out'), 3000);
+  const timeout = setTimeout(() => finish('Preset preload timed out'), 8000);
   preloadFrame.onload = () => {
     clearTimeout(timeout);
     finish('');
@@ -185,7 +221,7 @@ async function applyMode(mode = 'hold', details = {}) {
     } else {
       stopGameplayStream();
       const prepared = preparedPreset?.playId && preparedPreset.playId === details.playId;
-      const usesPreset = ['graphic', 'wall', 'individual'].includes(mode) && loadPresetFrame(mode, prepared ? preparedPreset.details : details);
+      const usesPreset = ['graphic', 'wall', 'individual'].includes(mode) && (prepared ? showPreparedPreset(details) : loadPresetFrame(mode, details));
       if (!usesPreset) {
         clearPresetFrame();
         setSceneText(mode, details);

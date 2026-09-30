@@ -8,7 +8,7 @@ A local-first desktop control center for Idaho State Esports broadcasts. This fo
 - Smash Bros. Ultimate
 - Call of Duty
 
-## Current milestone — v0.6.0
+## Current milestone - v0.6.2
 
 - Secure Electron desktop shell
 - Official ISU Roarange/Bengal Black-inspired control interface
@@ -45,6 +45,30 @@ A local-first desktop control center for Idaho State Esports broadcasts. This fo
 - Opt-in, token-authenticated Bitfocus Companion LAN API on port 3176
 - Companion-ready score, next-match, live, map, game-selection, and team-side actions
 - Flat live variables plus game-aware capabilities and server-sent event endpoints
+- Valorant Observer 3 OCR lab with scoreboard rows, score detection, trained loadout templates, and transparent in-game timer pass-through overlay work
+- Stage Display Manager and Stage Display Client subsystem for LAN-controlled audience displays, presets, wall/span graphics, station previews, blackout, cursor lock, and client update pushes
+- Rocket League Car Render Lab for API-driven loadout previews using locally extracted Rocket League assets
+
+## Developer handoff
+
+Start here when onboarding a new developer or another AI coding task:
+
+- `docs/developer-handoff.md` - project map, ports, build commands, subsystem notes, and repo hygiene
+- `docs/rocket-league-car-renderer.md` - current Rocket League render lab behavior and limitations
+- `docs/rocket-league-loadout-assets.md` - local asset pack path, hash, layout, and why the 7.56 GB zip is not in git
+- `docs/stage-display-client-install.md` - stage display client install and station setup
+- `docs/valorant-observer3-ocr-plan.md` - Valorant Observer 3 OCR design notes
+
+## Large asset packs
+
+The Rocket League extracted loadout asset zip is currently about 7.56 GB:
+
+```text
+assests/rl-loadout-assets.zip
+SHA256: 31BB61D57C5F9EA3385A8F4672E80159215CB957958508040835738D685813C9
+```
+
+That file is intentionally not committed because it exceeds GitHub file limits. Keep it local at the path above, or extract it to `assests/rl-loadout-assets/`. The small item database `assests/rocket-league-items.csv` is committed and should stay in source control.
 
 ## Bitfocus Companion remote control
 

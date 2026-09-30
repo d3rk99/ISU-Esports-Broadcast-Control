@@ -440,7 +440,8 @@ export function createPlayer(config, index = 0, includeSample = false) {
     playerImage: '',
     playerImageName: '',
     characterImage: '',
-    characterImageName: ''
+    characterImageName: '',
+    stageStation: ''
   };
 }
 
