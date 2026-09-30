@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { garagePaint } from './rl-car-palette.js';
+import { WHEEL_HUBS } from './rl-wheel-hubs.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { applyBodyPaint } from './rl-car-paint.js';
@@ -123,6 +124,28 @@ function boundOrBestTexture(asset, materialName, meshName, role, texturesByPath,
   return bestTexture(materialName, textures, role, scorer);
 }
 
+
+// Words that say nothing about WHICH car a texture belongs to.
+const GENERIC_TOKENS = new Set(['body', 'mic', 'mat', 'mi', 'd', 'n', 'rgb', 'diffuse', 'normal', 'skin', 'blank', 'blankskin',
+  'bs', 'chassis', 'chasis', 'paintable', 'default', 'master', 'tier', 'car', 'sk', 'sm', 'alt', 'redo', 'new', 'the']);
+function ownTokens(value = '') {
+  return String(value).replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase().split(/[^a-z]+/)
+    .filter((t) => t.length > 2 && !GENERIC_TOKENS.has(t));
+}
+// How strongly a texture's name ties it to this material / body (shared template
+// textures like Octane_Body_D score 0 on a Takumi material, so they lose).
+function ownershipScore(texture, ...names) {
+  const mine = new Set(names.flatMap((n) => ownTokens(n)));
+  if (!mine.size) return 0;
+  return ownTokens(fileBase(texture.path)).filter((t) => mine.has(t)).length;
+}
+function ownedTexture(textures, role, names, extra = () => true) {
+  const ranked = textures.filter((t) => t.role === role && extra(fileBase(t.path), t))
+    .map((t) => ({ t, s: ownershipScore(t, ...names) })).filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s);
+  return ranked[0]?.t || null;
+}
+
 // ---- Paint & decal composition -------------------------------------------------
 // Texture roles, verified channel-by-channel on the extracted pack (see rl-car-paint.js):
 // body BlankSkin R = paintable area; decal *_RGB: R = paintable area, A = pattern.
@@ -227,7 +250,13 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
     return map;
   };
   const texturesByPath = textureMap(textures);
-  const skinTextureFor = (binding) => bodySkinTexture(textures, binding);
+  const skinTextureFor = (binding, materialName = '') => {
+    const picked = bodySkinTexture(textures, binding);
+    if (picked && ownershipScore(picked, materialName, asset.bodyId || '') > 0) return picked;
+    const owned = textures.find((t) => /blank_?skin|_bs$/.test(fileBase(t.path)) && !/chassis|chasis|animated/.test(fileBase(t.path))
+      && ownershipScore(t, materialName, asset.bodyId || '') > 0);
+    return owned || picked;
+  };
   const patternTexture = decalPatternTexture(decal, asset);
   const decalDiffuse = decalDiffuseTexture(decal, asset);
   let painted = 0;
@@ -263,9 +292,18 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
     const chassisNormal = chassis && genericName
       ? textureFromPath(texturesByPath, chassisBinding?.normal) || findTexture(textures, (name, t) => t.role === 'normal' && /chassis|chasis/.test(name))
       : null;
-    const diffuse = chassisDiffuse || textureFromPath(texturesByPath, binding?.diffuse) || boundOrBestTexture(asset, material.name, meshName, 'diffuse', texturesByPath);
+    // No .mat of its own: the fallback binding is another material's (often the shared
+    // Body_All template = Octane_Body_D, wrong UV layout). Prefer a texture named for this material.
+    const exactBinding = bindingForMaterial(asset, material.name);
+    const ownNames = [material.name, asset.bodyId || ''];
+    const ownDiffuse = !exactBinding?.diffuse && !chassisDiffuse && !genericName
+      ? ownedTexture(textures, 'diffuse', ownNames, (name) => !/blank_?skin|chassis|chasis|thumb/.test(name) || chassis)
+      : null;
+    const diffuse = chassisDiffuse || textureFromPath(texturesByPath, exactBinding?.diffuse) || ownDiffuse || textureFromPath(texturesByPath, binding?.diffuse) || boundOrBestTexture(asset, material.name, meshName, 'diffuse', texturesByPath);
     const normal = chassisNormal || textureFromPath(texturesByPath, binding?.normal) || boundOrBestTexture(asset, material.name, meshName, 'normal', texturesByPath);
-    const useDiffuse = diffuse && !/^blank_n$|blank_?skin/.test(fileBase(diffuse.path));
+    // Glass / lens materials have their own small UV layout; a body diffuse on them is garbage.
+    const glass = /glass|lens|window/.test(compactKey(material.name || ''));
+    const useDiffuse = !glass && diffuse && !/^blank_n$|blank_?skin/.test(fileBase(diffuse.path));
     const map = await loadTexture(!chassis && decalDiffuse ? decalDiffuse : (useDiffuse ? diffuse : null), true);
     if (map) { material.map = map; material.color?.set?.(0xffffff); }
     // Generic shared normals (fur / sparkle / blank) belong to paint finishes, not the body shape.
@@ -275,15 +313,23 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
     }
     material.roughness = chassis ? 0.55 : 0.34;
     material.metalness = chassis ? 0.25 : 0.12;
+    if (glass) {
+      material.map = null; material.normalMap = null;
+      material.color?.set?.(/headlight|lens/.test(compactKey(material.name || '')) ? 0xdfe6ee : 0x10141a);
+      material.roughness = 0.08; material.metalness = 0.4;
+      if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis: true, glass: true }));
+      material.needsUpdate = true;
+      return;
+    }
     if (!chassis && paint) {
-      const skin = skinTextureFor(binding);
+      const skin = skinTextureFor(binding, material.name);
       const skinMap = await loadTexture(skin);
       const decalMap = patternTexture ? await loadTexture(patternTexture) : null;
       const decalGray = decalMap ? isGrayOpaque(decalMap.image) : false;
       if (applyBodyPaint(material, { skinMap, decalMap, decalGray, primary: paint.primary, accent: paint.accent })) painted += 1;
       else if (!material.map) material.color?.set?.(paint.primary); // no paint maps at all: flat team colour
     }
-    if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding)?.path?.split('/').pop() }));
+    if (globalThis.RL_CAR_DEBUG) console.log('[rl-car-debug]', JSON.stringify({ mat: material.name, mesh: meshName, chassis, generic: genericName, diffuse: diffuse?.path?.split('/').pop(), painted: Boolean(material.userData.rlPaint), skin: skinTextureFor(binding, material.name)?.path?.split('/').pop() }));
     material.needsUpdate = true;
   }));
   return { painted };
@@ -348,7 +394,8 @@ function wheelRadiusFor(bodyScene, anchors) {
 
 async function addWheels(bodyScene, asset = {}) {
   const wheel = asset.wheel;
-  const anchors = asset.wheelAnchors || {};
+  // Prefer the disc-joint hubs (true wheel mount); older packs only have the inner suspension joint.
+  const anchors = WHEEL_HUBS[asset.bodyId] || WHEEL_HUBS[asset.id] || asset.wheelAnchors || {};
   if (!wheel?.meshUrl || !Object.keys(anchors).length) return;
   const wheelScene = await loadGltfScene(wheel.meshUrl);
   await applyAssetTextures(wheelScene, wheel, { isWheel: true });
