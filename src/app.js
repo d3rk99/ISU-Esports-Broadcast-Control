@@ -1,4 +1,5 @@
 import './styles.css';
+import { normalizeLoadout, updateCarArt } from './rl-loadout.js';
 import { patchStageStatus } from './stage-status-view.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
@@ -1245,6 +1246,7 @@ function renderRocketLeaguePanel(game) {
         ${sourceFields}
       </div>
       <div class="rl-toolbar">
+        <button class="secondary-button" data-action="rl-car-lab">CAR RENDER LAB</button>
         <button class="secondary-button" data-action="copy-rl-config">COPY GAME CONFIG</button>
         <button class="secondary-button" data-action="${live.status === 'simulating' ? 'stop-rl-simulator' : 'start-rl-simulator'}">${live.status === 'simulating' ? 'STOP TEST FEED' : 'RUN TEST FEED'}</button>
         <span>${live.lastPacketAt ? `LAST PACKET ${escapeHtml(new Date(live.lastPacketAt).toLocaleTimeString())}` : 'NO MATCH DATA RECEIVED'} &middot; ${live.packets || 0} PACKETS &middot; ${Number(live.packetRate || 0).toFixed(1)} PKT/S${rl.source === 'remote' ? ` &middot; ${live.bridgeClients || 0} BRIDGE` : ''}</span>
@@ -1935,6 +1937,7 @@ function normalizeLivePlayers(data, rl) {
   return (data.Players || []).map((player) => ({
     id: rocketLeaguePlayerId(player),
     name: player.Name || 'Unknown Player',
+    loadout: normalizeLoadout(player.Loadout),
     teamNum: Number(player.TeamNum) || 0,
     shortcut: player.Shortcut,
     score: Number(player.Score) || 0,
@@ -2024,6 +2027,7 @@ function handleRocketLeagueEvent(envelope) {
     applyRocketLeagueScores(game);
     if (rl.syncPlayers) {
       rl.live.players = normalizeLivePlayers(data, rl);
+      updateCarArt(game);
       updateRocketLeagueRecentEvents(rl.live, rl.live.players);
     }
     scheduleLiveUpdate();
@@ -2178,6 +2182,18 @@ root.addEventListener('click', async (event) => {
   const index = Number(button.dataset.index);
   const game = current();
   const config = GAME_CONFIGS[state.selectedGame];
+  if (button.dataset.action === 'rl-car-lab') {
+    try {
+      const { openCarLab } = await import('./rl-car-lab.js');
+      openCarLab(() => state.games.rocketleague, (library) => {
+        commit(() => {
+          state.games.rocketleague.rocketLeague.carRenderer = library;
+          updateCarArt(state.games.rocketleague);
+        }, 'Car artwork saved');
+      });
+    } catch (error) { updateSaveStatus(`Car Lab: ${error.message}`); }
+    return;
+  }
   if (button.dataset.action === 'refresh-stage-displays') {
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     render();

@@ -73,6 +73,26 @@ function buildCompanionVariables(state = {}) {
     variables[`match_${number}_away_score`] = scalar(row.score?.[1]);
   });
 
+  variables.rl_spectated_team = '';
+  variables.rl_spectated_slot = '';
+  for (const side of ['home', 'away']) {
+    const blueTeam = Number(game.rocketLeague?.blueTeam) || 0;
+    const teamNum = side === 'home' ? blueTeam : 1 - blueTeam;
+    const players = gameKey === 'rocketleague' ? (game.rocketLeague?.live?.players || [])
+      .filter((player) => Number(player.teamNum) === teamNum)
+      .sort((a, b) => (Number(a.shortcut) || 99) - (Number(b.shortcut) || 99) || String(a.id || a.name).localeCompare(String(b.id || b.name))) : [];
+    for (let slot = 1; slot <= 3; slot += 1) {
+      const player = players[slot - 1];
+      variables[`rl_${side}_player_${slot}_name`] = scalar(player?.name);
+      const live = game.rocketLeague?.live;
+      const spectated = Boolean(player?.spectated && !live?.replay && ['connected', 'simulating'].includes(live?.status) && (live?.dataAgeMs ?? 0) < 3000);
+      variables[`rl_${side}_player_${slot}_spectated`] = spectated;
+      if (spectated) {
+        variables.rl_spectated_team = side;
+        variables.rl_spectated_slot = `${side}_${slot}`;
+      }
+    }
+  }
   if (gameKey === 'rocketleague' && game.rocketLeague?.live) {
     const live = game.rocketLeague.live;
     variables.rl_connection_status = scalar(live.status);

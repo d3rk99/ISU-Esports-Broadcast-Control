@@ -1,5 +1,6 @@
 const { app, BrowserWindow, clipboard, desktopCapturer, dialog, ipcMain, nativeImage, screen, shell } = require('electron');
 const crypto = require('node:crypto');
+const { MAX_MODEL_BYTES, validateCarGlb } = require('./rl-car-assets.cjs');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -275,8 +276,16 @@ async function loadProgramOutput(name = programOutputName) {
   return Boolean(windows.length);
 }
 
+function closeProgramOutput() {
+  const windows = [programOutputWindows.fill, programOutputWindows.key];
+  programOutputWindows = { fill: null, key: null };
+  for (const window of new Set(windows)) {
+    if (window && !window.isDestroyed()) window.destroy();
+  }
+}
+
 async function openProgramOutput(name = programOutputName) {
-  if (!PROGRAM_OUTPUTS.has(name)) return false;
+  if (!PROGRAM_OUTPUTS.has(name) || !getControllerWindow()) return false;
   const outputDisplaySettings = readOutputDisplaySettings();
   if (programOutputWindows.fill?.isDestroyed?.()) programOutputWindows.fill = null;
   if (programOutputWindows.key?.isDestroyed?.()) programOutputWindows.key = null;
@@ -291,6 +300,7 @@ async function openProgramOutput(name = programOutputName) {
   if (!programOutputWindows.fill || !programOutputWindows.key) return false;
   await Promise.all([programOutputWindows.fill.overlayReady, programOutputWindows.key.overlayReady]);
   await loadProgramOutput(name);
+  if (!getControllerWindow() || !programOutputWindows.fill || !programOutputWindows.key) return false;
   showOverlayOutputWindow(programOutputWindows.fill);
   showOverlayOutputWindow(programOutputWindows.key);
   return true;
@@ -730,6 +740,36 @@ function registerIpc() {
     fs.copyFileSync(source, destination);
     return { name: path.basename(source), url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/user-assets/${filename}` };
   });
+  ipcMain.handle('rl-car:pick-model', async (event) => {
+    const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+      title: 'Import self-contained car GLB (models you have permission to use)',
+      properties: ['openFile'], filters: [{ name: 'Embedded glTF model', extensions: ['glb'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return null;
+    const source = result.filePaths[0];
+    if (fs.statSync(source).size > MAX_MODEL_BYTES) throw Error('Model exceeds 32 MB.');
+    const bytes = await fs.promises.readFile(source);
+    validateCarGlb(bytes);
+    const filename = `car-${crypto.createHash('sha256').update(bytes).digest('hex')}.glb`;
+    const directory = path.join(app.getPath('userData'), 'broadcast-assets');
+    await fs.promises.mkdir(directory, { recursive: true });
+    await fs.promises.writeFile(path.join(directory, filename), bytes);
+    return { name: path.basename(source), url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/user-assets/${filename}` };
+  });
+  ipcMain.handle('rl-car:save-render', async (_event, dataUrl) => {
+    if (typeof dataUrl !== 'string' || dataUrl.length > 6 * 1024 * 1024 || !dataUrl.startsWith('data:image/png;base64,')) throw Error('Expected a PNG render under 6 MB.');
+    const raw = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64');
+    if (raw.length < 24 || raw.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || raw.readUInt32BE(16) > 2048 || raw.readUInt32BE(20) > 2048) throw Error('Invalid PNG dimensions.');
+    const image = nativeImage.createFromDataURL(dataUrl);
+    const size = image.getSize();
+    if (image.isEmpty() || size.width > 2048 || size.height > 2048) throw Error('Invalid render dimensions.');
+    const bytes = image.toPNG();
+    const filename = `car-render-${crypto.createHash('sha256').update(bytes).digest('hex')}.png`;
+    const directory = path.join(app.getPath('userData'), 'broadcast-assets');
+    await fs.promises.mkdir(directory, { recursive: true });
+    await fs.promises.writeFile(path.join(directory, filename), bytes);
+    return { url: `http://${OVERLAY_HOST}:${OVERLAY_PORT}/user-assets/${filename}` };
+  });
   ipcMain.handle('overlay:preview', (_event, details = {}) => {
     const previewUrl = overlayOutputUrl(details);
     if (!previewUrl) return false;
@@ -810,7 +850,10 @@ function createWindow() {
   controllerWindow = window;
   window.isControllerWindow = true;
   window.on('closed', () => {
-    if (controllerWindow === window) controllerWindow = null;
+    if (controllerWindow === window) {
+      controllerWindow = null;
+      closeProgramOutput();
+    }
   });
   window.once('ready-to-show', () => window.show());
   window.webContents.on('preload-error', (_event, preloadPath, error) => recordDiagnostic('preload-error', `${preloadPath}: ${error?.message || error}`));

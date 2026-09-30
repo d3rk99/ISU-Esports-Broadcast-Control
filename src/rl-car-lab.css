@@ -1,0 +1,17 @@
+#rl-car-lab { font-family: 'Segoe UI', sans-serif; width: min(1180px, 95vw); max-height: 92vh; overflow: auto; color: #eceef4; background: #11141c; border: 1px solid #f47920; padding: 24px; border-radius: 10px; }
+#rl-car-lab::backdrop { background: #000b; }
+#rl-car-lab header { display: flex; justify-content: space-between; align-items: center; }
+#rl-car-lab h2 { margin: 6px 0; }
+#rl-car-lab small { color: #f47920; letter-spacing: 2px; }
+#rl-car-lab p { font-size: 13px; line-height: 1.5; color: #b9c0d0; }
+.car-lab-grid { display: grid; grid-template-columns: 330px 1fr; gap: 24px; }
+#rl-car-lab label { display: block; margin: 14px 0; font-size: 11px; letter-spacing: 1px; }
+#rl-car-lab select, #rl-car-lab textarea { display: block; width: 100%; margin-top: 7px; padding: 8px; color: #fff; background: #1a1e29; border: 1px solid #4b5260; }
+#rl-car-lab textarea { resize: vertical; }
+#rl-car-lab button { background: #222837; border: 1px solid #4b5260; color: #fff; padding: 10px; margin: 4px 4px 4px 0; cursor: pointer; }
+#rl-car-lab button:disabled { opacity: .4; cursor: default; }
+#rl-car-lab #car-save { background: #854510; }
+#rl-car-lab .car-warning { border-left: 3px solid #f47920; padding-left: 10px; }
+#car-canvas { background: repeating-conic-gradient(#1f2430 0% 25%, #181c26 0% 50%) 0 / 24px 24px; border-radius: 8px; overflow: hidden; }
+#car-status { min-height: 60px; border-top: 1px solid #454b56; padding-top: 12px; }
+@media (max-width: 850px) { .car-lab-grid { grid-template-columns: 1fr; } }

@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   savedOutputDisplaySettings: ipcRenderer.sendSync('overlay:get-output-display-settings-sync'),
   overlayBaseUrl: 'http://127.0.0.1:3174',
   publishState: (state) => ipcRenderer.send('broadcast:update-state', state),
+  pickCarModel: () => ipcRenderer.invoke('rl-car:pick-model'),
+  saveCarRender: (dataUrl) => ipcRenderer.invoke('rl-car:save-render', dataUrl),
   getBroadcastInfo: () => ipcRenderer.invoke('broadcast:get-info'),
   getNetworkAddresses: () => ipcRenderer.invoke('network:get-addresses'),
   configureCompanion: (settings) => ipcRenderer.invoke('companion:configure', settings),

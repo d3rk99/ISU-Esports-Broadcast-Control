@@ -310,6 +310,47 @@
     return game?.valorantOcr?.live || {};
   }
 
+  function renderRocketLeagueStatCard(game, selectedGame, program) {
+    const card = $('#rl-player-stats');
+    if (!card) return;
+    const live = game.rocketLeague?.live;
+    const player = live?.players?.find((entry) => entry.spectated);
+    card.hidden = selectedGame !== 'rocketleague' || !player || Boolean(live?.replay) || !['connected', 'simulating'].includes(live?.status) || (live?.dataAgeMs ?? 0) >= 3000;
+    if (card.hidden) return;
+    const teamIndex = Number(player.teamNum) === 0 ? Number(game.rocketLeague?.blueTeam) || 0 : 1 - (Number(game.rocketLeague?.blueTeam) || 0);
+    const team = game.teams?.[teamIndex] || {};
+    const roster = (teamIndex === 0 ? game.rosters : game.awayRosters)?.[program === 'jv' ? 'jv' : 'varsity'] || [];
+    const normalize = (value) => String(value || '').trim().toLowerCase();
+    const matches = roster.filter((entry) => [entry.handle, entry.name].some((name) => normalize(name) && normalize(name) === normalize(player.name)));
+    const carImage = game.rocketLeague?.carRenderer?.enabled ? safeImageUrl(player.carImage, '') : '';
+    const portrait = carImage || (matches.length === 1 ? safeImageUrl(matches[0].playerImage, '') : '');
+    const logo = safeImageUrl(team.logoImage, '');
+    const artwork = $('#rl-player-art');
+    const signature = JSON.stringify([portrait, logo, team.shortName]);
+    if (artwork.dataset.signature !== signature) {
+      artwork.dataset.signature = signature;
+      artwork.replaceChildren();
+      const showImage = (url, isPortrait) => {
+        if (!url) { artwork.textContent = team.shortName || 'RL'; return; }
+        const image = document.createElement('img');
+        image.alt = '';
+        image.className = isPortrait ? 'portrait' : 'logo';
+        image.onerror = () => { image.remove(); if (isPortrait) showImage(logo, false); else artwork.textContent = team.shortName || 'RL'; };
+        image.src = url;
+        artwork.append(image);
+      };
+      showImage(portrait || logo, Boolean(portrait));
+    }
+    card.style.setProperty('--player-color', team.color || '#f47920');
+    setText('#rl-player-name', player.name);
+    setText('#rl-player-team', team.name || 'SPECTATING');
+    for (const stat of ['shots', 'goals', 'assists', 'saves', 'demos']) {
+      const value = Math.max(0, Number(player[stat]) || 0);
+      const node = $(`#rl-player-${stat}`);
+      if (node.textContent !== String(value)) node.textContent = String(value);
+    }
+  }
+
   function trustedValorantScore(live, side, fallback) {
     const value = live?.teams?.[side]?.score ?? live?.fields?.[`${side}Score`]?.value;
     return Number.isFinite(Number(value)) ? Number(value) : Number(fallback) || 0;
@@ -507,6 +548,7 @@
     root.classList.toggle('is-live', Boolean(game.match?.live));
     renderRocketLeagueScorecard(selectedGame, game, teams, activeMap);
     renderRocketLeaguePlayers(game, selectedGame);
+    renderRocketLeagueStatCard(game, selectedGame, state.activeRoster);
     renderValorantHud(selectedGame, game, teams, activeMap);
   }
 

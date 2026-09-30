@@ -38,6 +38,8 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		rl_overtime: { name: 'Rocket League: Overtime' },
 		rl_arena: { name: 'Rocket League: Arena' },
 		rl_spectated_player: { name: 'Rocket League: Spectated player' },
+		rl_spectated_team: { name: 'Rocket League: Spectated home/away team' },
+		rl_spectated_slot: { name: 'Rocket League: Camera slot (home_1–away_3; blank during replay)' },
 		rl_packet_rate: { name: 'Rocket League: Packet rate' },
 		rl_packets: { name: 'Rocket League: Packets received' },
 		stage_enabled: { name: 'Stage Displays: Manager enabled' },
@@ -62,6 +64,12 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		definitions[`match_${number}_away_score`] = { name: `Map/Game ${number}: Away score` }
 	}
 
+	for (const side of ['home', 'away']) {
+		for (let number = 1; number <= 3; number += 1) {
+			definitions[`rl_${side}_player_${number}_name`] = { name: `Rocket League ${side} player ${number}: Name` }
+			definitions[`rl_${side}_player_${number}_spectated`] = { name: `Rocket League ${side} player ${number}: Spectated` }
+		}
+	}
 	for (let number = 1; number <= 8; number += 1) {
 		definitions[`rl_player_${number}_name`] = { name: `Rocket League player ${number}: Name` }
 		definitions[`rl_player_${number}_team`] = { name: `Rocket League player ${number}: Team` }

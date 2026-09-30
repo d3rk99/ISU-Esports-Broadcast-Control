@@ -327,6 +327,7 @@ class RocketLeagueService {
       if (remaining === 270) away = 1;
       const players = ['BengalOne', 'BengalTwo', 'BengalThree', 'Opponent1', 'Opponent2', 'Opponent3'].map((name, index) => ({
         Name: name, PrimaryId: `Sim|${index}|0`, Shortcut: index + 1, TeamNum: index < 3 ? 0 : 1,
+        Loadout: ['isu_test_body', 'isu_test_decal', 'isu_test_wheels'],
         Score: Math.max(0, (300 - remaining) * 3 - index * 7), Goals: index === 0 ? home : index === 3 ? away : 0,
         Shots: index % 3, Assists: 0, Saves: index % 2, Demos: 0,
         Boost: Math.round(50 + 45 * Math.sin((300 - remaining + index * 4) / 7)), bDemolished: false
