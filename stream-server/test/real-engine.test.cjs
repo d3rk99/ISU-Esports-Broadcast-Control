@@ -98,3 +98,9 @@ test('stream keys are redacted from errors and URLs are built at the connection 
   assert.equal(rationalFps(59.94), '60000/1001');
   assert.equal(rationalFps(60), '60');
 });
+
+test('stream key query extras (Twitch ?bandwidthtest=true) reach the server unescaped; key still redacted', () => {
+  assert.equal(publishUrl({ serverUrl: 'rtmps://live.twitch.tv/app' }, 'live_1_abc?bandwidthtest=true'), 'rtmps://live.twitch.tv/app/live_1_abc?bandwidthtest=true');
+  assert.equal(publishUrl({ serverUrl: 'rtmp://a.example/live2' }, 'k/sub'), 'rtmp://a.example/live2/k/sub');
+  assert.ok(!redact('failed rtmps://live.twitch.tv/app/live_1_abc?bandwidthtest=true', 'live_1_abc?bandwidthtest=true').includes('live_1_abc'));
+});

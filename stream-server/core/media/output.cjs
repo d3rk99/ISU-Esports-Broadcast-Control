@@ -8,11 +8,17 @@ const BACKOFF = [1000, 2000, 4000, 8000, 15000, 30000];
 // Build the publish URL. Keys live only in memory here and in the child's argv (see SECURITY note).
 function publishUrl(definition, key) {
   const base = definition.serverUrl.replace(/\/+$/, '');
-  return key ? `${base}/${encodeURIComponent(key).replace(/%2F/g, '/')}` : base;
+  if (!key) return base;
+  // Keep a key's own query part (Twitch "?bandwidthtest=true", YouTube/Restream extras): only the
+  // key path is escaped; "?" and "&" pass through the way OBS sends them.
+  const at = key.indexOf('?');
+  const path = at < 0 ? key : key.slice(0, at);
+  const query = at < 0 ? '' : key.slice(at + 1).split('&').map((pair) => pair.split('=').map(encodeURIComponent).join('=')).join('&');
+  return `${base}/${encodeURIComponent(path).replace(/%2F/g, '/')}${query ? `?${query}` : ''}`;
 }
 function redact(text, key) {
   let out = String(text || '');
-  if (key) out = out.split(key).join('***').split(encodeURIComponent(key)).join('***');
+  if (key) for (const part of [key, encodeURIComponent(key), key.split('?')[0]]) if (part) out = out.split(part).join('***');
   return out.replace(/(rtmps?:\/\/[^\s/]+\/[^\s/]+\/)[^\s'"]+/gi, '$1***');
 }
 
