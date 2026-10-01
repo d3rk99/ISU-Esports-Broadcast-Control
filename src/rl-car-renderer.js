@@ -3,6 +3,7 @@ import { garagePaint } from './rl-car-palette.js';
 import { WHEEL_HUBS } from './rl-wheel-hubs.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { applyBodyPaint } from './rl-car-paint.js';
 import { applyFinish, createStudioEnvironment } from './rl-car-finish-material.js';
 
@@ -388,6 +389,22 @@ async function loadGltfScene(url) {
   return gltf.scene;
 }
 
+// Smooth shading. The pack's meshes carry no vertex normals, so GLTFLoader falls back to
+// flat shading (every triangle a facet). Rebuild normals that average across faces meeting
+// at less than `creaseDeg` and keep harder edges sharp (panel lines, wheel arches).
+export function smoothShading(root, creaseDeg = 50) {
+  root.traverse((child) => {
+    if (!child.isMesh || !child.geometry?.attributes?.position) return;
+    if (child.geometry.attributes.normal && !child.userData.rlFlatSource) return;
+    const smoothed = toCreasedNormals(child.geometry, THREE.MathUtils.degToRad(creaseDeg));
+    child.geometry.dispose();
+    child.geometry = smoothed;
+    for (const material of [child.material].flat().filter(Boolean)) {
+      if (material.flatShading) { material.flatShading = false; material.needsUpdate = true; }
+    }
+  });
+}
+
 // Wheel hubs come from the car skeleton (manifest wheelAnchors, glTF meters: +Y up,
 // +Z nose, +X = car's left). Radius: the car's own geometry tells us how far the
 // hub sits above the lowest point of the body, so the tyre reaches the ground plane.
@@ -431,6 +448,7 @@ async function addWheels(bodyScene, asset = {}) {
   const anchors = WHEEL_HUBS[asset.bodyId] || WHEEL_HUBS[asset.id] || asset.wheelAnchors || {};
   if (!wheel?.meshUrl || !Object.keys(anchors).length) return;
   const wheelScene = await loadGltfScene(wheel.meshUrl);
+  if (asset.smoothShading !== false) smoothShading(wheelScene);
   await applyAssetTextures(wheelScene, wheel, { isWheel: true });
   const wheelMaterials = new Set();
   wheelScene.traverse((child) => {
@@ -525,6 +543,7 @@ export function createCarRenderer(container) {
       clear();
       const scene = await loadGltfScene(url);
       try {
+        if (asset.smoothShading !== false) smoothShading(scene);
         await applyAssetTextures(scene, asset);
         await applyFinishes(scene, asset, globalThis.RL_NO_ENV ? null : environment());
         await addWheels(scene, asset);

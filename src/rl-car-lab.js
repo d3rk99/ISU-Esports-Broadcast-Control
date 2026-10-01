@@ -48,6 +48,7 @@ export function openCarLab(getGame, saveLibrary) {
           <label>PAINT FINISH<select id="car-pack-finish"></select></label>
           <label>ACCENT FINISH<select id="car-pack-accent-finish"></select></label>
         </div>
+        <label class="car-check"><input type="checkbox" id="car-smooth" checked> SMOOTH SHADING</label>
         <label>PAINT MODE<select id="car-paint-mode"><option value="team">Team colors (from the match)</option><option value="garage">Player's garage colors</option><option value="custom">Custom hex colors</option><option value="off">No paint recolor</option></select></label>
         <div class="car-color-row">
           <label>PRIMARY<input id="car-primary-color" type="color" value="#1597ff"></label>
@@ -235,6 +236,8 @@ export function openCarLab(getGame, saveLibrary) {
   $('car-pack-wheel').onchange = invalidatePackPreview;
   $('car-pack-finish').onchange = invalidatePackPreview;
   $('car-pack-accent-finish').onchange = invalidatePackPreview;
+  $('car-smooth').checked = localStorage.getItem('rlCarSmooth') !== '0';
+  $('car-smooth').onchange = () => { localStorage.setItem('rlCarSmooth', $('car-smooth').checked ? '1' : '0'); invalidatePackPreview(); };
   $('car-paint-mode').onchange = () => { syncPaintMode(); invalidatePackPreview(); };
   $('car-primary-color').onchange = invalidatePackPreview;
   $('car-secondary-color').onchange = invalidatePackPreview;
@@ -270,6 +273,7 @@ export function openCarLab(getGame, saveLibrary) {
       wheel,
       paintFinish: selectedFinish('car-pack-finish'),
       accentFinish: selectedFinish('car-pack-accent-finish'),
+      smoothShading: $('car-smooth').checked,
       wheelAnchors: body.wheelAnchors
     });
   });

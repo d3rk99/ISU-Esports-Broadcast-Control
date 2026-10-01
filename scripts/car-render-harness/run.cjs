@@ -107,7 +107,7 @@ app.whenReady().then(async () => {
     let ok = false; let error = '';
     if (body) {
       const fin = (name) => name ? summary.finishes.find((f) => f.displayName.toLowerCase() === String(name).toLowerCase()) || null : null;
-      const asset = { paintFinish: fin(c.paintFinish), accentFinish: fin(c.accentFinish ?? c.paintFinish), name: body.displayName, bodyId: body.id, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
+      const asset = { smoothShading: c.smooth !== false, paintFinish: fin(c.paintFinish), accentFinish: fin(c.accentFinish ?? c.paintFinish), name: body.displayName, bodyId: body.id, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
       try {
         ok = await win.webContents.executeJavaScript(`(async () => {
           // One renderer for the whole run: creating/disposing WebGL contexts per car

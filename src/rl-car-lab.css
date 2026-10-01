@@ -29,3 +29,6 @@
 .car-swatches { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
 .car-swatch { aspect-ratio: 1; min-height: 16px; padding: 0; border: 1px solid #0006; border-radius: 3px; cursor: pointer; }
 .car-swatch.is-picked { outline: 2px solid #fff; outline-offset: 1px; }
+
+.car-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.car-check input { width: auto; margin: 0; }
