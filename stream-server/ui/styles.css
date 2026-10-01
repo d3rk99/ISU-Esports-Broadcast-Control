@@ -4,3 +4,6 @@
 #interlock.locked{color:#ffb56d}#interlock.unlocked{color:#7dffb4}
 .state[data-state=CONNECTED]{color:#7dffb4}.state[data-state=ERROR]{color:#ff8d8d}.state[data-state=RECONNECTING],.state[data-state=CONNECTING]{color:#ffd36d}
 details.advanced{margin-top:10px}details.advanced summary{cursor:pointer;color:#aab3bd}[hidden]{display:none!important}
+button.record{background:#2a1a1a;border-color:#7a3434;color:#ffb3b3}button.record.on{background:#c62828;border-color:#ff6b6b;color:#fff;animation:recpulse 1.4s ease-in-out infinite}
+.record-status{margin:8px 0;padding:10px 14px;border:1px solid #353b42;border-radius:5px;color:#c9d1d9}.record-status.live{border-color:#c62828;color:#ffd0d0;background:#2a1414}.record-status.bad{border-color:#9a3b3b;color:#ffb3b3}
+@keyframes recpulse{50%{box-shadow:0 0 14px rgba(255,80,80,.6)}}

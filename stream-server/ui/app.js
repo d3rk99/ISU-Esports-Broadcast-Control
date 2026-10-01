@@ -18,6 +18,7 @@ function renderConfig(view) {
   $('engine').value = config.engine; $('inputType').value = config.input.type || 'test';
   $('inputFile').value = config.input.file || ''; $('inputDevice').value = config.input.device || ''; $('inputFormat').value = config.input.formatCode || '';
   $('storageDir').value = config.storageDir || ''; $('ffmpegPath').value = config.ffmpegPath || '';
+  $('recordDir').value = config.recording?.directory || ''; $('recordSegment').value = config.recording?.segmentMinutes || 30;
   syncInputFields();
   $('destinations').replaceChildren(...config.destinations.map(destinationRow));
   dirty = false; renderStatus(view.status);
@@ -41,7 +42,7 @@ function syncInputFields() {
   $('simLab').hidden = $('engine').value !== 'simulation';
 }
 function collect() {
-  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim() }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
+  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim() }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
     const d = { id: row.dataset.id }; for (const input of row.querySelectorAll('[data-field]')) d[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value; return d;
   }) };
 }
@@ -65,6 +66,15 @@ function renderStatus(s) {
   $('telemetry').textContent = sim
     ? `Uptime ${time(s.uptime)} · ${s.telemetry.currentBitrateKbps} kbps (fake) · Effective delay ${time(s.buffer.effectiveDelaySeconds)}`
     : `Uptime ${time(s.uptime)} · Frames ${s.telemetry.encodedFrames} · Dropped ${s.telemetry.droppedFrames} · Effective delay ${time(s.buffer.effectiveDelaySeconds)}${s.buffer.lastReleaseAgeMs !== null && s.buffer.lastReleaseAgeMs !== undefined ? ` · last chunk sent ${(s.buffer.lastReleaseAgeMs / 1000).toFixed(1)} s old` : ''}${s.telemetry.avSyncWarning ? ' · ⚠ NO AUDIO' : ''}`;
+  const rec = s.recording;
+  const recording = rec && ['RECORDING', 'WAITING_KEYFRAME'].includes(rec.state);
+  $('recordToggle').hidden = sim;
+  $('recordToggle').disabled = sim || s.encoder !== 'ENCODING';
+  $('recordToggle').textContent = recording ? '■ STOP RECORDING' : '● RECORD';
+  $('recordToggle').classList.toggle('on', Boolean(recording));
+  $('recordStatus').hidden = sim || !rec || rec.state === 'STOPPED' && !rec.files?.length;
+  if (rec && !sim) $('recordStatus').textContent = rec.state === 'ERROR' ? `● RECORDING STOPPED: ${rec.error}` : recording ? `● REC ${time(rec.seconds)} · ${mb(rec.bytes)} · LIVE (no delay) → ${rec.directory}` : `Last recording: ${rec.files?.slice(-1)[0] || ''} in ${rec.directory}`;
+  if (rec) $('recordStatus').className = `record-status ${rec.state === 'ERROR' ? 'bad' : recording ? 'live' : ''}`;
   for (const row of $('destinations').children) {
     const output = s.outputs.find(o => o.id === row.dataset.id);
     const extra = output && !sim ? ` · ${mb(output.sentBytes)} sent${output.droppedChunks ? ` · ${output.droppedChunks} skipped` : ''}` : '';
@@ -90,6 +100,7 @@ $('settings').addEventListener('change', (event) => { if (event.target.id === 'i
 $('settings').addEventListener('submit', event => { event.preventDefault(); command('save', collect()); });
 $('add').onclick = () => { $('destinations').append(destinationRow({ id: crypto.randomUUID(), name: 'Custom RTMP', protocol: 'RTMPS', enabled: true })); markDirty(); };
 for (const action of ['startAll', 'stopAll', 'signal', 'reset']) $(action).onclick = () => command(action);
+$('recordToggle').onclick = () => command(currentStatus?.recording && ['RECORDING', 'WAITING_KEYFRAME'].includes(currentStatus.recording.state) ? 'stopRecording' : 'startRecording');
 $('speed').onchange = () => command('speed', { value: Number($('speed').value) });
 window.stream.onStatus(renderStatus);
 window.stream.view().then(renderConfig).catch(() => { $('notice').textContent = 'Unable to load Stream Server state.'; });

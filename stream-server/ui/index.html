@@ -3,7 +3,8 @@
 <body>
 <header><div><small>ISU ESPORTS / DIRECTOR PC</small><h1>STREAM SERVER</h1></div><span class="badge" id="engineBadge">LOADING…</span></header>
 <main>
-<div class="toolbar"><span>Capture → Encode once → Delay → Fanout</span><div><button id="startAll" class="primary" disabled>START ALL</button><button id="stopAll">STOP ALL</button></div></div>
+<div class="toolbar"><span>Capture → Encode once → Delay → Fanout · Live recording</span><div><button id="recordToggle" class="record" disabled>● RECORD</button><button id="startAll" class="primary" disabled>START ALL</button><button id="stopAll">STOP ALL</button></div></div>
+<div id="recordStatus" class="record-status" hidden></div>
 <div id="notice" role="status" aria-live="polite"></div>
 <div id="engineError" class="engine-error" hidden></div>
 <form id="settings">
@@ -15,7 +16,7 @@
 <p id="inputStatus">NO SIGNAL</p><p id="ffmpegStatus" class="muted"></p></section>
 <section><h2>02 / ENCODER</h2><input id="encoderName" type="hidden"><div class="pair"><label>Encoder<select id="mode"><option value="hardware">NVIDIA NVENC (hardware)</option><option value="software">x264 (software)</option></select></label><label>Resolution<input id="resolution" pattern="[0-9]{2,5}x[0-9]{2,5}" required></label></div><div class="pair"><label>Frame rate<input id="fps" type="number" min="1" max="240" step="0.01" required></label><label>Video kbps<input id="videoBitrate" type="number" min="100" max="200000" required></label></div><div class="pair"><label>Audio kbps<input id="audioBitrate" type="number" min="32" max="1024" required></label><label>Codec<input value="H.264 / AAC" disabled></label></div><p id="encoderStatus">READY</p></section>
 <section><h2>03 / BROADCAST DELAY</h2><label>Configured delay (seconds)<input id="delaySeconds" type="number" min="0" max="86400" step="1" required></label><div id="delayTime" class="time">00:00 / 05:00</div><progress id="bufferProgress" max="100" value="0" aria-label="Delay buffer fill"></progress><p id="bufferStatus">BUFFERING · 0%</p><strong id="interlock">OUTPUTS LOCKED</strong><p class="muted" id="delayNote">Outputs unlock only after real encoded audio + video has aged the full delay. Nothing live can reach a destination before that.</p>
-<details class="advanced"><summary>Advanced</summary><label>Delay storage folder (blank = app data)<input id="storageDir"></label><label>FFmpeg path (blank = auto-detect)<input id="ffmpegPath"></label></details></section>
+<details class="advanced"><summary>Advanced</summary><label>Recording folder (blank = Videos\ISU Stream Server)<input id="recordDir"></label><label>New recording file every (minutes)<input id="recordSegment" type="number" min="1" max="720" step="1"></label><label>Delay storage folder (blank = app data)<input id="storageDir"></label><label>FFmpeg path (blank = auto-detect)<input id="ffmpegPath"></label></details></section>
 </div>
 <section class="outputs"><div class="section-heading"><h2>04 / STREAM DESTINATIONS</h2><button type="button" id="add">+ Add destination</button></div><p class="muted">Generic RTMP / RTMPS destinations: paste the server URL (e.g. rtmps://live.twitch.tv/app) and put the stream key in the key box, never in the URL. Every destination sends the same encoded program (no extra encoding).</p><div id="destinations"></div></section>
 <div class="save"><span>Saving input, encoder or delay changes stops outputs and refills the buffer. Destination-only edits keep the buffer.</span><button class="primary" type="submit">SAVE SETTINGS</button></div>

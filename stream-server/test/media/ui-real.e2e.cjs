@@ -23,6 +23,7 @@ app.whenReady().then(async () => {
   const store = new ConfigStore(dir, safeStorage.isEncryptionAvailable() ? new ElectronCredentialStore(safeStorage) : new PlainCreds());
   const cfg = defaults();
   cfg.encoder = { ...cfg.encoder, resolution: '1280x720', videoBitrate: 3000, audioBitrate: 128 };
+  cfg.recording = { directory: path.join(dir, 'recordings'), segmentMinutes: 30 };
   store.save(cfg);
   const service = new StreamService(store, new Logger(path.join(dir, 'logs')), { dataDir: dir });
   await service.initialize();
@@ -51,19 +52,25 @@ app.whenReady().then(async () => {
   await new Promise((r) => setTimeout(r, 600));
   const unlocked = !(await js(`document.querySelector('#startAll').disabled`));
   await js(`document.querySelector('#startAll').click()`);
+  await js(`document.querySelector('#recordToggle').click()`);
   await new Promise((r) => setTimeout(r, 9000));
+  const recLabel = await js(`document.querySelector('#recordToggle').textContent + ' | ' + document.querySelector('#recordStatus').textContent`);
   win.setSize(1400, 1100);
   fs.writeFileSync(shot, (await win.webContents.capturePage()).toPNG());
   const status = service.status();
+  const recState = status.recording?.state;
+  await js(`document.querySelector('#recordToggle').click()`);
+  await new Promise((r) => setTimeout(r, 2000));
+  const recFiles = fs.existsSync(path.join(dir, 'recordings')) ? fs.readdirSync(path.join(dir, 'recordings')).filter((f) => f.endsWith('.mkv')) : [];
   const keyInConfig = fs.readFileSync(store.file, 'utf8').includes('test-key');
   const keyInView = JSON.stringify(service.view()).includes('test-key');
   await service.close();
   await rx.stop();
   let streams = [];
   try { streams = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', rx.file]).toString()).streams.map((s) => `${s.codec_type}:${s.codec_name}`); } catch {}
-  const result = { lockedEarly, unlocked, outputState: status.outputs[0]?.state, sentBytes: status.outputs[0]?.sentBytes, streams, keyInConfig, keyInView, error: status.error };
+  const result = { recLabel, recState, recFiles: recFiles.length, lockedEarly, unlocked, outputState: status.outputs[0]?.state, sentBytes: status.outputs[0]?.sentBytes, streams, keyInConfig, keyInView, error: status.error };
   console.log(JSON.stringify(result));
-  const pass = lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
+  const pass = recState === 'RECORDING' && recFiles.length >= 1 && lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
   console.log(pass ? 'UI REAL PASS' : 'UI REAL FAIL');
   fs.rmSync(dir, { recursive: true, force: true });
   app.exit(pass ? 0 : 1);

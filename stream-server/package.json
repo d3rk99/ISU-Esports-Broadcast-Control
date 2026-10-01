@@ -14,6 +14,7 @@
     "test:media": "node test/media/pipeline.e2e.cjs 10 3",
     "test:media:300": "node test/media/pipeline.e2e.cjs 300 3",
     "test:ui-real": "electron test/media/ui-real.e2e.cjs",
-    "test:isolation": "node test/media/isolation.e2e.cjs"
+    "test:isolation": "node test/media/isolation.e2e.cjs",
+    "test:recording": "node test/media/recording.e2e.cjs"
   }
 }

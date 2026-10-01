@@ -3,6 +3,7 @@ const { EventEmitter } = require('node:events');
 const { ProgramEncoder } = require('./encoder.cjs');
 const { DelayBuffer } = require('./delay.cjs');
 const { Destination } = require('./output.cjs');
+const { Recorder } = require('./recorder.cjs');
 
 // Real media engine: one program encoder -> one delay buffer -> N stream-copy destinations.
 // The interlock lives HERE, at the byte boundary: a chunk reaches a destination only if it came
@@ -20,7 +21,16 @@ class RealEngine extends EventEmitter {
     this.error = '';
     this.instance = 0;
 
-    this.encoder.on('data', (packet) => { if (packet.instance === this.instance) this.delay.write(packet); });
+    this.recorder = new Recorder({ ffmpegPath: ffmpeg.path });
+    this.recorder.on('state', (state) => { this.logger.write('recording.state', { state }); this.emit('status'); });
+    // The encoder output goes two ways: the delay buffer (-> stream destinations, delayed) and the
+    // live recorder (-> local files only). The recorder has no route to any destination.
+    this.encoder.on('data', (packet) => {
+      if (packet.instance !== this.instance) return;
+      this.delay.write(packet);
+      this.recorder.feed(packet);
+    });
+    this.diskTimer = setInterval(() => this.recorder.checkDisk(), 1000);
     this.encoder.on('stats', () => this.emit('status'));
     this.encoder.on('exit', ({ expected, message, code }) => {
       if (expected) return;
@@ -126,6 +136,13 @@ class RealEngine extends EventEmitter {
     if (failures.length) throw new Error(failures.join(' · '));
   }
 
+  async startRecording(options) {
+    if (!this.encoder.running) throw new Error('Start the program encoder before recording');
+    await this.recorder.start(options);
+  }
+
+  async stopRecording() { await this.recorder.stop(); }
+
   async stopAllOutputs() { await Promise.all([...this.destinations.values()].map((d) => d.stop())); }
 
   snapshot() {
@@ -138,11 +155,14 @@ class RealEngine extends EventEmitter {
       encoder: { running: this.encoder.running, codec: stats.codec, fps: stats.fps, frames: stats.frames, dropped: stats.dropped, duplicated: stats.duplicated, bitrateKbps: stats.bitrateKbps, speed: stats.speed, uptimeSeconds: stats.startedAt && this.encoder.running ? (Date.now() - stats.startedAt) / 1000 : 0 },
       delay,
       lastReleaseAgeMs: this.lastRelease ? Math.round(this.lastRelease.ageMs) : null,
-      outputs: [...this.destinations.entries()].map(([id, d]) => ({ id, ...d.snapshot() }))
+      outputs: [...this.destinations.entries()].map(([id, d]) => ({ id, ...d.snapshot() })),
+      recording: this.recorder.snapshot()
     };
   }
 
   async close() {
+    clearInterval(this.diskTimer);
+    await this.recorder.stop();
     await this.stopAllOutputs();
     await this.encoder.stop();
     await this.delay.close();

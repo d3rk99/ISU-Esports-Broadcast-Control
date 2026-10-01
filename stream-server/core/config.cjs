@@ -1,12 +1,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { ICredentialStore } = require('./contracts.cjs');
-const defaults = () => ({ version: 2, engine: 'real', ffmpegPath: '', storageDir: '', input: { type: 'test', video: 'Test pattern (clock + tone)', audio: 'Test tone', file: '', device: '', formatCode: '' }, encoder: { name: 'H.264 / AAC', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 6000, audioBitrate: 160, codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
+const defaults = () => ({ version: 2, engine: 'real', ffmpegPath: '', storageDir: '', input: { type: 'test', video: 'Test pattern (clock + tone)', audio: 'Test tone', file: '', device: '', formatCode: '' }, encoder: { name: 'H.264 / AAC', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 6000, audioBitrate: 160, codec: 'H.264', audioCodec: 'AAC' }, recording: { directory: '', segmentMinutes: 30 }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
 // v1 (Codex scaffold) -> v2: adds engine selection, input type, FFmpeg path, delay storage.
 function migrate(c) {
   if (c?.version === 1) {
     const d = defaults();
-    return { ...c, version: 2, engine: 'simulation', ffmpegPath: '', storageDir: '', input: { ...d.input, ...c.input, type: 'test' } };
+    return { ...c, version: 2, engine: 'simulation', ffmpegPath: '', storageDir: '', recording: d.recording, input: { ...d.input, ...c.input, type: 'test' } };
   }
   return c;
 }
@@ -15,6 +15,7 @@ function validate(c) {
   if (!['real', 'simulation'].includes(c.engine)) throw new Error('Engine must be real or simulation');
   if (!['test', 'file', 'decklink'].includes(c.input.type)) throw new Error('Input type must be test, file or decklink');
   if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
+  if (c.recording !== undefined && (typeof c.recording !== 'object' || typeof c.recording.directory !== 'string' || c.recording.directory.length > 1024 || !(Number.isFinite(c.recording.segmentMinutes) && c.recording.segmentMinutes >= 1 && c.recording.segmentMinutes <= 720))) throw new Error('Invalid recording settings (segment 1-720 minutes)');
   for (const k of ['file', 'device', 'formatCode']) if (c.input[k] !== undefined && (typeof c.input[k] !== 'string' || c.input[k].length > 1024)) throw new Error('Invalid input setting');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;

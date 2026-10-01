@@ -23,6 +23,7 @@ class StreamService extends EventEmitter {
 
   get simulation() { return this.config.engine === 'simulation'; }
   storageDir() { return this.config.storageDir || path.join(this.dataDir, 'delay-buffer'); }
+  recordingDir() { return this.config.recording?.directory || path.join(require('node:os').homedir(), 'Videos', 'ISU Stream Server'); }
 
   async initialize() {
     if (this.simulation) return this.initSim();
@@ -78,6 +79,7 @@ class StreamService extends EventEmitter {
         const o = snap.outputs.find((x) => x.id === d.id) || {};
         return { id: d.id, state: d.enabled ? (o.state || 'STOPPED') : 'DISABLED', reconnectCount: o.reconnectCount || 0, sentBytes: o.sentBytes || 0, droppedChunks: o.droppedChunks || 0, queueBytes: o.queueBytes || 0, error: o.error || '' };
       }),
+      recording: { ...snap.recording, directory: this.recordingDir() },
       uptime: enc.uptimeSeconds,
       telemetry: { currentBitrateKbps: enc.bitrateKbps, droppedFrames: enc.dropped, encodedFrames: enc.frames, fps: enc.fps, speed: enc.speed, avSyncWarning: Boolean(snap.delay.hasVideo && !snap.delay.hasAudio) },
       ffmpeg: this.ffmpeg && { version: this.ffmpeg.version, nvenc: this.ffmpeg.nvencUsable, x264: this.ffmpeg.libx264, decklink: this.ffmpeg.decklink, rtmps: this.ffmpeg.rtmps }
@@ -103,6 +105,9 @@ class StreamService extends EventEmitter {
       // Reset = stop outputs, throw away every buffered second, refill from the live input.
       case 'reset': await this.engine.startProgram(this.config); break;
       case 'restartProgram': await this.engine.startProgram(this.config); break;
+      // Recording is LIVE (undelayed) local files; it never feeds a stream destination.
+      case 'startRecording': await this.engine.startRecording({ directory: this.recordingDir(), segmentMinutes: this.config.recording?.segmentMinutes || 30 }); break;
+      case 'stopRecording': await this.engine.stopRecording(); break;
       default: throw new Error('Unknown command');
     }
     this.emit('status', this.status());
