@@ -79,7 +79,8 @@ class ConfigStore {
       if (api.enabled && !key) key = this.credentials.seal(require('node:crypto').randomBytes(24).toString('hex'));
       next.api = { enabled: Boolean(api.enabled), port: Number(api.port) || 3180, lan: Boolean(api.lan), key };
     } else next.api = prevApi;
-    next.destinations = next.destinations.map(({ streamKey, clearKey, hasKey, ...d }) => ({ ...d, credential: clearKey ? '' : streamKey ? this.credentials.seal(streamKey) : previous.destinations.find(p => p.id === d.id)?.credential || '' }));
+    // Pasted keys often carry a trailing space/newline; Twitch then refuses with only a generic I/O error.
+    next.destinations = next.destinations.map(({ streamKey, clearKey, hasKey, ...d }) => ({ ...d, credential: clearKey ? '' : String(streamKey || '').trim() ? this.credentials.seal(String(streamKey).trim()) : previous.destinations.find(p => p.id === d.id)?.credential || '' }));
     return validate(next);
   }
 }

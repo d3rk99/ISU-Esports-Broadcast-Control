@@ -104,3 +104,25 @@ test('stream key query extras (Twitch ?bandwidthtest=true) reach the server unes
   assert.equal(publishUrl({ serverUrl: 'rtmp://a.example/live2' }, 'k/sub'), 'rtmp://a.example/live2/k/sub');
   assert.ok(!redact('failed rtmps://live.twitch.tv/app/live_1_abc?bandwidthtest=true', 'live_1_abc?bandwidthtest=true').includes('live_1_abc'));
 });
+
+test('pasted stream keys are trimmed; FFmpeg error shows the real cause lines, not just the summary', async () => {
+  const { ConfigStore, defaults } = require('../core/config.cjs');
+  const os = require('node:os'); const fsx = require('node:fs'); const pathx = require('node:path');
+  const dir = fsx.mkdtempSync(pathx.join(os.tmpdir(), 'trim-'));
+  const store = new ConfigStore(dir, { seal: (s) => `sealed:${s}`, open: (s) => s });
+  const raw = defaults(); raw.destinations[0].streamKey = '  live_1_abc\r\n';
+  assert.equal(store.prepare(raw, defaults()).destinations[0].credential, 'sealed:live_1_abc');
+  fsx.rmSync(dir, { recursive: true, force: true });
+  const { EventEmitter } = require('node:events');
+  const { Destination } = require('../core/media/output.cjs');
+  let child;
+  const spawnFn = () => { child = new EventEmitter(); child.stderr = new EventEmitter(); child.stderr.setEncoding = () => {}; child.stdin = new EventEmitter(); child.stdin.write = () => true; child.kill = () => {}; return child; };
+  const d = new Destination({ ffmpegPath: 'ffmpeg', definition: { id: 'a', serverUrl: 'rtmps://live.twitch.tv/app' }, getKey: () => 'live_1_abc', spawnFn });
+  d.start();
+  child.stderr.emit('data', '[tls @ 0x1] IO error: End of file\n[out#0/flv @ 0x2] Error opening output rtmps://live.twitch.tv/app/live_1_abc: Input/output error\nError opening output files: Input/output error\n');
+  child.emit('exit', 1);
+  const err = d.snapshot().error;
+  assert.match(err, /IO error: End of file/);
+  assert.ok(!err.includes('live_1_abc'));
+  d.stop();
+});

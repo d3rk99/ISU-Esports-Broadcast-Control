@@ -69,6 +69,8 @@ class Destination extends EventEmitter {
     let key = '';
     try { key = this.getKey(); }
     catch { this.wanted = false; this.set('ERROR', 'Saved stream key could not be decrypted on this Windows account. Re-enter the key.'); return; }
+    key = String(key || '').trim();
+    if (/\s/.test(key)) { this.wanted = false; this.set('ERROR', 'The stream key has a space or line break in it. Paste just the key and save again.'); return; }
     const url = publishUrl(this.definition, key);
     this.key = key;
     this.set(this.attempt ? 'RECONNECTING' : 'CONNECTING');
@@ -83,7 +85,13 @@ class Destination extends EventEmitter {
     child.stderr.on('data', (t) => { errorText = `${errorText}${t}`.slice(-1500); });
     child.stdin.on('error', () => {}); // EPIPE handled by exit
     child.on('error', (error) => this.onExit(child, null, redact(error.message, key)));
-    child.on('exit', (code) => this.onExit(child, code, redact(errorText.trim().split('\n').pop() || `exit ${code}`, key)));
+    // FFmpeg's last line is only a summary ("Error opening output files: Invalid argument"); the
+    // real cause is on the lines before it. Keep the last few distinct lines, redacted.
+    child.on('exit', (code) => {
+      const lines = [...new Set(errorText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))].slice(-4);
+      this.lastDetail = redact(lines.join('\n'), key);
+      this.onExit(child, code, redact(lines.join(' · ') || `exit ${code}`, key));
+    });
     // CONNECTED = FFmpeg is still alive and has taken media for 3 s (RTMP handshake done).
     const startSent = this.sentChunks;
     this.connectedTimer = setInterval(() => {
