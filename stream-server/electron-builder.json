@@ -2,8 +2,36 @@
   "appId": "edu.isu.esports.streamserver",
   "productName": "ISU Stream Server",
   "electronVersion": "44.3.0",
-  "directories": { "output": "../release/stream-server" },
-  "files": ["main.cjs", "preload.cjs", "core/**/*", "ui/**/*", "package.json"],
-  "win": { "target": [{ "target": "portable", "arch": ["x64"] }] },
-  "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+  "directories": {
+    "output": "../release/stream-server"
+  },
+  "files": [
+    "main.cjs",
+    "preload.cjs",
+    "core/**/*",
+    "ui/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "portable": {
+    "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+  },
+  "extraResources": [
+    {
+      "from": "vendor/ffmpeg",
+      "to": "ffmpeg",
+      "filter": [
+        "**/*"
+      ]
+    }
+  ]
 }

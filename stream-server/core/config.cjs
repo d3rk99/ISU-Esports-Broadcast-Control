@@ -1,9 +1,21 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { ICredentialStore } = require('./contracts.cjs');
-const defaults = () => ({ version: 1, input: { video: 'Simulation SDI 1', audio: 'Simulation embedded audio' }, encoder: { name: 'NVENC H.264 (simulated)', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 12000, audioBitrate: 192, codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
+const defaults = () => ({ version: 2, engine: 'real', ffmpegPath: '', storageDir: '', input: { type: 'test', video: 'Test pattern (clock + tone)', audio: 'Test tone', file: '', device: '', formatCode: '' }, encoder: { name: 'H.264 / AAC', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 6000, audioBitrate: 160, codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
+// v1 (Codex scaffold) -> v2: adds engine selection, input type, FFmpeg path, delay storage.
+function migrate(c) {
+  if (c?.version === 1) {
+    const d = defaults();
+    return { ...c, version: 2, engine: 'simulation', ffmpegPath: '', storageDir: '', input: { ...d.input, ...c.input, type: 'test' } };
+  }
+  return c;
+}
 function validate(c) {
-  if (c?.version !== 1 || !c.input || !c.encoder || !Array.isArray(c.destinations)) throw new Error('Invalid configuration schema');
+  if (c?.version !== 2 || !c.input || !c.encoder || !Array.isArray(c.destinations)) throw new Error('Invalid configuration schema');
+  if (!['real', 'simulation'].includes(c.engine)) throw new Error('Engine must be real or simulation');
+  if (!['test', 'file', 'decklink'].includes(c.input.type)) throw new Error('Input type must be test, file or decklink');
+  if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
+  for (const k of ['file', 'device', 'formatCode']) if (c.input[k] !== undefined && (typeof c.input[k] !== 'string' || c.input[k].length > 1024)) throw new Error('Invalid input setting');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;
   if (!num(c.delaySeconds, 0, 86400) || !str(c.input.video) || !str(c.input.audio)) throw new Error('Invalid input or delay (0–86400 seconds)');
@@ -34,7 +46,10 @@ class ConfigStore {
   load() {
     if (!fs.existsSync(this.file)) return defaults();
     // Fail closed: never overwrite a damaged/unknown config with defaults.
-    return validate(JSON.parse(fs.readFileSync(this.file, 'utf8')));
+    const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+    const migrated = validate(migrate(raw));
+    if (raw.version !== migrated.version) { fs.copyFileSync(this.file, `${this.file}.v${raw.version}.bak`); this.save(migrated); }
+    return migrated;
   }
   save(config) {
     validate(config);
@@ -49,4 +64,4 @@ class ConfigStore {
     return validate(next);
   }
 }
-module.exports = { defaults, validate, ConfigStore, ElectronCredentialStore };
+module.exports = { defaults, validate, migrate, ConfigStore, ElectronCredentialStore };

@@ -3,15 +3,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { ConfigStore, defaults, validate, ElectronCredentialStore } = require('../core/config.cjs');
+const { ConfigStore, defaults: realDefaults, validate, ElectronCredentialStore } = require('../core/config.cjs');
+// These scaffold tests drive the SIMULATION engine on purpose (selected explicitly).
+const defaults = () => ({ ...realDefaults(), engine: 'simulation' });
 const { StreamService } = require('../core/service.cjs');
 const { Logger } = require('../core/logger.cjs');
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const store = new ConfigStore(dir, { seal: s => Buffer.from(s).toString('base64') });
+  const store = new ConfigStore(dir, { seal: s => Buffer.from(s).toString('base64'), open: s => Buffer.from(s, 'base64').toString() });
+  store.save(defaults());
   const logger = new Logger(path.join(dir, 'logs'));
-  return { dir, store, service: new StreamService(store, logger), logger };
+  return { dir, store, service: new StreamService(store, logger, { dataDir: dir }), logger };
 }
 test('all and individual starts are locked until delay filled; signal loss revokes readiness', async t => {
   const { service: s } = setup(t); await s.initialize();
@@ -31,7 +34,7 @@ test('zero delay, disabled destinations, reconnect cancellation, config reset an
   await s.command('stopAll'); s.tick(10); assert.equal(s.status().outputs[0].state, 'STOPPED');
   await s.command('startAll'); s.tick(1); await s.command('fail', { id: 'output-1' }); s.tick(1); s.tick(1); assert.equal(s.status().outputs[0].state, 'CONNECTED');
   config.delaySeconds = 600; await s.command('save', config); assert.equal(s.status().outputsLocked, true);
-  const restarted = new StreamService(store, logger); await restarted.initialize(); assert.equal(restarted.config.delaySeconds, 600); assert.equal(restarted.status().buffer.filledSeconds, 0);
+  const restarted = new StreamService(store, logger, { dataDir: path.dirname(store.file) }); await restarted.initialize(); assert.equal(restarted.config.delaySeconds, 600); assert.equal(restarted.status().buffer.filledSeconds, 0);
 });
 test('credentials remain private, survive blank edits, and clear explicitly', async t => {
   const { service: s, dir } = setup(t); await s.initialize();

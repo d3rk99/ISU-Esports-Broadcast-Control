@@ -17,14 +17,17 @@ else {
   app.on('second-instance', () => { window?.restore(); window?.focus(); });
   app.whenReady().then(async () => {
     const logger = new Logger(path.join(app.getPath('userData'), 'logs'));
-    logger.write('application.startup', { state: 'SIMULATION' });
-    service = new StreamService(new ConfigStore(app.getPath('userData'), new ElectronCredentialStore(safeStorage)), logger);
+    const store = new ConfigStore(app.getPath('userData'), new ElectronCredentialStore(safeStorage));
+    if (smoke) store.save({ ...require('./core/config.cjs').defaults(), engine: process.env.SMOKE_ENGINE || 'simulation' });
+    service = new StreamService(store, logger, { dataDir: app.getPath('userData') });
+    logger.write('application.startup', { state: service.simulation ? 'SIMULATION' : 'REAL' });
     await service.initialize();
     window = new BrowserWindow({ width: 1400, height: 980, minWidth: 1000, minHeight: 720, show: !smoke, title: 'ISU Stream Server', backgroundColor: '#101317', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
     window.setMenuBarVisibility(false);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', event => event.preventDefault());
     ipcMain.handle('stream:view', event => { authorize(event); return service.view(); });
+    // Real-mode startup errors are shown in the UI, never silently replaced by simulation.
     ipcMain.handle('stream:command', (event, action, payload) => {
       authorize(event);
       return enqueue(async () => {

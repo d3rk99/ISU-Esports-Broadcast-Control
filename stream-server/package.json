@@ -1,8 +1,8 @@
 {
   "name": "isu-stream-server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Standalone simulated stream server for the ISU Director PC",
+  "description": "ISU Stream Server: capture, one H.264/AAC encode, true disk delay, multi-RTMP(S) fan-out",
   "author": "Idaho State Esports",
   "main": "main.cjs",
   "scripts": {
@@ -10,6 +10,10 @@
     "test": "node --test test/*.test.cjs",
     "smoke": "electron . --smoke",
     "build": "electron-builder --config electron-builder.json --dir",
-    "package": "electron-builder --config electron-builder.json --win portable"
+    "package": "electron-builder --config electron-builder.json --win portable",
+    "test:media": "node test/media/pipeline.e2e.cjs 10 3",
+    "test:media:300": "node test/media/pipeline.e2e.cjs 300 3",
+    "test:ui-real": "electron test/media/ui-real.e2e.cjs",
+    "test:isolation": "node test/media/isolation.e2e.cjs"
   }
 }

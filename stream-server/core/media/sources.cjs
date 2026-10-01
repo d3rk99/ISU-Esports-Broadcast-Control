@@ -1,0 +1,55 @@
+'use strict';
+// Capture sources expressed as FFmpeg input arguments. The encoder process owns capture, so
+// raw frames never pass through Node or Electron.
+
+function parseResolution(text) {
+  const m = /^(\d{2,5})x(\d{2,5})$/.exec(String(text || ''));
+  if (!m) throw new Error('Resolution must look like 1920x1080');
+  return { width: Number(m[1]), height: Number(m[2]) };
+}
+
+// Rational frame rates: 59.94 -> 60000/1001, so timestamps never drift.
+function rationalFps(fps) {
+  const known = { 23.976: '24000/1001', 29.97: '30000/1001', 59.94: '60000/1001', 119.88: '120000/1001' };
+  const rounded = Math.round(Number(fps) * 1000) / 1000;
+  return known[rounded] || String(Number(fps));
+}
+
+// Deterministic real media: moving test pattern with a burnt-in wall clock + frame number,
+// and a tone that beeps once per second (sync marker), so receivers can be checked for content.
+function testSourceArgs({ resolution, fps }) {
+  const { width, height } = parseResolution(resolution);
+  const rate = rationalFps(fps);
+  const font = Math.round(height / 14);
+  const text = `drawtext=text='ISU TEST %{localtime\\:%H\\\\\\:%M\\\\\\:%S} F%{frame_num}':x=40:y=40:fontsize=${font}:fontcolor=white:box=1:boxcolor=black@0.6`;
+  return [
+    '-re', '-f', 'lavfi', '-i', `testsrc2=size=${width}x${height}:rate=${rate},${text}`,
+    '-re', '-f', 'lavfi', '-i', `sine=frequency=1000:sample_rate=48000:beep_factor=4`
+  ];
+}
+
+function fileSourceArgs({ file }) {
+  if (!file) throw new Error('Choose a media file for the file source');
+  return ['-re', '-stream_loop', '-1', '-i', file];
+}
+
+// Blackmagic DeckLink via FFmpeg's decklink input (needs an FFmpeg built with --enable-decklink
+// and the Desktop Video driver). Embedded SDI audio comes in on the same device.
+function decklinkSourceArgs({ device, formatCode }) {
+  if (!device) throw new Error('Choose a DeckLink device');
+  const args = ['-f', 'decklink', '-audio_input', 'embedded', '-channels', '2'];
+  if (formatCode) args.push('-format_code', formatCode);
+  args.push('-i', device);
+  return args;
+}
+
+function sourceArgs(input, encoder) {
+  switch (input.type) {
+    case 'test': return testSourceArgs(encoder);
+    case 'file': return fileSourceArgs(input);
+    case 'decklink': return decklinkSourceArgs(input);
+    default: throw new Error(`Unknown input type: ${input.type}`);
+  }
+}
+
+module.exports = { sourceArgs, rationalFps, parseResolution };
