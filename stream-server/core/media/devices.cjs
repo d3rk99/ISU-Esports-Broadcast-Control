@@ -152,12 +152,14 @@ function deviceInput(input, { platform = process.platform } = {}) {
     if (/:/.test(video) || /:/.test(audio)) throw new Error('DirectShow device names cannot contain ":"; pick the device again from the list');
     if (fmt) opts.push(COMPRESSED.has(fmt) ? '-vcodec' : '-pixel_format', fmt);
     const target = audio ? `video=${video}:audio=${audio}` : `video=${video}`;
-    const args = ['-f', 'dshow', '-rtbufsize', '1024M', '-thread_queue_size', '1024', ...opts, '-i', target];
+    // Live capture = no probing buffer and timestamps from the wall clock. DirectShow virtual cameras
+    // (OBS Virtual Camera) send odd timestamps that otherwise make FFmpeg hold frames back.
+    const args = ['-f', 'dshow', '-rtbufsize', '256M', '-thread_queue_size', '1024', '-fflags', 'nobuffer', '-use_wallclock_as_timestamps', '1', '-probesize', '1M', '-analyzeduration', '0', ...opts, '-i', target];
     return audio ? { args, video: '0:v:0', audio: '0:a:0' } : { args: [...args, ...silence], video: '0:v:0', audio: '1:a:0' };
   }
   if (backend === 'v4l2') {
     if (fmt) opts.push('-input_format', fmt);
-    const args = ['-f', 'v4l2', '-thread_queue_size', '1024', ...opts, '-i', video];
+    const args = ['-f', 'v4l2', '-thread_queue_size', '1024', '-fflags', 'nobuffer', ...opts, '-i', video];
     return audio ? { args: [...args, '-f', 'pulse', '-thread_queue_size', '1024', '-i', audio], video: '0:v:0', audio: '1:a:0' } : { args: [...args, ...silence], video: '0:v:0', audio: '1:a:0' };
   }
   const args = ['-f', 'avfoundation', ...opts, '-i', `${video}:${audio || 'none'}`];

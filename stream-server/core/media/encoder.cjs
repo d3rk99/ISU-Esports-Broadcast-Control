@@ -39,6 +39,9 @@ class ProgramEncoder extends EventEmitter {
       '-g', String(gop), '-keyint_min', String(gop), '-bf', '0', '-forced-idr', '1', '-sc_threshold', '0',
       '-c:a', 'aac', '-b:a', `${Number(encoder.audioBitrate)}k`, '-ar', '48000', '-ac', '2',
       '-af', 'aresample=async=1000',
+      // FFmpeg's interleaver waits up to max_interleave_delta (default 10 s!) for a lagging stream
+      // before writing. With a live camera + generated audio that showed up as a ~10 s late program.
+      '-max_interleave_delta', '500000', '-flush_packets', '1',
       '-f', 'mpegts', '-mpegts_flags', '+resend_headers', '-muxdelay', '0', '-pat_period', '0.2',
       'pipe:1'
     ];
