@@ -5,6 +5,8 @@ const os = require('node:os');
 const { ConfigStore, ElectronCredentialStore } = require('./core/config.cjs');
 const { Logger } = require('./core/logger.cjs');
 const { StreamService } = require('./core/service.cjs');
+const { buildInfo, buildLabel } = require('./core/build-info.cjs');
+const BUILD = buildInfo();
 const { ApiServer } = require('./core/api.cjs');
 const smoke = process.argv.includes('--smoke');
 app.setName('ISU Stream Server');
@@ -33,11 +35,12 @@ else {
     };
     await applyApi();
     service.on('saved', () => enqueue(applyApi));
-    window = new BrowserWindow({ width: 1400, height: 980, minWidth: 1000, minHeight: 720, show: !smoke, title: 'ISU Stream Server', backgroundColor: '#101317', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
+    window = new BrowserWindow({ width: 1400, height: 980, minWidth: 1000, minHeight: 720, show: !smoke, title: `ISU Stream Server v${BUILD.version} (${BUILD.commit}${BUILD.dirty ? '+changes' : ''})`, backgroundColor: '#101317', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
     window.setMenuBarVisibility(false);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', event => event.preventDefault());
     ipcMain.handle('stream:view', event => { authorize(event); return service.view(); });
+    ipcMain.handle('stream:build', event => { authorize(event); return { ...BUILD, label: buildLabel(BUILD) }; });
     // Real-mode startup errors are shown in the UI, never silently replaced by simulation.
     ipcMain.handle('stream:command', (event, action, payload) => {
       authorize(event);

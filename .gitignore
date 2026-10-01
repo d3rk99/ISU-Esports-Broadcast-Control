@@ -15,3 +15,4 @@ rl-app.bundle
 isu-broadcast-main.bundle
 stream-server/vendor/ffmpeg/*
 !stream-server/vendor/ffmpeg/README.md
+stream-server/build-info.json

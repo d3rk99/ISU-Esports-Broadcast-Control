@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('stream', {
   view: () => ipcRenderer.invoke('stream:view'),
   command: (action, payload) => ipcRenderer.invoke('stream:command', action, payload),
   apiKey: () => ipcRenderer.invoke('stream:apiKey'),
+  build: () => ipcRenderer.invoke('stream:build'),
   onStatus: on('stream:status'),
   // Preview JPEG bytes (Uint8Array) and audio meter { peak:[L,R], rms:[L,R] } in dBFS.
   onPreview: on('stream:preview'),

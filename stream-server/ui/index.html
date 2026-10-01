@@ -32,5 +32,5 @@
 </form>
 <section id="telemetryPanel"><h2>05 / LIVE STATS</h2><div class="lab"><button type="button" id="reset">Reset buffer</button><span id="telemetry"></span></div></section>
 <section id="simLab"><h2>SIMULATION LAB</h2><div class="lab"><label>Buffer clock<select id="speed"><option value="1">Real time · 1×</option><option value="30">Accelerated · 30×</option><option value="60">Accelerated · 60×</option></select></label><button id="signal">Toggle input signal</button></div><p class="muted">Use “Simulate failure” on a connected destination to observe ERROR → RECONNECTING → CONNECTED.</p></section>
-<footer>Independent application · Capture → one H.264/AAC encode → disk delay buffer → stream-copy fan-out (FFmpeg).</footer>
+<footer><span id="buildInfo">Version: loading…</span><br>Capture → one H.264/AAC encode → disk delay buffer → stream-copy fan-out (FFmpeg).</footer>
 </main><script src="app.js"></script></body></html>

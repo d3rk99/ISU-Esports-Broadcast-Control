@@ -213,3 +213,5 @@ $('recordToggle').onclick = () => command(currentStatus?.recording && ['RECORDIN
 $('speed').onchange = () => command('speed', { value: Number($('speed').value) });
 window.stream.onStatus(renderStatus);
 window.stream.view().then(renderConfig).catch(() => { $('notice').textContent = 'Unable to load Stream Server state.'; });
+
+window.stream.build?.().then((b) => { $('buildInfo').textContent = b.label; }).catch(() => { $('buildInfo').textContent = 'Version unknown'; });

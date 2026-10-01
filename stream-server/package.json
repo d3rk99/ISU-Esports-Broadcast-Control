@@ -1,6 +1,6 @@
 {
   "name": "isu-stream-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "ISU Stream Server: capture, one H.264/AAC encode, true disk delay, multi-RTMP(S) fan-out",
   "author": "Idaho State Esports",
@@ -22,6 +22,10 @@
     "test:device": "node test/media/device.e2e.cjs",
     "test:preview": "node test/media/preview.e2e.cjs",
     "test:preview-latency": "node test/media/preview-latency.e2e.cjs",
-    "test:avsync": "node test/media/avsync.e2e.cjs"
+    "test:avsync": "node test/media/avsync.e2e.cjs",
+    "buildinfo": "node scripts/build-info.cjs",
+    "prestart": "node scripts/build-info.cjs",
+    "prebuild": "node scripts/build-info.cjs",
+    "prepackage": "node scripts/build-info.cjs"
   }
 }

@@ -10,7 +10,8 @@
     "preload.cjs",
     "core/**/*",
     "ui/**/*",
-    "package.json"
+    "package.json",
+    "build-info.json"
   ],
   "win": {
     "target": [
