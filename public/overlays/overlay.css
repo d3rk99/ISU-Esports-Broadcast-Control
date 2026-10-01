@@ -2013,11 +2013,11 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
   grid-row: 2;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   justify-self: stretch;
   box-sizing: border-box;
   height: 20px;
-  padding: 0 12px;
+  padding: 0 18px;
   background: linear-gradient(180deg, rgba(4,9,16,.96), rgba(2,5,10,.92));
   border-bottom: 1px solid rgba(189,222,255,.3);
   box-shadow: 0 8px 14px rgba(0,0,0,.4);
@@ -2034,7 +2034,8 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
   clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
   border-right: 4px solid var(--away-color);
 }
-.sm-pips i { width: 20px; height: 8px; background: rgba(255,255,255,.16); transform: skewX(-20deg); }
+/* Pips share the strip evenly so the 12 stocks always span its full length. */
+.sm-pips i { flex: 1 1 0; min-width: 0; height: 8px; background: rgba(255,255,255,.16); transform: skewX(-20deg); }
 .sm-pips--home i.on { background: var(--home-color); box-shadow: 0 0 6px color-mix(in srgb, var(--home-color) 70%, transparent); }
 .sm-pips--away i.on { background: var(--away-color); box-shadow: 0 0 6px color-mix(in srgb, var(--away-color) 70%, transparent); }
 @keyframes sm-card-in { from { opacity: 0; transform: translate(-50%, -30px); } to { opacity: 1; transform: translate(-50%, 0); } }
