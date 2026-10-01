@@ -30,7 +30,10 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1400, height: 1100, show: false, webPreferences: { preload: path.join(root, 'preload.cjs'), contextIsolation: true, sandbox: true, offscreen: true } });
   ipcMain.handle('stream:view', () => service.view());
   ipcMain.handle('stream:command', async (_e, action, payload) => { try { return { ok: true, view: await service.command(action, payload) }; } catch (error) { return { ok: false, error: error.message }; } });
-  service.on('status', (s) => { if (!win.isDestroyed()) win.webContents.send('stream:status', s); });
+  service.on('status', () => { if (!win.isDestroyed()) win.webContents.send('stream:status', service.fullStatus()); });
+  service.on('preview', (jpeg) => { if (!win.isDestroyed()) win.webContents.send('stream:preview', jpeg); });
+  service.on('meter', (m) => { if (!win.isDestroyed()) win.webContents.send('stream:meter', m); });
+  ipcMain.handle('stream:apiKey', () => '');
   await win.loadFile(path.join(root, 'ui/index.html'));
   const js = (code) => win.webContents.executeJavaScript(code);
   await new Promise((r) => setTimeout(r, 800));
@@ -54,6 +57,7 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('#startAll').click()`);
   await js(`document.querySelector('#recordToggle').click()`);
   await new Promise((r) => setTimeout(r, 9000));
+  const monitor = await js(`({ previewLive: document.querySelector('.preview-box').classList.contains('live'), imgW: document.querySelector('#previewImg').naturalWidth, meterL: parseFloat(document.querySelector('#meterL').style.height) || 0, meterText: document.querySelector('#meterText').textContent, health: document.querySelector('#healthBadge').textContent, outState: document.querySelector('#destinations .state').textContent })`);
   const recLabel = await js(`document.querySelector('#recordToggle').textContent + ' | ' + document.querySelector('#recordStatus').textContent`);
   win.setSize(1400, 1100);
   fs.writeFileSync(shot, (await win.webContents.capturePage()).toPNG());
@@ -68,9 +72,9 @@ app.whenReady().then(async () => {
   await rx.stop();
   let streams = [];
   try { streams = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', rx.file]).toString()).streams.map((s) => `${s.codec_type}:${s.codec_name}`); } catch {}
-  const result = { recLabel, recState, recFiles: recFiles.length, lockedEarly, unlocked, outputState: status.outputs[0]?.state, sentBytes: status.outputs[0]?.sentBytes, streams, keyInConfig, keyInView, error: status.error };
+  const result = { monitor, recLabel, recState, recFiles: recFiles.length, lockedEarly, unlocked, outputState: status.outputs[0]?.state, sentBytes: status.outputs[0]?.sentBytes, streams, keyInConfig, keyInView, error: status.error };
   console.log(JSON.stringify(result));
-  const pass = recState === 'RECORDING' && recFiles.length >= 1 && lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
+  const pass = monitor.previewLive && monitor.imgW > 0 && monitor.meterL > 10 && /HEALTHY/.test(monitor.outState) && recState === 'RECORDING' && recFiles.length >= 1 && lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
   console.log(pass ? 'UI REAL PASS' : 'UI REAL FAIL');
   fs.rmSync(dir, { recursive: true, force: true });
   app.exit(pass ? 0 : 1);

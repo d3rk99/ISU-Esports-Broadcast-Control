@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { ICredentialStore } = require('./contracts.cjs');
-const defaults = () => ({ version: 2, engine: 'real', ffmpegPath: '', storageDir: '', input: { type: 'test', video: 'Test pattern (clock + tone)', audio: 'Test tone', file: '', device: '', formatCode: '' }, encoder: { name: 'H.264 / AAC', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 6000, audioBitrate: 160, codec: 'H.264', audioCodec: 'AAC' }, recording: { directory: '', segmentMinutes: 30 }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
+const defaults = () => ({ version: 2, engine: 'real', ffmpegPath: '', storageDir: '', input: { type: 'test', video: 'Test pattern (clock + tone)', audio: 'Test tone', file: '', device: '', formatCode: '' }, encoder: { name: 'H.264 / AAC', mode: 'hardware', resolution: '1920x1080', fps: 59.94, videoBitrate: 6000, audioBitrate: 160, codec: 'H.264', audioCodec: 'AAC' }, recording: { directory: '', segmentMinutes: 30 }, api: { enabled: false, port: 3180, lan: false, key: '' }, delaySeconds: 300, destinations: ['Twitch', 'YouTube', 'League RTMP'].map((name, i) => ({ id: `output-${i + 1}`, name, enabled: true, protocol: 'RTMPS', serverUrl: '', credential: '' })) });
 // v1 (Codex scaffold) -> v2: adds engine selection, input type, FFmpeg path, delay storage.
 function migrate(c) {
   if (c?.version === 1) {
@@ -16,6 +16,11 @@ function validate(c) {
   if (!['test', 'file', 'decklink'].includes(c.input.type)) throw new Error('Input type must be test, file or decklink');
   if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
   if (c.recording !== undefined && (typeof c.recording !== 'object' || typeof c.recording.directory !== 'string' || c.recording.directory.length > 1024 || !(Number.isFinite(c.recording.segmentMinutes) && c.recording.segmentMinutes >= 1 && c.recording.segmentMinutes <= 720))) throw new Error('Invalid recording settings (segment 1-720 minutes)');
+  if (c.api !== undefined) {
+    const a = c.api;
+    // 3174-3178 belong to the Broadcast Controller / bridges; never share a listener with them.
+    if (typeof a !== 'object' || typeof a.enabled !== 'boolean' || typeof a.lan !== 'boolean' || typeof a.key !== 'string' || a.key.length > 16000 || !Number.isInteger(a.port) || a.port < 1024 || a.port > 65535 || [3174, 3175, 3176, 3177, 3178].includes(a.port)) throw new Error('Invalid Companion API settings (port 1024-65535, not 3174-3178)');
+  }
   for (const k of ['file', 'device', 'formatCode']) if (c.input[k] !== undefined && (typeof c.input[k] !== 'string' || c.input[k].length > 1024)) throw new Error('Invalid input setting');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;
@@ -44,6 +49,7 @@ class ElectronCredentialStore extends ICredentialStore {
 }
 class ConfigStore {
   constructor(directory, credentials) { this.file = path.join(directory, 'config.json'); this.credentials = credentials; }
+  apiKey(c) { return c.api?.key ? this.credentials.open(c.api.key) : ''; }
   load() {
     if (!fs.existsSync(this.file)) return defaults();
     // Fail closed: never overwrite a damaged/unknown config with defaults.
@@ -58,9 +64,17 @@ class ConfigStore {
     fs.writeFileSync(`${this.file}.tmp`, JSON.stringify(config, null, 2), { mode: 0o600 });
     fs.renameSync(`${this.file}.tmp`, this.file);
   }
-  publicConfig(c) { return { ...structuredClone(c), destinations: c.destinations.map(({ credential, ...d }) => ({ ...d, hasKey: Boolean(credential) })) }; }
+  publicConfig(c) { const api = c.api || defaults().api; return { ...structuredClone(c), api: { enabled: api.enabled, port: api.port, lan: api.lan, hasKey: Boolean(api.key) }, destinations: c.destinations.map(({ credential, ...d }) => ({ ...d, hasKey: Boolean(credential) })) }; }
   prepare(raw, previous) {
     const next = structuredClone(raw);
+    // API key: kept from the previous config unless regenerated; a new one is made when first enabled.
+    const prevApi = previous.api || defaults().api;
+    if (next.api) {
+      const { hasKey, regenerateKey, ...api } = next.api;
+      let key = regenerateKey ? '' : prevApi.key || '';
+      if (api.enabled && !key) key = this.credentials.seal(require('node:crypto').randomBytes(24).toString('hex'));
+      next.api = { enabled: Boolean(api.enabled), port: Number(api.port) || 3180, lan: Boolean(api.lan), key };
+    } else next.api = prevApi;
     next.destinations = next.destinations.map(({ streamKey, clearKey, hasKey, ...d }) => ({ ...d, credential: clearKey ? '' : streamKey ? this.credentials.seal(streamKey) : previous.destinations.find(p => p.id === d.id)?.credential || '' }));
     return validate(next);
   }

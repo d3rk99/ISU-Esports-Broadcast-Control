@@ -19,7 +19,7 @@ async function startReceiver(file, { ffmpeg = 'ffmpeg' } = {}) {
   const fs = require('node:fs');
   receiver.watch = setInterval(() => { try { if (!receiver.firstMediaAt && fs.statSync(file).size > 0) receiver.firstMediaAt = performance.now(); } catch {} }, 20);
   await new Promise((r) => setTimeout(r, 400));
-  receiver.stop = () => new Promise((resolve) => { clearInterval(receiver.watch); if (child.exitCode !== null) return resolve(); child.once('exit', resolve); child.kill('SIGINT'); setTimeout(() => child.kill('SIGKILL'), 3000); });
+  receiver.stop = () => new Promise((resolve) => { clearInterval(receiver.watch); if (child.exitCode !== null || child.signalCode !== null) return resolve(); child.once('exit', resolve); child.kill('SIGINT'); setTimeout(() => child.kill('SIGKILL'), 3000); });
   return receiver;
 }
 

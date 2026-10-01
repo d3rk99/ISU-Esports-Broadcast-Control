@@ -18,6 +18,9 @@ function renderConfig(view) {
   $('engine').value = config.engine; $('inputType').value = config.input.type || 'test';
   $('inputFile').value = config.input.file || ''; $('inputDevice').value = config.input.device || ''; $('inputFormat').value = config.input.formatCode || '';
   $('storageDir').value = config.storageDir || ''; $('ffmpegPath').value = config.ffmpegPath || '';
+  const api = config.api || { enabled: false, port: 3180, lan: false };
+  $('apiEnabled').checked = api.enabled; $('apiPort').value = api.port; $('apiLan').checked = api.lan; $('apiRegenerate').checked = false; $('apiKey').hidden = true;
+  renderApi(view.api);
   $('recordDir').value = config.recording?.directory || ''; $('recordSegment').value = config.recording?.segmentMinutes || 30;
   syncInputFields();
   $('destinations').replaceChildren(...config.destinations.map(destinationRow));
@@ -42,12 +45,13 @@ function syncInputFields() {
   $('simLab').hidden = $('engine').value !== 'simulation';
 }
 function collect() {
-  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim() }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
+  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, api: { enabled: $('apiEnabled').checked, port: Number($('apiPort').value) || 3180, lan: $('apiLan').checked, regenerateKey: $('apiRegenerate').checked }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim() }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
     const d = { id: row.dataset.id }; for (const input of row.querySelectorAll('[data-field]')) d[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value; return d;
   }) };
 }
 function renderStatus(s) {
   currentStatus = s;
+  renderHealth(s);
   const sim = s.simulation;
   $('engineBadge').textContent = sim ? 'SIMULATION • NO MEDIA SENT' : s.engine === 'ERROR' ? 'REAL ENGINE • ERROR' : s.engine === 'RUNNING' ? 'REAL ENGINE • LIVE MEDIA' : `REAL ENGINE • ${s.engine}`;
   $('engineBadge').className = `badge ${sim ? '' : s.engine === 'ERROR' ? 'bad' : 'real'}`;
@@ -80,17 +84,59 @@ function renderStatus(s) {
     const extra = output && !sim ? ` · ${mb(output.sentBytes)} sent${output.droppedChunks ? ` · ${output.droppedChunks} skipped` : ''}` : '';
     row.querySelector('.state').textContent = output ? `${output.state} · reconnects ${output.reconnectCount}${extra}${output.error ? ` · ${output.error}` : ''}` : 'UNSAVED';
     row.querySelector('.state').dataset.state = output?.state || '';
+    row.querySelector('.state').dataset.health = output?.health || '';
+    if (output?.health && !sim && output.state !== 'DISABLED') row.querySelector('.state').textContent = `${output.health} · ${row.querySelector('.state').textContent}`;
     row.querySelector('[data-action=start]').disabled = dirty || s.outputsLocked || !output || output.state === 'DISABLED';
     row.querySelector('[data-action=stop]').disabled = !output;
     row.querySelector('[data-action=fail]').hidden = !sim;
     row.querySelector('[data-action=fail]').disabled = output?.state !== 'CONNECTED';
   }
 }
+const PROBLEM_TEXT = { ENCODER: 'encoder stopped', LOW_FPS: 'low frame rate', DROPPED_FRAMES: 'dropping frames', NO_AUDIO: 'no audio', SILENT: 'audio silent', BUFFERING: 'delay still filling' };
+function renderHealth(s) {
+  const h = s.programHealth || { healthy: false, problems: [] };
+  const badge = $('healthBadge');
+  const onlyBuffering = h.problems.length === 1 && h.problems[0] === 'BUFFERING';
+  badge.textContent = h.healthy ? 'PROGRAM HEALTHY' : onlyBuffering ? 'BUFFERING' : 'PROGRAM PROBLEM';
+  badge.className = `health ${h.healthy ? 'ok' : onlyBuffering ? 'warn' : 'bad'}`;
+  $('healthText').textContent = h.problems.length ? `Problems: ${h.problems.map((p) => PROBLEM_TEXT[p] || p).join(', ')}` : 'Encoder, audio and delay all healthy.';
+  if (!s.preview?.running || !s.preview?.videoLive) { $('previewImg').closest('.preview-box').classList.remove('live'); }
+  if (!s.preview?.audioLive) setMeters({ peak: [-90, -90], rms: [-90, -90] });
+}
+function renderApi(api) {
+  if (!api) return;
+  $('apiStatus').textContent = api.listening ? `Listening on ${api.address}` : api.error ? `Not running: ${api.error}` : 'Off';
+}
+// dBFS -> bar height: -60 dB at the bottom, 0 dB at the top.
+const level = (dbfs) => Math.max(0, Math.min(1, (dbfs + 60) / 60));
+function setMeters(m) {
+  for (const [i, ch] of [[0, 'L'], [1, 'R']]) {
+    const box = $(`meter${ch}`).parentElement;
+    $(`meter${ch}`).style.setProperty('--h', `${box.clientHeight}px`);
+    $(`meter${ch}`).style.height = `${level(m.rms[i]) * 100}%`;
+    $(`peak${ch}`).style.bottom = `${level(m.peak[i]) * 100}%`;
+  }
+  const f = (d) => d <= -89 ? '—' : d.toFixed(0);
+  $('meterText').textContent = `L ${f(m.peak[0])} · R ${f(m.peak[1])} dBFS peak`;
+}
+let previewUrl = '';
+window.stream.onPreview((bytes) => {
+  if (!$('previewOn').checked) return;
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
+  const img = $('previewImg');
+  img.onload = () => { if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = url; };
+  img.src = url;
+  img.closest('.preview-box').classList.add('live');
+});
+window.stream.onMeter(setMeters);
+$('previewOn').onchange = () => { command('preview', { enabled: $('previewOn').checked }); if (!$('previewOn').checked) $('previewImg').closest('.preview-box').classList.remove('live'); };
+$('apiShowKey').onclick = async () => { const key = await window.stream.apiKey(); $('apiKey').hidden = false; $('apiKey').textContent = key || 'No key yet: tick Enable and save settings first.'; if (key) navigator.clipboard?.writeText(key).catch(() => {}); };
 function markDirty() { dirty = true; $('notice').textContent = 'Unsaved settings. Save to apply; this stops outputs and resets the delay.'; if (currentStatus) renderStatus(currentStatus); }
 async function command(action, payload) {
   try {
     const result = await window.stream.command(action, payload);
     if (!result.ok) throw new Error(result.error);
+    if (result.view.api) renderApi(result.view.api);
     if (action === 'save') { renderConfig(result.view); $('notice').textContent = 'Settings saved. Keys encrypted using Windows user credentials.'; }
     else { renderStatus(result.view.status); if (!dirty) $('notice').textContent = ''; }
   } catch (error) { $('notice').textContent = error.message; }

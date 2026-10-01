@@ -7,3 +7,24 @@ details.advanced{margin-top:10px}details.advanced summary{cursor:pointer;color:#
 button.record{background:#2a1a1a;border-color:#7a3434;color:#ffb3b3}button.record.on{background:#c62828;border-color:#ff6b6b;color:#fff;animation:recpulse 1.4s ease-in-out infinite}
 .record-status{margin:8px 0;padding:10px 14px;border:1px solid #353b42;border-radius:5px;color:#c9d1d9}.record-status.live{border-color:#c62828;color:#ffd0d0;background:#2a1414}.record-status.bad{border-color:#9a3b3b;color:#ffb3b3}
 @keyframes recpulse{50%{box-shadow:0 0 14px rgba(255,80,80,.6)}}
+
+/* Program monitor: preview + stereo meters + health */
+.monitor h2 small{font-size:10px;color:#ffb56d;margin-left:8px}
+.monitor-row{display:grid;grid-template-columns:minmax(320px,640px) 70px 1fr;gap:18px;align-items:stretch}
+.preview-box{position:relative;aspect-ratio:16/9;background:#05070a;border:1px solid #39424c;border-radius:6px;overflow:hidden;display:grid;place-items:center}
+.preview-box img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none}
+.preview-box.live img{display:block}.preview-box.live #previewEmpty{display:none}
+#previewEmpty{color:#6c7884;letter-spacing:3px;font-weight:700}
+.health{position:absolute;bottom:10px;left:10px;padding:5px 9px;border-radius:4px;font-size:11px;letter-spacing:1px;background:#3a3f46;color:#e9edf2}
+.health.ok{background:#1f7a3a}.health.warn{background:#a8650f}.health.bad{background:#b3261e}
+.meters{display:grid;grid-template-columns:18px 18px 28px;gap:4px;height:100%;min-height:200px}
+.meter{position:relative;background:#0b0f13;border:1px solid #333c45;border-radius:3px;overflow:hidden}
+.meter i{position:absolute;left:0;right:0;bottom:0;height:0;background:linear-gradient(to top,#2fbf5b 0%,#2fbf5b 70%,#e6c229 85%,#e5432f 97%);background-size:100% var(--h,200px);background-position:bottom;transition:height 80ms linear}
+.meter em{position:absolute;left:0;right:0;height:2px;background:#fff;bottom:0}
+.scale{position:relative;font-size:9px;color:#7c8a98;font-family:Consolas,monospace}.scale span{position:absolute;left:2px;transform:translateY(50%);line-height:1}
+.monitor-info p{margin:0 0 10px}#meterText{font-family:Consolas,monospace;font-size:15px}
+label.inline{flex-direction:row;align-items:center;gap:8px}label.inline input{width:18px;height:18px}
+#apiKey{display:block;word-break:break-all;background:#0b0f13;border:1px solid #39424c;padding:8px;border-radius:4px;font-size:12px;user-select:all}
+.destination .state[data-health=HEALTHY]{color:#47d16f}.destination .state[data-health=STALLED],.destination .state[data-health=LAGGING]{color:#ffce47}.destination .state[data-health=FAILED]{color:#ff6b5e}
+@media(max-width:1100px){.monitor-row{grid-template-columns:1fr 70px}.monitor-info{grid-column:1/-1}}
+.scale span:nth-child(1){bottom:100.0%}.scale span:nth-child(2){bottom:90.0%}.scale span:nth-child(3){bottom:80.0%}.scale span:nth-child(4){bottom:66.7%}.scale span:nth-child(5){bottom:50.0%}.scale span:nth-child(6){bottom:33.3%}.scale span:nth-child(7){bottom:0.0%}

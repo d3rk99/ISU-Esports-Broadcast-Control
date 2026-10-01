@@ -5,10 +5,11 @@ const os = require('node:os');
 const { ConfigStore, ElectronCredentialStore } = require('./core/config.cjs');
 const { Logger } = require('./core/logger.cjs');
 const { StreamService } = require('./core/service.cjs');
+const { ApiServer } = require('./core/api.cjs');
 const smoke = process.argv.includes('--smoke');
 app.setName('ISU Stream Server');
 app.setPath('userData', smoke ? fs.mkdtempSync(path.join(os.tmpdir(), 'isu-stream-smoke-')) : path.join(app.getPath('appData'), 'ISU Stream Server'));
-let service, timer, window, closing = false;
+let service, timer, window, api, closing = false;
 // Serialize commands and ticks so future async adapters cannot race UI/API commands.
 let queue = Promise.resolve();
 function enqueue(fn) { const result = queue.then(fn); queue = result.catch(() => {}); return result; }
@@ -22,6 +23,16 @@ else {
     service = new StreamService(store, logger, { dataDir: app.getPath('userData') });
     logger.write('application.startup', { state: service.simulation ? 'SIMULATION' : 'REAL' });
     await service.initialize();
+    // Companion API: same serialized queue + interlock as the UI. Off unless enabled in settings.
+    api = new ApiServer({ run: (action, payload) => enqueue(() => service.command(action, payload)), getStatus: () => service.fullStatus(), getKey: () => store.apiKey(service.config), logger });
+    service.apiState = () => api.state;
+    const applyApi = async () => {
+      const a = service.config.api || {};
+      if (a.enabled) { try { await api.start({ port: a.port, lan: a.lan }); } catch (error) { logger.write('api.state', { state: 'FAILED', code: 'API_START' }); } }
+      else await api.stop();
+    };
+    await applyApi();
+    service.on('saved', () => enqueue(applyApi));
     window = new BrowserWindow({ width: 1400, height: 980, minWidth: 1000, minHeight: 720, show: !smoke, title: 'ISU Stream Server', backgroundColor: '#101317', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false } });
     window.setMenuBarVisibility(false);
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -36,7 +47,11 @@ else {
       });
     });
     function authorize(event) { if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender'); }
-    service.on('status', state => { if (!window.isDestroyed()) window.webContents.send('stream:status', state); });
+    service.on('status', () => { if (!window.isDestroyed()) window.webContents.send('stream:status', service.fullStatus()); });
+    // Preview: <= 5 small JPEGs/s and 10 meter updates/s on their own channels, never in status.
+    service.on('preview', jpeg => { if (!window.isDestroyed() && !window.isMinimized()) window.webContents.send('stream:preview', jpeg); });
+    service.on('meter', meter => { if (!window.isDestroyed()) window.webContents.send('stream:meter', meter); });
+    ipcMain.handle('stream:apiKey', event => { authorize(event); return store.apiKey(service.config); });
     await window.loadFile(path.join(__dirname, 'ui/index.html'));
     let last = performance.now();
     timer = setInterval(() => { const now = performance.now(); const seconds = Math.min(2, (now - last) / 1000); last = now; enqueue(() => service.tick(seconds)).catch(() => logger.write('application.error', { code: 'TICK_FAILED' })); }, 250);
@@ -76,6 +91,6 @@ else {
   app.on('before-quit', event => {
     if (!service || closing) return;
     event.preventDefault(); closing = true; clearInterval(timer);
-    enqueue(() => service.close()).finally(() => app.quit());
+    enqueue(async () => { await api?.stop(); await service.close(); }).finally(() => app.quit());
   });
 }

@@ -1,0 +1,37 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
+	"id": "idahostate-esports-stream-server",
+	"name": "ISU Esports Stream Server",
+	"shortname": "ISU Stream",
+	"description": "Start/stop delayed multistream outputs and recording, with live/healthy stream feedback",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/d3rk99/ISU-Esports-Broadcast-Control.git",
+	"bugs": "https://github.com/d3rk99/ISU-Esports-Broadcast-Control/issues",
+	"maintainers": [
+		{
+			"name": "Idaho State Esports",
+			"email": "d3rk99@users.noreply.github.com"
+		}
+	],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"legacyIds": [],
+	"manufacturer": "Idaho State University",
+	"products": [
+		"Stream Server"
+	],
+	"keywords": [
+		"streaming",
+		"rtmp",
+		"multistream",
+		"delay",
+		"recording",
+		"ISU"
+	]
+}

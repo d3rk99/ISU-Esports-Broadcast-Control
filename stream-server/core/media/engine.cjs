@@ -4,6 +4,7 @@ const { ProgramEncoder } = require('./encoder.cjs');
 const { DelayBuffer } = require('./delay.cjs');
 const { Destination } = require('./output.cjs');
 const { Recorder } = require('./recorder.cjs');
+const { Preview } = require('./preview.cjs');
 
 // Real media engine: one program encoder -> one delay buffer -> N stream-copy destinations.
 // The interlock lives HERE, at the byte boundary: a chunk reaches a destination only if it came
@@ -23,12 +24,17 @@ class RealEngine extends EventEmitter {
 
     this.recorder = new Recorder({ ffmpegPath: ffmpeg.path });
     this.recorder.on('state', (state) => { this.logger.write('recording.state', { state }); this.emit('status'); });
+    // Confidence preview + audio meters: decodes the live program (never a second program encode).
+    this.preview = new Preview({ ffmpegPath: ffmpeg.path });
+    this.preview.on('frame', (jpeg) => this.emit('preview', jpeg));
+    this.preview.on('meter', (meter) => this.emit('meter', meter));
     // The encoder output goes two ways: the delay buffer (-> stream destinations, delayed) and the
     // live recorder (-> local files only). The recorder has no route to any destination.
     this.encoder.on('data', (packet) => {
       if (packet.instance !== this.instance) return;
       this.delay.write(packet);
       this.recorder.feed(packet);
+      this.preview.feed(packet);
     });
     this.diskTimer = setInterval(() => this.recorder.checkDisk(), 1000);
     this.encoder.on('stats', () => this.emit('status'));
@@ -156,12 +162,14 @@ class RealEngine extends EventEmitter {
       delay,
       lastReleaseAgeMs: this.lastRelease ? Math.round(this.lastRelease.ageMs) : null,
       outputs: [...this.destinations.entries()].map(([id, d]) => ({ id, ...d.snapshot() })),
-      recording: this.recorder.snapshot()
+      recording: this.recorder.snapshot(),
+      preview: this.preview.snapshot()
     };
   }
 
   async close() {
     clearInterval(this.diskTimer);
+    this.preview.close();
     await this.recorder.stop();
     await this.stopAllOutputs();
     await this.encoder.stop();

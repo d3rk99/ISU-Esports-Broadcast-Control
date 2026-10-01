@@ -4,6 +4,7 @@ const path = require('node:path');
 const { SimStreamService } = require('./sim-service.cjs');
 const { RealEngine } = require('./media/engine.cjs');
 const { findFfmpeg } = require('./media/ffmpeg.cjs');
+const { HealthTracker } = require('./health.cjs');
 
 // Transport-independent command facade used by the UI and the local API. The engine is chosen
 // explicitly by config.engine; a real-mode failure is reported, never swapped for simulation.
@@ -19,6 +20,7 @@ class StreamService extends EventEmitter {
     this.engine = null;
     this.ffmpeg = null;
     this.startupError = '';
+    this.health = new HealthTracker();
   }
 
   get simulation() { return this.config.engine === 'simulation'; }
@@ -38,6 +40,9 @@ class StreamService extends EventEmitter {
     }
     this.engine = new RealEngine({ ffmpeg: this.ffmpeg, storageDir: this.storageDir(), credentials: this.store.credentials, logger: this.logger });
     this.engine.on('status', () => this.emit('status', this.status()));
+    // Preview frames/meters go out as their own events: big JPEGs never ride the status object.
+    this.engine.on('preview', (jpeg) => this.emit('preview', jpeg));
+    this.engine.on('meter', (meter) => this.emit('meter', meter));
     await this.engine.init();
     this.engine.configureDestinations(this.config.destinations);
     // The program (capture + encode + buffering) starts with the app; outputs never auto-start.
@@ -77,16 +82,25 @@ class StreamService extends EventEmitter {
       encoderInstance: snap.encoderInstance,
       outputs: defs.map((d) => {
         const o = snap.outputs.find((x) => x.id === d.id) || {};
-        return { id: d.id, state: d.enabled ? (o.state || 'STOPPED') : 'DISABLED', reconnectCount: o.reconnectCount || 0, sentBytes: o.sentBytes || 0, droppedChunks: o.droppedChunks || 0, queueBytes: o.queueBytes || 0, error: o.error || '' };
+        const out = { id: d.id, name: d.name, state: d.enabled ? (o.state || 'STOPPED') : 'DISABLED', reconnectCount: o.reconnectCount || 0, sentBytes: o.sentBytes || 0, droppedChunks: o.droppedChunks || 0, queueBytes: o.queueBytes || 0, error: o.error || '' };
+        return { ...out, ...this.health.output(out) };
       }),
       recording: { ...snap.recording, directory: this.recordingDir() },
+      preview: snap.preview,
       uptime: enc.uptimeSeconds,
       telemetry: { currentBitrateKbps: enc.bitrateKbps, droppedFrames: enc.dropped, encodedFrames: enc.frames, fps: enc.fps, speed: enc.speed, avSyncWarning: Boolean(snap.delay.hasVideo && !snap.delay.hasAudio) },
       ffmpeg: this.ffmpeg && { version: this.ffmpeg.version, nvenc: this.ffmpeg.nvencUsable, x264: this.ffmpeg.libx264, decklink: this.ffmpeg.decklink, rtmps: this.ffmpeg.rtmps }
     };
   }
 
-  view() { return { config: this.store.publicConfig(this.config), devices: this.devices(), status: this.status() }; }
+  // status() plus program health. Kept separate so the health clock only advances on real polls.
+  fullStatus() {
+    const s = this.status();
+    if (s.simulation) return { ...s, programHealth: { healthy: !s.outputsLocked, problems: s.outputsLocked ? ['BUFFERING'] : [] } };
+    return { ...s, programHealth: this.health.program(s, Number(this.config.encoder.fps) || 0) };
+  }
+
+  view() { return { config: this.store.publicConfig(this.config), devices: this.devices(), status: this.fullStatus(), api: this.apiState?.() || { listening: false } }; }
 
   devices() {
     if (this.sim) return this.sim.devices;
@@ -95,6 +109,8 @@ class StreamService extends EventEmitter {
 
   async command(action, payload = {}) {
     if (action === 'save') return this.save(payload);
+    // Delay change via the API: same path as SAVE SETTINGS (stop outputs, discard, refill).
+    if (action === 'setDelay') return this.save({ ...this.store.publicConfig(this.config), delaySeconds: payload.seconds });
     if (this.sim) { await this.sim.command(action, payload); return this.view(); }
     if (!this.engine) throw new Error(this.startupError || 'Real engine unavailable');
     switch (action) {
@@ -108,6 +124,7 @@ class StreamService extends EventEmitter {
       // Recording is LIVE (undelayed) local files; it never feeds a stream destination.
       case 'startRecording': await this.engine.startRecording({ directory: this.recordingDir(), segmentMinutes: this.config.recording?.segmentMinutes || 30 }); break;
       case 'stopRecording': await this.engine.stopRecording(); break;
+      case 'preview': this.engine.preview.setEnabled(Boolean(payload.enabled)); break;
       default: throw new Error('Unknown command');
     }
     this.emit('status', this.status());
@@ -122,6 +139,7 @@ class StreamService extends EventEmitter {
     if (programChanged && this.engine?.encoder.running) await this.engine.stopAllOutputs();
     this.store.save(next);
     this.config = next;
+    this.health.forget(next.destinations.map((d) => d.id));
     if (engineChanged) {
       await this.closeEngines();
       await this.initialize();
@@ -142,6 +160,7 @@ class StreamService extends EventEmitter {
       await this.initialize();
     }
     this.logger.write('settings.saved', { state: next.engine.toUpperCase(), seconds: next.delaySeconds });
+    this.emit('saved');
     this.emit('status', this.status());
     return this.view();
   }

@@ -15,6 +15,9 @@
     "test:media:300": "node test/media/pipeline.e2e.cjs 300 3",
     "test:ui-real": "electron test/media/ui-real.e2e.cjs",
     "test:isolation": "node test/media/isolation.e2e.cjs",
-    "test:recording": "node test/media/recording.e2e.cjs"
+    "test:recording": "node test/media/recording.e2e.cjs",
+    "test:companion": "node test/media/companion.e2e.cjs",
+    "companion:build": "cd companion-module && corepack yarn install && corepack yarn build",
+    "companion:package": "cd companion-module && corepack yarn install && corepack yarn package"
   }
 }
