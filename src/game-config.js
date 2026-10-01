@@ -272,7 +272,7 @@ const ROCKET_LEAGUE_MAP_ART = {
   Wasteland: { url: '/assets/rocket league/maps/wasteland.webp', name: 'wasteland.webp' }
 };
 
-const VALORANT_MAPS = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset'];
+const VALORANT_MAPS = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Summit', 'Sunset'];
 
 export const VALORANT_WEAPON_CATEGORIES = {
   sidearms: ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff'],
@@ -299,6 +299,7 @@ const VALORANT_MAP_ART = {
   Pearl: { url: '/assets/valorant/maps/pearl.webp', name: 'pearl.webp' },
   Range: { url: '/assets/valorant/maps/range.webp', name: 'range.webp' },
   Split: { url: '/assets/valorant/maps/split.webp', name: 'split.webp' },
+  Summit: { url: '/assets/valorant/maps/summit.webp', name: 'summit.webp' },
   Sunset: { url: '/assets/valorant/maps/sunset.webp', name: 'sunset.webp' }
 };
 

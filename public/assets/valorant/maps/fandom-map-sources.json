@@ -96,6 +96,14 @@
     "height": 1080
   },
   {
+    "map": "Summit",
+    "file": "summit.webp",
+    "source": "https://static.wikia.nocookie.net/valorant/images/c/c9/Loading_Screen_Summit.png/revision/latest?cb=20260811003127",
+    "sourceFile": "Loading Screen Summit.png",
+    "width": 1920,
+    "height": 1080
+  },
+  {
     "map": "Sunset",
     "file": "sunset.webp",
     "source": "https://static.wikia.nocookie.net/valorant/images/5/5c/Loading_Screen_Sunset.png/revision/latest?cb=20230829125442",

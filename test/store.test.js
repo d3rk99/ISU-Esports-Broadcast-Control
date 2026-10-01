@@ -120,6 +120,10 @@ test('character choices and shared artwork library are game specific', () => {
   assert.ok(valorant.mapArt.Ascent.url.endsWith('/ascent.webp'));
   assert.ok(valorant.mapArt.Fracture.url.endsWith('/fracture.webp'));
   assert.ok(valorant.mapArt.Range.url.endsWith('/range.webp'));
+  assert.ok(GAME_CONFIGS.valorant.maps.includes('Summit'));
+  for (const map of GAME_CONFIGS.valorant.maps) {
+    assert.ok(existsSync(new URL(`../public${valorant.mapArt[map]?.url}`, import.meta.url)), `${map} is missing map art`);
+  }
   assert.ok(GAME_CONFIGS.valorant.weapons.includes('Vandal'));
   assert.ok(GAME_CONFIGS.valorant.weapons.includes('Operator'));
   assert.ok(GAME_CONFIGS.valorant.weapons.includes('Outlaw'));
