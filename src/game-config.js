@@ -333,6 +333,143 @@ function createValorantWeaponArt() {
   }));
 }
 
+// Official character art bundled with the app (served from public/assets). Smash: smashbros.com
+// fighter renders (Mii Fighters from the official SSBU renders on SmashWiki). VALORANT: Riot's
+// agent full portraits via valorant-api.com. A PNG picked in the roster tab overrides these.
+const SMASH_FIGHTER_ART = {
+  "Mario": 'mario.webp',
+  "Donkey Kong": 'donkey-kong.webp',
+  "Link": 'link.webp',
+  "Samus": 'samus.webp',
+  "Dark Samus": 'dark-samus.webp',
+  "Yoshi": 'yoshi.webp',
+  "Kirby": 'kirby.webp',
+  "Fox": 'fox.webp',
+  "Pikachu": 'pikachu.webp',
+  "Luigi": 'luigi.webp',
+  "Ness": 'ness.webp',
+  "Captain Falcon": 'captain-falcon.webp',
+  "Jigglypuff": 'jigglypuff.webp',
+  "Peach": 'peach.webp',
+  "Daisy": 'daisy.webp',
+  "Bowser": 'bowser.webp',
+  "Ice Climbers": 'ice-climbers.webp',
+  "Sheik": 'sheik.webp',
+  "Zelda": 'zelda.webp',
+  "Dr. Mario": 'dr-mario.webp',
+  "Pichu": 'pichu.webp',
+  "Falco": 'falco.webp',
+  "Marth": 'marth.webp',
+  "Lucina": 'lucina.webp',
+  "Young Link": 'young-link.webp',
+  "Ganondorf": 'ganondorf.webp',
+  "Mewtwo": 'mewtwo.webp',
+  "Roy": 'roy.webp',
+  "Chrom": 'chrom.webp',
+  "Mr. Game & Watch": 'mr-game-and-watch.webp',
+  "Meta Knight": 'meta-knight.webp',
+  "Pit": 'pit.webp',
+  "Dark Pit": 'dark-pit.webp',
+  "Zero Suit Samus": 'zero-suit-samus.webp',
+  "Wario": 'wario.webp',
+  "Snake": 'snake.webp',
+  "Ike": 'ike.webp',
+  "Pokémon Trainer": 'pokemon-trainer.webp',
+  "Diddy Kong": 'diddy-kong.webp',
+  "Lucas": 'lucas.webp',
+  "Sonic": 'sonic.webp',
+  "King Dedede": 'king-dedede.webp',
+  "Olimar": 'olimar.webp',
+  "Lucario": 'lucario.webp',
+  "R.O.B.": 'r-o-b.webp',
+  "Toon Link": 'toon-link.webp',
+  "Wolf": 'wolf.webp',
+  "Villager": 'villager.webp',
+  "Mega Man": 'mega-man.webp',
+  "Wii Fit Trainer": 'wii-fit-trainer.webp',
+  "Rosalina & Luma": 'rosalina-and-luma.webp',
+  "Little Mac": 'little-mac.webp',
+  "Greninja": 'greninja.webp',
+  "Mii Brawler": 'mii-brawler.webp',
+  "Mii Swordfighter": 'mii-swordfighter.webp',
+  "Mii Gunner": 'mii-gunner.webp',
+  "Palutena": 'palutena.webp',
+  "Pac-Man": 'pac-man.webp',
+  "Robin": 'robin.webp',
+  "Shulk": 'shulk.webp',
+  "Bowser Jr.": 'bowser-jr.webp',
+  "Duck Hunt": 'duck-hunt.webp',
+  "Ryu": 'ryu.webp',
+  "Ken": 'ken.webp',
+  "Cloud": 'cloud.webp',
+  "Corrin": 'corrin.webp',
+  "Bayonetta": 'bayonetta.webp',
+  "Inkling": 'inkling.webp',
+  "Ridley": 'ridley.webp',
+  "Simon": 'simon.webp',
+  "Richter": 'richter.webp',
+  "King K. Rool": 'king-k-rool.webp',
+  "Isabelle": 'isabelle.webp',
+  "Incineroar": 'incineroar.webp',
+  "Piranha Plant": 'piranha-plant.webp',
+  "Joker": 'joker.webp',
+  "Hero": 'hero.webp',
+  "Banjo & Kazooie": 'banjo-and-kazooie.webp',
+  "Terry": 'terry.webp',
+  "Byleth": 'byleth.webp',
+  "Min Min": 'min-min.webp',
+  "Steve": 'steve.webp',
+  "Sephiroth": 'sephiroth.webp',
+  "Pyra / Mythra": 'pyra-mythra.webp',
+  "Kazuya": 'kazuya.webp',
+  "Sora": 'sora.webp'
+};
+
+const VALORANT_AGENT_ART = {
+  "Gekko": 'gekko.webp',
+  "Fade": 'fade.webp',
+  "Breach": 'breach.webp',
+  "Deadlock": 'deadlock.webp',
+  "Tejo": 'tejo.webp',
+  "Raze": 'raze.webp',
+  "Chamber": 'chamber.webp',
+  "KAY/O": 'kay-o.webp',
+  "Skye": 'skye.webp',
+  "Cypher": 'cypher.webp',
+  "Sova": 'sova.webp',
+  "Miks": 'miks.webp',
+  "Killjoy": 'killjoy.webp',
+  "Harbor": 'harbor.webp',
+  "Vyse": 'vyse.webp',
+  "Viper": 'viper.webp',
+  "Phoenix": 'phoenix.webp',
+  "Veto": 'veto.webp',
+  "Astra": 'astra.webp',
+  "Brimstone": 'brimstone.webp',
+  "Iso": 'iso.webp',
+  "Clove": 'clove.webp',
+  "Neon": 'neon.webp',
+  "Yoru": 'yoru.webp',
+  "Waylay": 'waylay.webp',
+  "Sage": 'sage.webp',
+  "Reyna": 'reyna.webp',
+  "Omen": 'omen.webp',
+  "Jett": 'jett.webp'
+};
+
+function bundledCharacterArt(table, folder) {
+  return Object.fromEntries(Object.entries(table).map(([name, filename]) => [
+    name,
+    { url: `/assets/${folder}/${filename}`, name: filename, bundled: true }
+  ]));
+}
+
+export function createBundledCharacterArt(gameKey) {
+  if (gameKey === 'smash') return bundledCharacterArt(SMASH_FIGHTER_ART, 'smash/fighters');
+  if (gameKey === 'valorant') return bundledCharacterArt(VALORANT_AGENT_ART, 'valorant/agents');
+  return {};
+}
+
 function createOverwatchCharacterArt() {
   return Object.fromEntries(Object.entries(OVERWATCH_HERO_ART).map(([hero, filename]) => [
     hero,
@@ -486,7 +623,7 @@ export function createGameState(gameKey) {
     },
     rosterFirstSide: 'home',
     showAwayRoster: false,
-    characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : {},
+    characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : createBundledCharacterArt(gameKey),
     weaponArt: gameKey === 'valorant' ? createValorantWeaponArt() : {},
     mapArt: gameKey === 'overwatch'
       ? createOverwatchMapArt()

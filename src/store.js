@@ -55,9 +55,11 @@ export function loadState(storage = window.localStorage) {
           }));
         }
       }
+      // Overwatch art is always the bundled set. Smash/VALORANT: bundled art fills every
+      // character the user hasn't picked their own PNG for.
       parsed.games[game].characterArt = game === 'overwatch'
         ? { ...(parsed.games[game].characterArt || {}), ...fallback.games[game].characterArt }
-        : parsed.games[game].characterArt || {};
+        : { ...(fallback.games[game].characterArt || {}), ...(parsed.games[game].characterArt || {}) };
       parsed.games[game].mapArt = game === 'overwatch' || game === 'valorant' || game === 'rocketleague'
         ? { ...(parsed.games[game].mapArt || {}), ...fallback.games[game].mapArt }
         : parsed.games[game].mapArt || {};

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGameState, createInitialState, GAME_CONFIGS, GAME_ORDER } from '../src/game-config.js';
@@ -108,7 +109,14 @@ test('character choices and shared artwork library are game specific', () => {
     assert.ok(overwatch.mapArt[map].url.startsWith('/assets/overwatch/maps/'));
   }
   const valorant = createGameState('valorant');
-  assert.equal(valorant.characterArt && Object.keys(valorant.characterArt).length, 0);
+  // Every agent and every Smash fighter ships official art, and the file is really in public/.
+  for (const [gameKey, folder] of [['valorant', '/assets/valorant/agents/'], ['smash', '/assets/smash/fighters/']]) {
+    const art = createGameState(gameKey).characterArt;
+    for (const name of GAME_CONFIGS[gameKey].characters) {
+      assert.ok(art[name]?.url.startsWith(folder), `${gameKey}: ${name} is missing bundled art`);
+      assert.ok(existsSync(new URL(`../public${art[name].url}`, import.meta.url)), `${gameKey}: ${art[name].url} file is missing`);
+    }
+  }
   assert.ok(valorant.mapArt.Ascent.url.endsWith('/ascent.webp'));
   assert.ok(valorant.mapArt.Fracture.url.endsWith('/fracture.webp'));
   assert.ok(valorant.mapArt.Range.url.endsWith('/range.webp'));

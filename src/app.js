@@ -4,7 +4,7 @@ import { syncRosterSides } from './rl-roster-sync.js';
 import { requestCarRender } from './rl-auto-car.js';
 import { patchStageStatus } from './stage-status-view.js';
 import { patchHtml } from './dom-patch.js';
-import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName } from './game-config.js';
+import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
@@ -2649,7 +2649,12 @@ root.addEventListener('click', async (event) => {
     const type = button.dataset.imageType;
     const character = button.dataset.character;
     commit(() => {
-      if (type === 'characterArtwork') delete game.characterArt[character];
+      if (type === 'characterArtwork') {
+        // Clearing a custom PNG brings back the bundled official art (Smash/VALORANT) if there is one.
+        const bundled = createBundledCharacterArt(state.selectedGame)[character];
+        if (bundled && !game.characterArt[character]?.bundled) game.characterArt[character] = bundled;
+        else delete game.characterArt[character];
+      }
       else {
         const player = activeRosterCollection(game)[state.activeRoster][index];
         player[type] = '';
