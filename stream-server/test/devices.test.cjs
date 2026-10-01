@@ -65,3 +65,22 @@ test('config: device source needs a device and sane mode values', () => {
   assert.throws(() => validate({ ...c, input: { ...c.input, framerate: '60; rm -rf' } }), /frame rate/);
   assert.throws(() => validate({ ...c, input: { ...c.input, deviceFormat: 'nv12 -i x' } }), /pixel format/);
 });
+
+test('A/V sync like OBS: one dshow graph, device timestamps (no wall-clock restamp), 10 ms audio buffer; manual offset', () => {
+  const a = deviceInput({ videoDevice: 'Blackmagic Web Presenter', audioDevice: 'Blackmagic Web Presenter Audio' }, { platform: 'win32' });
+  assert.deepEqual(a.args.slice(-2), ['-i', 'video=Blackmagic Web Presenter:audio=Blackmagic Web Presenter Audio']);
+  assert.ok(!a.args.includes('-use_wallclock_as_timestamps'));
+  assert.equal(a.args[a.args.indexOf('-audio_buffer_size') + 1], '10');
+  const b = deviceInput({ videoDevice: 'V', audioDevice: 'A', audioBufferMs: 40 }, { platform: 'win32' }).args;
+  assert.equal(b[b.indexOf('-audio_buffer_size') + 1], '40');
+  assert.ok(!deviceInput({ videoDevice: 'V' }, { platform: 'win32' }).args.includes('-audio_buffer_size'));
+  const { ProgramEncoder } = require('../core/media/encoder.cjs');
+  const enc = new ProgramEncoder({ nvencUsable: true, libx264: true, path: 'ffmpeg' });
+  const settings = { mode: 'hardware', resolution: '1280x720', fps: 59.94, videoBitrate: 3000, audioBitrate: 128 };
+  const late = enc.args({ type: 'test', audioOffsetMs: -150 }, settings).join(' ');
+  assert.match(late, /setpts=PTS\+0\.150\/TB,scale/); // audio earlier = picture held back 150 ms
+  const early = enc.args({ type: 'test', audioOffsetMs: 200 }, settings).join(' ');
+  assert.match(early, /asetpts=PTS\+0\.200\/TB,aresample/);
+  assert.doesNotMatch(enc.args({ type: 'test' }, settings).join(' '), /setpts/);
+  assert.throws(() => validate({ ...defaults(), input: { ...defaults().input, audioOffsetMs: 5000 } }), /Audio sync offset/);
+});

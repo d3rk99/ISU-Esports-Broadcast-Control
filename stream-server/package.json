@@ -21,6 +21,7 @@
     "companion:package": "cd companion-module && corepack yarn install && corepack yarn package",
     "test:device": "node test/media/device.e2e.cjs",
     "test:preview": "node test/media/preview.e2e.cjs",
-    "test:preview-latency": "node test/media/preview-latency.e2e.cjs"
+    "test:preview-latency": "node test/media/preview-latency.e2e.cjs",
+    "test:avsync": "node test/media/avsync.e2e.cjs"
   }
 }

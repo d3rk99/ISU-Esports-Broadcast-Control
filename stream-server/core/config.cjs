@@ -26,6 +26,7 @@ function validate(c) {
   if (c.input.videoSize && !/^\d{2,5}x\d{2,5}$/.test(c.input.videoSize)) throw new Error('Capture resolution must look like 1920x1080 (or blank for device default)');
   if (c.input.framerate && !/^\d{1,6}(\.\d{1,4})?(\/\d{1,5})?$/.test(c.input.framerate)) throw new Error('Capture frame rate must be a number like 59.94 or 60000/1001 (or blank)');
   if (c.input.deviceFormat && !/^[a-z0-9_]{1,32}$/i.test(c.input.deviceFormat)) throw new Error('Invalid capture pixel format');
+  for (const [k, lo, hi] of [['audioOffsetMs', -2000, 2000], ['audioBufferMs', 5, 500]]) if (c.input[k] !== undefined && c.input[k] !== '' && !(Number.isFinite(Number(c.input[k])) && Number(c.input[k]) >= lo && Number(c.input[k]) <= hi)) throw new Error(`${k === 'audioOffsetMs' ? 'Audio sync offset' : 'Audio buffer'} must be ${lo} to ${hi} ms`);
   if (c.input.type === 'device' && !c.input.videoDevice) throw new Error('Pick a video capture device before saving');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;

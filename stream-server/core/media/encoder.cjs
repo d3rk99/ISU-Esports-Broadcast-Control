@@ -29,16 +29,19 @@ class ProgramEncoder extends EventEmitter {
       : ['-c:v', 'libx264', '-preset', encoder.x264Preset || 'veryfast', '-tune', 'zerolatency', '-x264-params', 'nal-hrd=cbr'];
     const [width, height] = encoder.resolution.split('x');
     const source = sourceInput(input, encoder);
+    const offsetMs = Math.max(-2000, Math.min(2000, Math.round(Number(input.audioOffsetMs) || 0)));
     return [
       '-hide_banner', '-nostdin', '-loglevel', 'error', '-stats_period', '1', '-progress', 'pipe:2',
       ...source.args,
       '-map', source.video, '-map', source.audio,
-      '-vf', `scale=${width}:${height}:flags=bicubic,fps=${fps},format=yuv420p`,
+      // Manual A/V sync offset (like OBS "Sync Offset"): + = audio later, - = audio earlier (done by
+      // delaying the picture, since audio can't be played before it was captured).
+      '-vf', `${offsetMs < 0 ? `setpts=PTS+${(-offsetMs / 1000).toFixed(3)}/TB,` : ''}scale=${width}:${height}:flags=bicubic,fps=${fps},format=yuv420p`,
       ...video,
       '-b:v', `${v}k`, '-maxrate', `${v}k`, '-bufsize', `${v * 2}k`,
       '-g', String(gop), '-keyint_min', String(gop), '-bf', '0', '-forced-idr', '1', '-sc_threshold', '0',
       '-c:a', 'aac', '-b:a', `${Number(encoder.audioBitrate)}k`, '-ar', '48000', '-ac', '2',
-      '-af', 'aresample=async=1000',
+      '-af', `${offsetMs > 0 ? `asetpts=PTS+${(offsetMs / 1000).toFixed(3)}/TB,` : ''}aresample=async=1000`,
       // FFmpeg's interleaver waits up to max_interleave_delta (default 10 s!) for a lagging stream
       // before writing. With a live camera + generated audio that showed up as a ~10 s late program.
       '-max_interleave_delta', '500000', '-flush_packets', '1',

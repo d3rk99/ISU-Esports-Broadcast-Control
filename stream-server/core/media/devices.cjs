@@ -152,9 +152,14 @@ function deviceInput(input, { platform = process.platform } = {}) {
     if (/:/.test(video) || /:/.test(audio)) throw new Error('DirectShow device names cannot contain ":"; pick the device again from the list');
     if (fmt) opts.push(COMPRESSED.has(fmt) ? '-vcodec' : '-pixel_format', fmt);
     const target = audio ? `video=${video}:audio=${audio}` : `video=${video}`;
-    // Live capture = no probing buffer and timestamps from the wall clock. DirectShow virtual cameras
-    // (OBS Virtual Camera) send odd timestamps that otherwise make FFmpeg hold frames back.
-    const args = ['-f', 'dshow', '-rtbufsize', '256M', '-thread_queue_size', '1024', '-fflags', 'nobuffer', '-use_wallclock_as_timestamps', '1', '-probesize', '1M', '-analyzeduration', '0', ...opts, '-i', target];
+    // A/V sync, the way OBS's win-dshow/libdshowcapture does it:
+    //  - video + audio in ONE dshow graph (same reference clock), never two inputs;
+    //  - each sample keeps the device's own capture timestamp (NOT arrival time: arrival-time
+    //    stamping made audio late by one audio buffer);
+    //  - small audio buffers: OBS asks the pin for 10 ms (SetAudioBuffering). FFmpeg's default is the
+    //    device default, typically 500 ms+, so audio arrived in big late lumps.
+    const audioBufferMs = Math.max(5, Math.min(500, Number(input.audioBufferMs) || 10));
+    const args = ['-f', 'dshow', '-rtbufsize', '256M', '-thread_queue_size', '1024', '-fflags', 'nobuffer', '-probesize', '1M', '-analyzeduration', '0', ...(audio ? ['-audio_buffer_size', String(audioBufferMs)] : []), ...opts, '-i', target];
     return audio ? { args, video: '0:v:0', audio: '0:a:0' } : { args: [...args, ...silence], video: '0:v:0', audio: '1:a:0' };
   }
   if (backend === 'v4l2') {
