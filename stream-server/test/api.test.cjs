@@ -70,8 +70,24 @@ test('health: CONNECTED but no bytes moving = STALLED; flowing = HEALTHY; reconn
   const lag = h.output({ id: 'a', state: 'CONNECTED', sentBytes: 6e6, droppedChunks: 1 });
   assert.equal(lag.health, 'LAGGING');
   assert.equal(h.output({ id: 'a', state: 'RECONNECTING', sentBytes: 6e6, droppedChunks: 1 }).health, 'FAILED');
-  const p = h.program({ encoder: 'ENCODING', telemetry: { fps: 59.9, droppedFrames: 0 }, buffer: { ready: true }, preview: { running: true, audioLive: true, silentSeconds: 12 } }, 59.94);
+  const p = h.program({ encoder: 'ENCODING', uptime: 60, telemetry: { fps: 59.9, droppedFrames: 0 }, buffer: { ready: true }, preview: { running: true, audioLive: true, silentSeconds: 12 } }, 59.94);
   assert.deepEqual(p.problems, ['SILENT']);
+  assert.deepEqual(p.severe, []); // silence alone is a warning, not a red PROGRAM PROBLEM
+});
+
+test('program health: no false PROGRAM PROBLEM from startup fps, a stray dropped frame, or preview off', () => {
+  let now = 0; const h = new HealthTracker(() => now);
+  const base = (over) => ({ encoder: 'ENCODING', uptime: 60, telemetry: { fps: 59.9, droppedFrames: 0 }, buffer: { ready: true }, preview: { enabled: true, running: true, audioLive: true, silentSeconds: 0 }, ...over });
+  // just restarted: FFmpeg's average fps is still climbing
+  assert.deepEqual(h.program(base({ uptime: 2, telemetry: { fps: 20, droppedFrames: 0 } }), 59.94).problems, []);
+  // a capture card drops 2 frames: fine. A burst of 60 within 30 s: real problem.
+  assert.deepEqual(h.program(base({ telemetry: { fps: 59.9, droppedFrames: 2 } }), 59.94).severe, []);
+  now += 5000; assert.deepEqual(h.program(base({ telemetry: { fps: 59.9, droppedFrames: 62 } }), 59.94).severe, ['DROPPED_FRAMES']);
+  now += 31000; assert.deepEqual(h.program(base({ telemetry: { fps: 59.9, droppedFrames: 62 } }), 59.94).severe, []); // burst aged out
+  // preview turned off: audio can't be judged, so it's not reported as NO_AUDIO
+  assert.deepEqual(h.program(base({ telemetry: { fps: 59.9, droppedFrames: 62 }, preview: { enabled: false, running: false, audioLive: false } }), 59.94).problems, []);
+  // a real input with no audio track at all: still red
+  assert.deepEqual(h.program(base({ telemetry: { fps: 59.9, droppedFrames: 62 }, preview: { enabled: true, running: true, audioLive: false } }), 59.94).severe, ['NO_AUDIO']);
 });
 
 test('variables: all_enabled_healthy ignores disabled outputs and needs a healthy program', () => {

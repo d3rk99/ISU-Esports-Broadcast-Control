@@ -45,15 +45,30 @@ class HealthTracker {
     const problems = [];
     if (s.encoder !== 'ENCODING') problems.push('ENCODER');
     else {
-      if ((s.telemetry?.fps || 0) < targetFps * 0.9) problems.push('LOW_FPS');
-      if (this.dropped.at && t - this.dropped.at < WINDOW_MS) problems.push('DROPPED_FRAMES');
+      // FFmpeg's fps is an average since start; give it a few seconds to settle after a (re)start.
+      const settled = (s.uptime || 0) >= 8;
+      if (settled && (s.telemetry?.fps || 0) < targetFps * 0.9) problems.push('LOW_FPS');
+      // Only a burst of drops counts. Capture cards/webcams drop a frame now and then (clock drift)
+      // and FFmpeg's drop counter never goes down, so one drop used to light the badge for 30 s.
+      // Samples of the drop counter over the last WINDOW_MS; recent drops = now - oldest sample.
+      this.dropHistory = (this.dropHistory || []).filter((d) => t - d.at < WINDOW_MS && d.frames <= frames);
+      this.dropHistory.push({ frames, at: t });
+      const recentDrops = frames - this.dropHistory[0].frames;
+      if (settled && recentDrops > Math.max(5, targetFps * 0.5)) problems.push('DROPPED_FRAMES');
       const p = s.preview;
-      if (p?.running && p.audioLive === false) problems.push('NO_AUDIO');
-      else if (p?.silentSeconds >= SILENCE_S) problems.push('SILENT');
+      // Audio checks need the monitor's meter feed. With the preview turned off they're unknowable,
+      // not a problem. Silence is reported (amber in Companion) but doesn't turn the badge red:
+      // a quiet room / muted ATEM between segments is a normal state, unlike NO audio track at all.
+      if (p?.enabled !== false && p?.running && settled) {
+        if (p.audioLive === false) problems.push('NO_AUDIO');
+        else if (p.silentSeconds >= SILENCE_S) problems.push('SILENT');
+      }
       if (s.telemetry?.avSyncWarning) problems.push('NO_AUDIO');
     }
     if (!s.buffer?.ready) problems.push('BUFFERING');
-    return { healthy: !problems.length, problems: [...new Set(problems)] };
+    const list = [...new Set(problems)];
+    const WARN_ONLY = new Set(['SILENT', 'BUFFERING']);
+    return { healthy: !list.length, problems: list, severe: list.filter((x) => !WARN_ONLY.has(x)) };
   }
 
   forget(ids) { for (const id of this.outputs.keys()) if (!ids.includes(id)) this.outputs.delete(id); }

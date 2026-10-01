@@ -13,7 +13,9 @@ const EOI = Buffer.from([0xff, 0xd9]);
 const AUDIO_RATE = 16000;
 const WINDOW_SAMPLES = AUDIO_RATE / 10; // 100 ms meter windows
 const SILENCE_DB = -60;
-const MAX_BACKLOG_BYTES = 3 * 1024 * 1024; // ~3-4 s of a 6 Mbps program; beyond that the preview resyncs
+// Max video the preview may lag behind live before it jumps to the newest keyframe (~1 s at 6 Mbps).
+// Kept small so the monitor stays near-live; the stream outputs are never affected.
+const MAX_BACKLOG_BYTES = 768 * 1024;
 
 // Byte offset of the first video packet that STARTS a new frame (PES start), or -1.
 function findFrameStart(packets, videoPid) {
@@ -53,7 +55,11 @@ class Preview extends EventEmitter {
   }
 
   spawnDecoder() {
-    const args = ['-hide_banner', '-nostdin', '-loglevel', 'error', '-threads', '0', '-fflags', '+discardcorrupt', '-flags', '-output_corrupt', '-f', 'mpegts', '-i', 'pipe:0',
+    const args = ['-hide_banner', '-nostdin', '-loglevel', 'error', '-threads', '0',
+      // Low latency like OBS's monitor: no probing/analysis buffer (the stream layout is already known,
+      // it's our own encoder) and no decoder reordering delay. This took ~4.5 s before the first frame.
+      '-probesize', '32', '-analyzeduration', '0', '-fflags', 'nobuffer+discardcorrupt', '-flags', 'low_delay', '-flags', '-output_corrupt',
+      '-f', 'mpegts', '-i', 'pipe:0',
       '-map', '0:v:0', '-an', '-vf', `fps=${this.fps},scale=${this.width}:-2:flags=fast_bilinear`, '-c:v', 'mjpeg', '-q:v', '5', '-f', 'image2pipe', 'pipe:1',
       '-map', '0:a:0?', '-vn', '-ac', '2', '-ar', String(AUDIO_RATE), '-c:a', 'pcm_s16le', '-f', 's16le', 'pipe:3'];
     const child = this.spawn(this.ffmpegPath, args, { stdio: ['pipe', 'pipe', 'ignore', 'pipe'], windowsHide: true });

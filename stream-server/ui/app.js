@@ -141,9 +141,10 @@ const PROBLEM_TEXT = { ENCODER: 'encoder stopped', LOW_FPS: 'low frame rate', DR
 function renderHealth(s) {
   const h = s.programHealth || { healthy: false, problems: [] };
   const badge = $('healthBadge');
-  const onlyBuffering = h.problems.length === 1 && h.problems[0] === 'BUFFERING';
-  badge.textContent = h.healthy ? 'PROGRAM HEALTHY' : onlyBuffering ? 'BUFFERING' : 'PROGRAM PROBLEM';
-  badge.className = `health ${h.healthy ? 'ok' : onlyBuffering ? 'warn' : 'bad'}`;
+  const severe = h.severe || h.problems.filter((p) => p !== 'BUFFERING');
+  const onlyBuffering = !severe.length && h.problems.includes('BUFFERING');
+  badge.textContent = h.healthy ? 'PROGRAM HEALTHY' : severe.length ? `PROGRAM PROBLEM: ${severe.map((p) => PROBLEM_TEXT[p] || p).join(', ').toUpperCase()}` : onlyBuffering ? 'BUFFERING' : 'CHECK AUDIO (SILENT)';
+  badge.className = `health ${h.healthy ? 'ok' : severe.length ? 'bad' : 'warn'}`;
   $('healthText').textContent = h.problems.length ? `Problems: ${h.problems.map((p) => PROBLEM_TEXT[p] || p).join(', ')}` : 'Encoder, audio and delay all healthy.';
   if (!s.preview?.running || !s.preview?.videoLive) { $('previewImg').closest('.preview-box').classList.remove('live'); }
   if (!s.preview?.audioLive) setMeters({ peak: [-90, -90], rms: [-90, -90] });
