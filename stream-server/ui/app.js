@@ -22,6 +22,7 @@ function renderConfig(view) {
   $('apiEnabled').checked = api.enabled; $('apiPort').value = api.port; $('apiLan').checked = api.lan; $('apiRegenerate').checked = false; $('apiKey').hidden = true;
   renderApi(view.api);
   $('recordDir').value = config.recording?.directory || ''; $('recordSegment').value = config.recording?.segmentMinutes || 30;
+  captureDevices = view.devices?.capture || captureDevices; renderDevices();
   syncInputFields();
   $('destinations').replaceChildren(...config.destinations.map(destinationRow));
   dirty = false; renderStatus(view.status);
@@ -40,12 +41,56 @@ function destinationRow(d) {
   const clear = element('input', { type: 'checkbox' }); clear.dataset.field = 'clearKey'; actions.append(field('Clear saved key', clear));
   const remove = element('button', { type: 'button', textContent: 'Remove' }); remove.onclick = () => { row.remove(); markDirty(); }; actions.append(remove); row.append(actions); return row;
 }
+let captureDevices = null;
+let deviceModes = [];
+const option = (value, text) => element('option', { value, textContent: text });
+// Device lists from the server. Keeps the saved choice even if it's unplugged right now, so
+// opening the app with a camera unplugged never silently changes the config.
+function renderDevices() {
+  const saved = config?.input || {};
+  const cap = captureDevices || { video: [], audio: [] };
+  const vids = cap.video.map((d) => option(d.id, d.name));
+  if (saved.videoDevice && !cap.video.some((d) => d.id === saved.videoDevice)) vids.unshift(option(saved.videoDevice, `${saved.videoDevice} (not found)`));
+  $('videoDevice').replaceChildren(option('', vids.length ? 'Choose a device…' : 'No devices found · Refresh'), ...vids);
+  $('videoDevice').value = saved.videoDevice || '';
+  const auds = cap.audio.map((d) => option(d.id, d.name));
+  if (saved.audioDevice && !cap.audio.some((d) => d.id === saved.audioDevice)) auds.unshift(option(saved.audioDevice, `${saved.audioDevice} (not found)`));
+  $('audioDevice').replaceChildren(option('', 'None (silent audio)'), ...auds);
+  $('audioDevice').value = saved.audioDevice || '';
+  renderModes();
+  $('deviceNote').textContent = cap.error ? `Device scan: ${cap.error}` : `${cap.video.length} video / ${cap.audio.length} audio device(s) found${cap.backend ? ` via ${cap.backend}` : ''}. Webcams, capture cards, OBS Virtual Camera and DeckLink all appear here.`;
+}
+function modeValue(m) { return [m.size, m.fps, m.format].join('|'); }
+function renderModes() {
+  const saved = config?.input || {};
+  const current = [saved.videoSize || '', saved.framerate || '', saved.deviceFormat || ''].join('|');
+  const opts = deviceModes.map((m) => option(modeValue(m), m.label));
+  if (current !== '||' && !deviceModes.some((m) => modeValue(m) === current)) opts.unshift(option(current, current.split('|').filter(Boolean).join(' · ')));
+  $('deviceMode').replaceChildren(option('', 'Device default'), ...opts);
+  $('deviceMode').value = current === '||' ? '' : current;
+}
+async function scanDevices() {
+  $('deviceNote').textContent = 'Scanning devices…';
+  const result = await window.stream.command('scanDevices');
+  if (!result.ok) { $('deviceNote').textContent = result.error; return; }
+  captureDevices = result.view.devices.capture; renderDevices();
+}
+async function loadModes() {
+  const device = $('videoDevice').value;
+  if (!device) { $('deviceNote').textContent = 'Pick a video device first.'; return; }
+  $('deviceNote').textContent = 'Asking the device for its modes…';
+  const result = await window.stream.command('deviceModes', { device });
+  if (!result.ok) { $('deviceNote').textContent = result.error; return; }
+  deviceModes = result.view.modes || [];
+  const keep = $('deviceMode').value; renderModes(); if ([...$('deviceMode').options].some((o) => o.value === keep)) $('deviceMode').value = keep;
+  $('deviceNote').textContent = deviceModes.length ? `${deviceModes.length} mode(s). Pick one, or Device default.` : 'The device did not list its modes (it may be busy in another app). Device default still works.';
+}
 function syncInputFields() {
   for (const el of document.querySelectorAll('[data-input]')) el.hidden = el.dataset.input !== $('inputType').value;
   $('simLab').hidden = $('engine').value !== 'simulation';
 }
 function collect() {
-  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, api: { enabled: $('apiEnabled').checked, port: Number($('apiPort').value) || 3180, lan: $('apiLan').checked, regenerateKey: $('apiRegenerate').checked }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim() }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
+  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, api: { enabled: $('apiEnabled').checked, port: Number($('apiPort').value) || 3180, lan: $('apiLan').checked, regenerateKey: $('apiRegenerate').checked }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim(), videoDevice: $('videoDevice').value, audioDevice: $('audioDevice').value, videoSize: $('deviceMode').value.split('|')[0] || '', framerate: $('deviceMode').value.split('|')[1] || '', deviceFormat: $('deviceMode').value.split('|')[2] || '' }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
     const d = { id: row.dataset.id }; for (const input of row.querySelectorAll('[data-field]')) d[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value; return d;
   }) };
 }
@@ -144,6 +189,9 @@ async function command(action, payload) {
 $('settings').addEventListener('input', markDirty);
 $('settings').addEventListener('change', (event) => { if (event.target.id === 'inputType' || event.target.id === 'engine') syncInputFields(); });
 $('settings').addEventListener('submit', event => { event.preventDefault(); command('save', collect()); });
+$('scanDevices').onclick = scanDevices;
+$('loadModes').onclick = loadModes;
+$('videoDevice').addEventListener('change', () => { deviceModes = []; $('deviceMode').replaceChildren(option('', 'Device default')); });
 $('add').onclick = () => { $('destinations').append(destinationRow({ id: crypto.randomUUID(), name: 'Custom RTMP', protocol: 'RTMPS', enabled: true })); markDirty(); };
 for (const action of ['startAll', 'stopAll', 'signal', 'reset']) $(action).onclick = () => command(action);
 $('recordToggle').onclick = () => command(currentStatus?.recording && ['RECORDING', 'WAITING_KEYFRAME'].includes(currentStatus.recording.state) ? 'stopRecording' : 'startRecording');

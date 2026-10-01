@@ -4,17 +4,20 @@ const path = require('node:path');
 const { SimStreamService } = require('./sim-service.cjs');
 const { RealEngine } = require('./media/engine.cjs');
 const { findFfmpeg } = require('./media/ffmpeg.cjs');
+const { listDevices, listModes } = require('./media/devices.cjs');
 const { HealthTracker } = require('./health.cjs');
 
 // Transport-independent command facade used by the UI and the local API. The engine is chosen
 // explicitly by config.engine; a real-mode failure is reported, never swapped for simulation.
 class StreamService extends EventEmitter {
-  constructor(store, logger, { dataDir = '', findFfmpegFn = findFfmpeg } = {}) {
+  constructor(store, logger, { dataDir = '', findFfmpegFn = findFfmpeg, listDevicesFn = listDevices, listModesFn = listModes } = {}) {
     super();
     this.store = store;
     this.logger = logger;
     this.dataDir = dataDir;
     this.findFfmpeg = findFfmpegFn;
+    this.listDevicesFn = listDevicesFn;
+    this.listModesFn = listModesFn;
     this.config = store.load();
     this.sim = null;
     this.engine = null;
@@ -38,6 +41,9 @@ class StreamService extends EventEmitter {
       this.emit('status', this.status());
       return;
     }
+    // List capture devices before the program grabs one (an open device can't list its modes).
+    try { await this.scanDevices(); this.logger.write('device.discovery', { count: this.captureDevices.video.length }); }
+    catch { this.captureDevices = { backend: '', video: [], audio: [], error: 'Device scan failed' }; }
     this.engine = new RealEngine({ ffmpeg: this.ffmpeg, storageDir: this.storageDir(), credentials: this.store.credentials, logger: this.logger });
     this.engine.on('status', () => this.emit('status', this.status()));
     // Preview frames/meters go out as their own events: big JPEGs never ride the status object.
@@ -104,13 +110,29 @@ class StreamService extends EventEmitter {
 
   devices() {
     if (this.sim) return this.sim.devices;
-    return { video: ['Test pattern (clock + tone)', 'Media file', 'DeckLink SDI'], audio: ['Embedded / file audio'], decklink: Boolean(this.ffmpeg?.decklink) };
+    return { video: ['Test pattern (clock + tone)', 'Media file', 'DeckLink SDI', 'Video capture device'], audio: ['Embedded / file audio'], decklink: Boolean(this.ffmpeg?.decklink), capture: this.captureDevices || null };
+  }
+
+  // Webcams / capture cards / virtual cameras. Read-only listing; never interrupts the program.
+  async scanDevices() {
+    if (!this.ffmpeg) throw new Error(this.startupError || 'FFmpeg is not available, so devices cannot be listed');
+    this.captureDevices = { ...(await this.listDevicesFn(this.ffmpeg.path)), scannedAt: Date.now() };
+    return this.captureDevices;
+  }
+
+  async deviceModes(device) {
+    if (!this.ffmpeg) throw new Error('FFmpeg is not available');
+    if (typeof device !== 'string' || !device || device.length > 1024) throw new Error('Pick a video device first');
+    // A device already in use (by this program or another app) may refuse to list its modes.
+    return this.listModesFn(this.ffmpeg.path, device);
   }
 
   async command(action, payload = {}) {
     if (action === 'save') return this.save(payload);
     // Delay change via the API: same path as SAVE SETTINGS (stop outputs, discard, refill).
     if (action === 'setDelay') return this.save({ ...this.store.publicConfig(this.config), delaySeconds: payload.seconds });
+    if (action === 'scanDevices') { await this.scanDevices(); return this.view(); }
+    if (action === 'deviceModes') return { ...this.view(), modes: await this.deviceModes(payload.device) };
     if (this.sim) { await this.sim.command(action, payload); return this.view(); }
     if (!this.engine) throw new Error(this.startupError || 'Real engine unavailable');
     switch (action) {

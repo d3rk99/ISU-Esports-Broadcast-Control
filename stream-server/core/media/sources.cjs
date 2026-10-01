@@ -1,4 +1,5 @@
 'use strict';
+const { deviceInput } = require('./devices.cjs');
 // Capture sources expressed as FFmpeg input arguments. The encoder process owns capture, so
 // raw frames never pass through Node or Electron.
 
@@ -43,13 +44,18 @@ function decklinkSourceArgs({ device, formatCode }) {
   return args;
 }
 
-function sourceArgs(input, encoder) {
+// Every source = FFmpeg input args + which input streams carry the program video and audio.
+function sourceInput(input, encoder, options = {}) {
   switch (input.type) {
-    case 'test': return testSourceArgs(encoder);
-    case 'file': return fileSourceArgs(input);
-    case 'decklink': return decklinkSourceArgs(input);
+    case 'test': return { args: testSourceArgs(encoder), video: '0:v:0', audio: '1:a:0' };
+    case 'file': return { args: fileSourceArgs(input), video: '0:v:0', audio: '0:a:0?' };
+    case 'decklink': return { args: decklinkSourceArgs(input), video: '0:v:0', audio: '0:a:0?' };
+    // Webcams, capture cards, OBS Virtual Camera... (DirectShow on Windows, v4l2 on Linux).
+    case 'device': return deviceInput(input, options);
     default: throw new Error(`Unknown input type: ${input.type}`);
   }
 }
 
-module.exports = { sourceArgs, rationalFps, parseResolution };
+function sourceArgs(input, encoder, options) { return sourceInput(input, encoder, options).args; }
+
+module.exports = { sourceInput, sourceArgs, rationalFps, parseResolution };

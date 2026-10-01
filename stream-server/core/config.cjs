@@ -13,7 +13,7 @@ function migrate(c) {
 function validate(c) {
   if (c?.version !== 2 || !c.input || !c.encoder || !Array.isArray(c.destinations)) throw new Error('Invalid configuration schema');
   if (!['real', 'simulation'].includes(c.engine)) throw new Error('Engine must be real or simulation');
-  if (!['test', 'file', 'decklink'].includes(c.input.type)) throw new Error('Input type must be test, file or decklink');
+  if (!['test', 'file', 'decklink', 'device'].includes(c.input.type)) throw new Error('Input type must be test, file, decklink or device');
   if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
   if (c.recording !== undefined && (typeof c.recording !== 'object' || typeof c.recording.directory !== 'string' || c.recording.directory.length > 1024 || !(Number.isFinite(c.recording.segmentMinutes) && c.recording.segmentMinutes >= 1 && c.recording.segmentMinutes <= 720))) throw new Error('Invalid recording settings (segment 1-720 minutes)');
   if (c.api !== undefined) {
@@ -21,7 +21,11 @@ function validate(c) {
     // 3174-3178 belong to the Broadcast Controller / bridges; never share a listener with them.
     if (typeof a !== 'object' || typeof a.enabled !== 'boolean' || typeof a.lan !== 'boolean' || typeof a.key !== 'string' || a.key.length > 16000 || !Number.isInteger(a.port) || a.port < 1024 || a.port > 65535 || [3174, 3175, 3176, 3177, 3178].includes(a.port)) throw new Error('Invalid Companion API settings (port 1024-65535, not 3174-3178)');
   }
-  for (const k of ['file', 'device', 'formatCode']) if (c.input[k] !== undefined && (typeof c.input[k] !== 'string' || c.input[k].length > 1024)) throw new Error('Invalid input setting');
+  for (const k of ['file', 'device', 'formatCode', 'videoDevice', 'audioDevice', 'deviceFormat', 'videoSize', 'framerate']) if (c.input[k] !== undefined && (typeof c.input[k] !== 'string' || c.input[k].length > 1024)) throw new Error('Invalid input setting');
+  if (c.input.videoSize && !/^\d{2,5}x\d{2,5}$/.test(c.input.videoSize)) throw new Error('Capture resolution must look like 1920x1080 (or blank for device default)');
+  if (c.input.framerate && !/^\d{1,6}(\.\d{1,4})?(\/\d{1,5})?$/.test(c.input.framerate)) throw new Error('Capture frame rate must be a number like 59.94 or 60000/1001 (or blank)');
+  if (c.input.deviceFormat && !/^[a-z0-9_]{1,32}$/i.test(c.input.deviceFormat)) throw new Error('Invalid capture pixel format');
+  if (c.input.type === 'device' && !c.input.videoDevice) throw new Error('Pick a video capture device before saving');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;
   if (!num(c.delaySeconds, 0, 86400) || !str(c.input.video) || !str(c.input.audio)) throw new Error('Invalid input or delay (0–86400 seconds)');

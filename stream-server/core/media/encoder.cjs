@@ -1,7 +1,7 @@
 'use strict';
 const { spawn } = require('node:child_process');
 const { EventEmitter } = require('node:events');
-const { sourceArgs, rationalFps } = require('./sources.cjs');
+const { sourceInput, rationalFps } = require('./sources.cjs');
 const { TsReader, PACKET } = require('./ts.cjs');
 
 // THE program encoder: exactly one FFmpeg process captures the input and encodes H.264/AAC
@@ -28,10 +28,11 @@ class ProgramEncoder extends EventEmitter {
       ? ['-c:v', 'h264_nvenc', '-preset', 'p5', '-tune', 'll', '-rc', 'cbr']
       : ['-c:v', 'libx264', '-preset', encoder.x264Preset || 'veryfast', '-tune', 'zerolatency', '-x264-params', 'nal-hrd=cbr'];
     const [width, height] = encoder.resolution.split('x');
+    const source = sourceInput(input, encoder);
     return [
       '-hide_banner', '-nostdin', '-loglevel', 'error', '-stats_period', '1', '-progress', 'pipe:2',
-      ...sourceArgs(input, encoder),
-      '-map', '0:v:0', '-map', input.type === 'test' ? '1:a:0' : '0:a:0?',
+      ...source.args,
+      '-map', source.video, '-map', source.audio,
       '-vf', `scale=${width}:${height}:flags=bicubic,fps=${fps},format=yuv420p`,
       ...video,
       '-b:v', `${v}k`, '-maxrate', `${v}k`, '-bufsize', `${v * 2}k`,

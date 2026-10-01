@@ -18,6 +18,7 @@
     "test:recording": "node test/media/recording.e2e.cjs",
     "test:companion": "node test/media/companion.e2e.cjs",
     "companion:build": "cd companion-module && corepack yarn install && corepack yarn build",
-    "companion:package": "cd companion-module && corepack yarn install && corepack yarn package"
+    "companion:package": "cd companion-module && corepack yarn install && corepack yarn package",
+    "test:device": "node test/media/device.e2e.cjs"
   }
 }
