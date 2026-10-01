@@ -32,6 +32,16 @@ app.whenReady().then(async () => {
     const data = fs.readFileSync(background).toString('base64');
     await win.webContents.executeJavaScript(`document.body.style.background = 'url(data:image/png;base64,${data}) center/1920px 1080px no-repeat'`);
   }
+  if (process.env.FRAMES) {
+    // Animation strip: pause every animation at each time (ms) and capture it.
+    for (const ms of process.env.FRAMES.split(',').map(Number)) {
+      await win.webContents.executeJavaScript(`document.getAnimations().forEach((a) => { a.pause(); a.currentTime = ${ms}; })`);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      fs.writeFileSync(outFile.replace(/\.png$/, `-${ms}.png`), (await win.webContents.capturePage()).toPNG());
+    }
+    app.exit(0);
+    return;
+  }
   await new Promise((resolve) => setTimeout(resolve, 2500));
   fs.writeFileSync(outFile, (await win.webContents.capturePage()).toPNG());
   app.exit(0);

@@ -1848,7 +1848,6 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
   grid-template-rows: 86px 14px;
   color: #f7fbff;
   transform: translateX(-50%);
-  animation: sm-card-in 700ms cubic-bezier(.2,.82,.18,1) both;
 }
 .smash-scorecard[hidden] { display: none; }
 .sm-panel {
@@ -2038,4 +2037,32 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
 .sm-pips i { flex: 1 1 0; min-width: 0; height: 8px; background: rgba(255,255,255,.16); transform: skewX(-20deg); }
 .sm-pips--home i.on { background: var(--home-color); box-shadow: 0 0 6px color-mix(in srgb, var(--home-color) 70%, transparent); }
 .sm-pips--away i.on { background: var(--away-color); box-shadow: 0 0 6px color-mix(in srgb, var(--away-color) 70%, transparent); }
-@keyframes sm-card-in { from { opacity: 0; transform: translate(-50%, -30px); } to { opacity: 1; transform: translate(-50%, 0); } }
+/* Intro, same feel as the VALORANT / Rocket League cards. Plays when the overlay loads or
+   switches to Smash (the card is re-shown, which restarts the animations):
+   1. the centre core (CREW BATTLE / set score) drops in on its own,
+   2. the stock boxes slide out from behind it,
+   3. the name panels sweep out,
+   4. the logos snap in at the ends,
+   5. the stock meters wipe across from the centre. */
+.smash-scorecard > * { animation-fill-mode: both; animation-timing-function: cubic-bezier(.2,.82,.18,1); }
+.sm-core { z-index: 4; animation: sm-drop 560ms both; }
+.sm-core > * { animation: sm-fade 300ms 420ms both; }
+.sm-stocks { z-index: 3; }
+.sm-stocks--home { animation: sm-out-left 460ms 700ms both; --sm-from: calc(var(--sm-stock-track) + 0px); }
+.sm-stocks--away { animation: sm-out-right 460ms 700ms both; --sm-from: calc(var(--sm-stock-track) * -1); }
+.sm-name { z-index: 2; }
+.sm-name--home { animation: sm-out-left 520ms 1020ms both; --sm-from: calc(var(--sm-name-track) + var(--sm-stock-track)); }
+.sm-name--away { animation: sm-out-right 520ms 1020ms both; --sm-from: calc((var(--sm-name-track) + var(--sm-stock-track)) * -1); }
+.sm-name > * { animation: sm-fade 320ms 1380ms both; }
+.sm-logo { z-index: 1; }
+.sm-logo--home { animation: sm-logo-in 420ms 1420ms both; }
+.sm-logo--away { animation: sm-logo-in 420ms 1420ms both; }
+.sm-pips--home { animation: sm-wipe-left 560ms 1760ms both; }
+.sm-pips--away { animation: sm-wipe-right 560ms 1760ms both; }
+@keyframes sm-drop { 0% { opacity: 0; transform: translateY(-140%); } 70% { opacity: 1; transform: translateY(6%); } 100% { opacity: 1; transform: translateY(0); } }
+@keyframes sm-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sm-out-left { from { opacity: 0; transform: translateX(var(--sm-from)); } 20% { opacity: 1; } to { opacity: 1; transform: translateX(0); } }
+@keyframes sm-out-right { from { opacity: 0; transform: translateX(var(--sm-from)); } 20% { opacity: 1; } to { opacity: 1; transform: translateX(0); } }
+@keyframes sm-logo-in { from { opacity: 0; transform: scale(.6); filter: brightness(2.2); } 60% { opacity: 1; transform: scale(1.06); } to { opacity: 1; transform: scale(1); filter: none; } }
+@keyframes sm-wipe-left { from { opacity: 0; clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); } to { opacity: 1; clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%); } }
+@keyframes sm-wipe-right { from { opacity: 0; clip-path: polygon(0 0, 0 0, 0 100%, 0 100%); } to { opacity: 1; clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); } }
