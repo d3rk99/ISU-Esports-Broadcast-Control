@@ -12,7 +12,7 @@
 </head>
 <body>
   <div id="stage"></div>
-  <script>globalThis.RL_CAR_DEBUG = true;</script>
+  <script>globalThis.RL_CAR_DEBUG = true; globalThis.RL_NO_ENV = new URLSearchParams(location.search).has("noenv");</script>
   <script type="module">
     import { createCarRenderer } from '/src/rl-car-renderer.js';
     import { buildAssetIndex, composeCar } from '/src/rl-car-compose.js';

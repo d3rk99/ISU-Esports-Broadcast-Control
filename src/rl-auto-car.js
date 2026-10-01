@@ -5,6 +5,7 @@
 import { createCarRenderer } from './rl-car-renderer.js';
 import { buildAssetIndex, composeCar } from './rl-car-compose.js';
 import { liveLoadoutKey } from './rl-roster-sync.js';
+import { findFinish } from './rl-car-finish.js';
 
 let packPromise = null;
 let renderer = null;
@@ -44,7 +45,10 @@ function ensureRenderer() {
 // job: { key, player: { id, name, loadout, teamNum }, teams, paint }
 // Resolves { url, name, loadoutKey } or throws.
 async function renderOne(job) {
-  const { index } = await assetPack();
+  const { pack, index } = await assetPack();
+  const finishes = pack.finishes || [];
+  const fromFeed = (job.player.loadout || []).map((item) => findFinish(finishes, item)).find(Boolean);
+  const paintFinish = fromFeed || finishes.find((f) => /^glossy$/i.test(f.displayName)) || null;
   const car = composeCar({ Loadout: job.player.loadout, TeamNum: job.player.teamNum }, job.teams || [], index, { paint: job.paint || null });
   if (!car.body) throw Error(`No asset for body "${job.player.loadout?.[0] || '?'}"`);
   const [body, decal, wheel] = await Promise.all([details('body', car.body), details('decal', car.decal), details('wheel', car.wheel)]);
@@ -59,7 +63,9 @@ async function renderOne(job) {
     materialBindings: body.materialBindings || {},
     wheelAnchors: body.wheelAnchors,
     decal,
-    wheel
+    wheel,
+    paintFinish,
+    accentFinish: paintFinish
   });
   if (!ok) throw Error('Render was cancelled.');
   const image = await window.isuDesktop?.saveCarRender?.(r.png());

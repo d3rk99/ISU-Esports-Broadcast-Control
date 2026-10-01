@@ -559,7 +559,7 @@ function materialBindingsForAsset(pack, asset, paths = null) {
 
 function rocketLeagueLoadoutPack() {
   const pack = findRocketLeagueLoadoutPack();
-  if (!pack) return { available: false, bodies: [], wheels: [], decals: [], error: 'rl-loadout-assets.zip was not found in the assests folder.' };
+  if (!pack) return { available: false, bodies: [], wheels: [], decals: [], finishes: [], error: 'rl-loadout-assets.zip was not found in the assests folder.' };
   if (rocketLeagueLoadoutPackCache?.root === pack.root && rocketLeagueLoadoutPackCache?.type === pack.type) return rocketLeagueLoadoutPackCache.value;
   try {
     const manifest = JSON.parse(readRocketLeaguePackFile(pack, 'manifest.json').toString('utf8'));
@@ -622,6 +622,26 @@ function rocketLeagueLoadoutPack() {
         aliases: aliasesForRocketLeagueItem(decal, itemDb.records, 'Skin')
       };
     });
+    const finishSummaries = (manifest.finishes || []).map((finish) => {
+      remember(finish.thumbnail); remember(finish.detailNormal);
+      return {
+        id: finish.id,
+        productId: finish.productId,
+        displayName: finish.displayName || finish.id,
+        thumbnailUrl: assetUrl(finish.thumbnail),
+        detailNormalUrl: assetUrl(finish.detailNormal),
+        lightCurve: finish.lightCurve || '',
+        specularStrength: Number(finish.specularStrength) || 0,
+        specularTint: Number(finish.specularTint) || 0,
+        environmentStrength: Number(finish.environmentStrength) || 0,
+        rimLightTint: Number(finish.rimLightTint) || 0,
+        sparkleStrength: Number(finish.sparkleStrength) || 0,
+        pearlescentStrength: Number(finish.pearlescentStrength) || 0,
+        diffuseDetailNormalStrength: Number(finish.diffuseDetailNormalStrength) || 0,
+        specularDetailNormalStrength: Number(finish.specularDetailNormalStrength) || 0,
+        aliases: aliasesForRocketLeagueItem(finish, itemDb.records, 'PaintFinish')
+      };
+    });
     const value = {
       available: true,
       source: pack.type,
@@ -631,13 +651,14 @@ function rocketLeagueLoadoutPack() {
       bodies: bodySummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       wheels: wheelSummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       decals: decalSummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      finishes: finishSummaries.sort((a, b) => a.displayName.localeCompare(b.displayName)),
       knownPaths: [...knownPaths]
     };
     rocketLeagueLoadoutPackCache = { type: pack.type, root: pack.root, value };
     return value;
   } catch (error) {
     rocketLeagueLoadoutPackCache = null;
-    return { available: false, bodies: [], wheels: [], decals: [], error: error.message };
+    return { available: false, bodies: [], wheels: [], decals: [], finishes: [], error: error.message };
   }
 }
 

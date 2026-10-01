@@ -28,7 +28,8 @@ function manifestSummary() {
     available: true,
     bodies: manifest.bodies.map((b) => ({ ...b, aliases: aliases(b, 'Body') })),
     wheels: manifest.wheels.map((w) => ({ ...w, aliases: aliases(w, 'Wheels') })),
-    decals: manifest.decals.map((d) => ({ ...d, aliases: aliases(d, 'Skin') }))
+    decals: manifest.decals.map((d) => ({ ...d, aliases: aliases(d, 'Skin') })),
+    finishes: (manifest.finishes || []).map((f) => ({ ...f, detailNormalUrl: f.detailNormal ? `http://127.0.0.1:3174/rl-loadout-assets/${f.detailNormal}` : '' }))
   };
 }
 
@@ -90,7 +91,7 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 820, height: 540, show: false, webPreferences: { offscreen: true } });
   const logs = [];
   win.webContents.on('console-message', (_e, _l, message) => logs.push(message));
-  await win.loadURL('http://127.0.0.1:3174/scripts/car-render-harness/harness.html');
+  await win.loadURL('http://127.0.0.1:3174/scripts/car-render-harness/harness.html' + (process.env.NOENV ? '?noenv' : '?x'));
   await win.webContents.executeJavaScript('new Promise(r => { const t = setInterval(() => { if (window.harness?.ready) { clearInterval(t); r(); } }, 50); })');
   const report = [];
   for (const c of cases) {
@@ -105,7 +106,8 @@ app.whenReady().then(async () => {
     const wheel = details(find(summary.wheels, composed.wheel));
     let ok = false; let error = '';
     if (body) {
-      const asset = { name: body.displayName, bodyId: body.id, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
+      const fin = (name) => name ? summary.finishes.find((f) => f.displayName.toLowerCase() === String(name).toLowerCase()) || null : null;
+      const asset = { paintFinish: fin(c.paintFinish), accentFinish: fin(c.accentFinish ?? c.paintFinish), name: body.displayName, bodyId: body.id, url: body.meshUrl, textures: body.textures, materialBindings: body.materialBindings, wheelAnchors: body.wheelAnchors, decal, wheel, paint: composed.paint, teamNum: composed.teamNum };
       try {
         ok = await win.webContents.executeJavaScript(`(async () => {
           // One renderer for the whole run: creating/disposing WebGL contexts per car
@@ -119,7 +121,7 @@ app.whenReady().then(async () => {
     }
     report.push({ name: c.name, ok, error, ...composed });
   }
-  fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({ report, logs: logs.filter((l) => l.includes("rl-car-debug")) }, null, 2));
+  fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify({ report, logs: logs.filter((l) => l.includes("rl-car-debug") || /THREE|error|ERROR|warn/i.test(l)) }, null, 2));
   console.log(JSON.stringify(report.map((r) => ({ n: r.name, ok: r.ok, b: r.body, d: r.decal, w: r.wheel, miss: r.missing.map((m) => m.slot + ':' + m.name), err: r.error }))));
   app.exit(0);
 });

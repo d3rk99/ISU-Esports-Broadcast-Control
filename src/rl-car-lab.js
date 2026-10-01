@@ -1,5 +1,6 @@
 import { createCarRenderer } from './rl-car-renderer.js';
 import { normalizeLoadout, loadoutKey } from './rl-loadout.js';
+import { findFinish } from './rl-car-finish.js';
 import { BLUE_PRIMARY, ORANGE_PRIMARY, ACCENT, garagePaint } from './rl-car-palette.js';
 import './rl-car-lab.css';
 
@@ -43,6 +44,10 @@ export function openCarLab(getGame, saveLibrary) {
         </div>
         <label>DECAL<select id="car-pack-decal"></select></label>
         <label>WHEEL<select id="car-pack-wheel"></select></label>
+        <div class="car-color-row">
+          <label>PAINT FINISH<select id="car-pack-finish"></select></label>
+          <label>ACCENT FINISH<select id="car-pack-accent-finish"></select></label>
+        </div>
         <label>PAINT MODE<select id="car-paint-mode"><option value="team">Team colors (from the match)</option><option value="garage">Player's garage colors</option><option value="custom">Custom hex colors</option><option value="off">No paint recolor</option></select></label>
         <div class="car-color-row">
           <label>PRIMARY<input id="car-primary-color" type="color" value="#1597ff"></label>
@@ -105,6 +110,15 @@ export function openCarLab(getGame, saveLibrary) {
     if ($('car-pack-decal').value === 'auto') return loadoutDecal();
     if ($('car-pack-decal').value === 'none') return null;
     return pack.decals?.[Number($('car-pack-decal').value)] || null;
+  };
+  // Finish slots aren't sent by the Stats API in a standard match; "Auto" uses one if the
+  // Loadout array happens to name it, otherwise Glossy (the game default).
+  const loadoutFinish = () => normalizeLoadout(selected?.loadout).map((item) => findFinish(pack.finishes || [], item)).find(Boolean) || null;
+  const selectedFinish = (id) => {
+    const value = $(id).value;
+    if (value === 'none') return null;
+    if (value === 'auto') return loadoutFinish() || (pack.finishes || []).find((f) => /^glossy$/i.test(f.displayName)) || null;
+    return pack.finishes?.[Number(value)] || null;
   };
   const selectedWheel = () => {
     if ($('car-pack-wheel').value === 'auto') return loadoutWheel();
@@ -192,13 +206,20 @@ export function openCarLab(getGame, saveLibrary) {
       syncPackThumbnail();
       return;
     }
-    $('car-pack-status').textContent = `${pack.bodies.length} bodies / ${pack.wheels.length} wheels / ${pack.decals?.length || 0} decals${pack.itemCount ? ` / ${pack.itemCount} item rows` : ''}`;
+    $('car-pack-status').textContent = `${pack.bodies.length} bodies / ${pack.wheels.length} wheels / ${pack.decals?.length || 0} decals / ${pack.finishes?.length || 0} finishes${pack.itemCount ? ` / ${pack.itemCount} item rows` : ''}`;
     $('car-pack-body').replaceChildren(...pack.bodies.map((body, index) => new Option(body.displayName, String(index))));
     $('car-pack-decal').replaceChildren(
       new Option('Auto from selected player', 'auto'),
       new Option('None', 'none'),
       ...(pack.decals || []).map((decal, index) => new Option(`${decal.displayName}${decal.appliesToBodyName ? ` (${decal.appliesToBodyName})` : decal.universal ? ' (Universal)' : ''}`, String(index)))
     );
+    for (const id of ['car-pack-finish', 'car-pack-accent-finish']) {
+      $(id).replaceChildren(
+        new Option('Auto (Glossy unless the feed names one)', 'auto'),
+        new Option('Flat (no finish)', 'none'),
+        ...(pack.finishes || []).map((finish, index) => new Option(`${finish.displayName} (${finish.lightCurve || '?'})`, String(index)))
+      );
+    }
     $('car-pack-wheel').replaceChildren(
       new Option('Auto from selected player', 'auto'),
       new Option('None', 'none'),
@@ -212,6 +233,8 @@ export function openCarLab(getGame, saveLibrary) {
   $('car-pack-body').onchange = () => { syncPackThumbnail(); invalidatePackPreview(); };
   $('car-pack-decal').onchange = invalidatePackPreview;
   $('car-pack-wheel').onchange = invalidatePackPreview;
+  $('car-pack-finish').onchange = invalidatePackPreview;
+  $('car-pack-accent-finish').onchange = invalidatePackPreview;
   $('car-paint-mode').onchange = () => { syncPaintMode(); invalidatePackPreview(); };
   $('car-primary-color').onchange = invalidatePackPreview;
   $('car-secondary-color').onchange = invalidatePackPreview;
@@ -245,6 +268,8 @@ export function openCarLab(getGame, saveLibrary) {
       textures: body.textures || [],
       decal,
       wheel,
+      paintFinish: selectedFinish('car-pack-finish'),
+      accentFinish: selectedFinish('car-pack-accent-finish'),
       wheelAnchors: body.wheelAnchors
     });
   });

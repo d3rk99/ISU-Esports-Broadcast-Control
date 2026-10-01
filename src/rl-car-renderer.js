@@ -4,6 +4,7 @@ import { WHEEL_HUBS } from './rl-wheel-hubs.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { applyBodyPaint } from './rl-car-paint.js';
+import { applyFinish, createStudioEnvironment } from './rl-car-finish-material.js';
 
 export function disposeObject(object) {
   object?.traverse((child) => {
@@ -310,6 +311,7 @@ async function applyAssetTextures(root, asset = {}, { isWheel = false } = {}) {
         : ownedTexture(textures, 'normal', ownNames, (name) => (chassis ? /chassis|chasis|parts/.test(name) : !/chassis|chasis/.test(name)))));
     // Glass / lens materials have their own small UV layout; a body diffuse on them is garbage.
     const glass = /glass|lens|window/.test(compactKey(material.name || ''));
+    material.userData.rlPart = glass ? 'glass' : (chassis ? 'chassis' : 'body');
     const useDiffuse = !glass && diffuse && !/^blank_n$|blank_?skin/.test(fileBase(diffuse.path));
     const map = await loadTexture(!chassis && decalDiffuse ? decalDiffuse : (useDiffuse ? diffuse : null), true);
     if (map) { material.map = map; material.color?.set?.(0xffffff); }
@@ -399,6 +401,30 @@ function wheelRadiusFor(bodyScene, anchors) {
   return Math.max(0.12, Math.min(0.26, radius));
 }
 
+// Paint finish on the paintable body, accent finish on chassis/trim. Glass and wheels keep theirs.
+// Without a chosen finish every part still gets the env map so it isn't lit by lamps alone.
+async function applyFinishes(root, asset = {}, envMap = null) {
+  const loader = new THREE.TextureLoader();
+  const normals = new Map();
+  const detailFor = async (finish) => {
+    if (!finish?.detailNormalUrl) return null;
+    if (!normals.has(finish.detailNormalUrl)) normals.set(finish.detailNormalUrl, loader.loadAsync(finish.detailNormalUrl).catch(() => null));
+    const texture = await normals.get(finish.detailNormalUrl);
+    return texture ? texture.clone() : null;
+  };
+  const jobs = [];
+  root.traverse((child) => {
+    if (!child.isMesh || /^wheel-/.test(child.parent?.name || '') || /^wheel-/.test(child.name || '')) return;
+    for (const material of [child.material].flat().filter(Boolean)) jobs.push({ mesh: child, material });
+  });
+  for (const { mesh, material } of jobs) {
+    const part = material.userData?.rlPart || 'body';
+    const finish = part === 'body' ? asset.paintFinish : part === 'chassis' ? asset.accentFinish : null;
+    if (finish) applyFinish(mesh, material, finish, { detailNormal: await detailFor(finish), envMap });
+    else if (envMap && 'envMap' in material) { material.envMap = envMap; material.envMapIntensity = 0.35; material.needsUpdate = true; }
+  }
+}
+
 async function addWheels(bodyScene, asset = {}) {
   const wheel = asset.wheel;
   // Prefer the disc-joint hubs (true wheel mount); older packs only have the inner suspension joint.
@@ -466,6 +492,9 @@ export function createCarRenderer(container) {
   controls.enablePan = false;
   controls.minDistance = 2; controls.maxDistance = 12;
   // Studio-style lighting: soft sky/ground fill, a key light front-left, rim from behind.
+  let studioEnv = null;
+  // Built lazily, after the first real render: PMREM's fromScene changes renderer state.
+  const environment = () => { if (!studioEnv) { studioEnv = createStudioEnvironment(renderer); renderer.setRenderTarget(null); } return studioEnv; };
   scene.add(new THREE.HemisphereLight(0xe8f0ff, 0x2a2c33, 1.6));
   for (const [x, y, z, strength] of [[5, 7, 6, 3.2], [-6, 4, -2, 1.6], [0, 3, -7, 2.2]]) {
     const light = new THREE.DirectionalLight(0xffffff, strength);
@@ -497,6 +526,7 @@ export function createCarRenderer(container) {
       const scene = await loadGltfScene(url);
       try {
         await applyAssetTextures(scene, asset);
+        await applyFinishes(scene, asset, globalThis.RL_NO_ENV ? null : environment());
         await addWheels(scene, asset);
       } catch (error) {
         console.warn('[rl-car-lab] Partial asset composition failed:', error);
@@ -506,6 +536,6 @@ export function createCarRenderer(container) {
     },
     resetCamera,
     png() { if (!object || disposed) throw Error('Load a model before saving.'); render(); return renderer.domElement.toDataURL('image/png'); },
-    dispose() { generation++; clear(); disposed = true; controls.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); }
+    dispose() { generation++; clear(); disposed = true; controls.dispose(); studioEnv?.dispose(); renderer.dispose(); renderer.forceContextLoss(); renderer.domElement.remove(); }
   };
 }
