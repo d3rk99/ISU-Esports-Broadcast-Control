@@ -584,6 +584,52 @@
     renderValorantPlayerCards('#val-away-players', observer.teams?.away?.players, 'away');
   }
 
+  // Smash crew battle: 1v1 games, each crew shares a 12-stock pool (detailScore = stocks left,
+  // set from the controller's CURRENT STOCKS buttons). Set score = crew battles won (team score).
+  const SMASH_CREW_STOCKS = 12;
+  function renderSmashScorecard(selectedGame, game, teams) {
+    const card = $('#smash-scorecard');
+    if (!card) return;
+    card.hidden = selectedGame !== 'smash';
+    if (card.hidden) return;
+    const seriesLength = Math.max(1, Number(game.seriesLength) || 3);
+    const winsNeeded = Math.ceil(seriesLength / 2);
+    teams.slice(0, 2).forEach((team, index) => {
+      const side = index === 0 ? 'home' : 'away';
+      const raw = Number(team?.detailScore);
+      const stocks = Math.max(0, Number.isFinite(raw) ? raw : SMASH_CREW_STOCKS);
+      setText(`#sm-${side}-name`, team?.name || (index === 0 ? 'HOME' : 'AWAY'));
+      setText(`#sm-${side}-tag`, team?.shortName || '');
+      setText(`#sm-${side}-stocks`, stocks);
+      $(`.sm-stocks--${side}`)?.classList.toggle('is-out', stocks === 0);
+      renderLogo(`#sm-${side}-logo`, team);
+      const dots = $(`#sm-${side}-series`);
+      if (dots) {
+        dots.replaceChildren();
+        for (let i = 0; i < winsNeeded; i += 1) {
+          const dot = document.createElement('i');
+          if (i < (Number(team?.score) || 0)) dot.className = 'is-won';
+          dots.append(dot);
+        }
+      }
+      const pips = $(`#sm-${side}-pips`);
+      if (pips) {
+        pips.replaceChildren();
+        const total = Math.max(SMASH_CREW_STOCKS, stocks);
+        for (let i = 0; i < total; i += 1) {
+          const pip = document.createElement('i');
+          // Home pips fill from the centre outward (right-aligned), away from the centre too.
+          const lit = index === 0 ? i >= total - stocks : i < stocks;
+          if (lit) pip.className = 'on';
+          pips.append(pip);
+        }
+      }
+    });
+    setText('#sm-set-score', `${Number(teams[0]?.score) || 0} - ${Number(teams[1]?.score) || 0}`);
+    setText('#sm-core-label', 'CREW BATTLE');
+    setText('#sm-game-label', `GAME ${(game.activeMap || 0) + 1} / BEST OF ${seriesLength}`);
+  }
+
   function renderScoreboard(state) {
     const root = $('[data-overlay="scoreboard"]');
     if (!root) return;
@@ -617,6 +663,7 @@
     renderRocketLeaguePlayers(game, selectedGame);
     renderRocketLeagueStatCard(game, selectedGame, state.activeRoster);
     renderValorantHud(selectedGame, game, teams, activeMap);
+    renderSmashScorecard(selectedGame, game, teams);
   }
 
   function renderValorantVeto(game) {
