@@ -2006,16 +2006,35 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
   font-weight: 1000;
   letter-spacing: .18em;
 }
-/* Stock pips under each crew: one per stock in the pool, spent ones dim. */
+/* Stock pips under each crew: one per stock in the pool, spent ones dim. They sit on their
+   own dark strip so they read over any stage (bright skies, white stages). */
+.smash-scorecard { grid-template-rows: 86px 20px; }
 .sm-pips {
   grid-row: 2;
   display: flex;
+  align-items: center;
   gap: 3px;
-  padding-top: 4px;
+  justify-self: stretch;
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, rgba(4,9,16,.96), rgba(2,5,10,.92));
+  border-bottom: 1px solid rgba(189,222,255,.3);
+  box-shadow: 0 8px 14px rgba(0,0,0,.4);
 }
-.sm-pips--home { grid-column: 1 / span 3; justify-content: flex-end; padding-right: 6px; }
-.sm-pips--away { grid-column: 5 / span 3; justify-content: flex-start; padding-left: 6px; }
-.sm-pips i { width: 20px; height: 6px; background: rgba(255,255,255,.14); transform: skewX(-20deg); }
+.sm-pips--home {
+  grid-column: 1 / span 3;
+  justify-content: flex-end;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 14px 100%);
+  border-left: 4px solid var(--home-color);
+}
+.sm-pips--away {
+  grid-column: 5 / span 3;
+  justify-content: flex-start;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  border-right: 4px solid var(--away-color);
+}
+.sm-pips i { width: 20px; height: 8px; background: rgba(255,255,255,.16); transform: skewX(-20deg); }
 .sm-pips--home i.on { background: var(--home-color); box-shadow: 0 0 6px color-mix(in srgb, var(--home-color) 70%, transparent); }
 .sm-pips--away i.on { background: var(--away-color); box-shadow: 0 0 6px color-mix(in srgb, var(--away-color) 70%, transparent); }
 @keyframes sm-card-in { from { opacity: 0; transform: translate(-50%, -30px); } to { opacity: 1; transform: translate(-50%, 0); } }
