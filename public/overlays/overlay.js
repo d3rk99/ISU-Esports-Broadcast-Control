@@ -404,14 +404,19 @@
     return role === 'defense' ? 'GREEN' : role === 'attack' ? 'RED' : '--';
   }
 
-  function renderValorantRoundHistory(live) {
+  function renderValorantRoundHistory(live, { growing = false, fallbackRound = 1 } = {}) {
     const container = $('#val-round-history');
     if (!container) return;
     const timeline = live?.observer3?.roundTimeline || {};
     const rounds = Array.isArray(timeline.rounds) ? timeline.rounds : [];
     const currentRound = Number(timeline.currentRound) || 0;
+    // Growing mode (experimental, controller toggle): only rounds 1..current are drawn and the
+    // bar widens with each round until it is full width at round 24.
+    const shown = growing ? Math.max(1, Math.min(24, currentRound || fallbackRound || 1)) : 24;
+    container.classList.toggle('is-growing', growing);
+    container.style.setProperty('--val-rounds-shown', String(shown));
     container.replaceChildren();
-    for (let index = 0; index < 24; index += 1) {
+    for (let index = 0; index < shown; index += 1) {
       const round = rounds[index] || { round: index + 1 };
       const marker = document.createElement('span');
       const winnerRole = round.winnerRole || '';
@@ -439,6 +444,58 @@
     }
   }
 
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs = {}) {
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+    return node;
+  }
+
+  // Ult points per agent differ (6-9), so progress is current/required from the OCR read,
+  // and the ring gets one tick per point. Ready = full ring + a star icon, no text.
+  function valorantUltimateProgress(player) {
+    const ult = player?.ultimateState || {};
+    const current = Number(ult.current);
+    const required = Number(ult.required);
+    if (ult.status === 'ready') return { ready: true, current: Number.isFinite(required) ? required : null, required: Number.isFinite(required) ? required : null };
+    if (Number.isFinite(current) && Number.isFinite(required) && required > 0) return { ready: current >= required, current, required };
+    const match = String(ult.display || player?.ultimate || '').match(/(\d+)\s*\/\s*(\d+)/);
+    if (match && Number(match[2]) > 0) return { ready: Number(match[1]) >= Number(match[2]), current: Number(match[1]), required: Number(match[2]) };
+    return { ready: false, current: null, required: null };
+  }
+
+  function valorantUltimateRing(player) {
+    const progress = valorantUltimateProgress(player);
+    const wrap = document.createElement('div');
+    const known = progress.ready || (progress.current !== null && progress.required);
+    wrap.className = `val-ult${progress.ready ? ' is-ready' : ''}${known ? '' : ' is-unknown'}`;
+    wrap.dataset.ultCurrent = progress.current ?? '';
+    wrap.dataset.ultRequired = progress.required ?? '';
+    const radius = 22;
+    const circumference = 2 * Math.PI * radius;
+    const svg = svgEl('svg', { viewBox: '0 0 52 52', 'aria-hidden': 'true' });
+    svg.append(svgEl('circle', { class: 'track', cx: 26, cy: 26, r: radius }));
+    const fraction = progress.ready ? 1 : known ? Math.max(0, Math.min(1, progress.current / progress.required)) : 0;
+    svg.append(svgEl('circle', { class: 'fill', cx: 26, cy: 26, r: radius, 'stroke-dasharray': `${(fraction * circumference).toFixed(2)} ${circumference.toFixed(2)}` }));
+    const segments = progress.required && progress.required <= 12 ? progress.required : 0;
+    for (let index = 0; index < segments; index += 1) {
+      const angle = (index / segments) * Math.PI * 2;
+      const inner = radius - 3.4; const outer = radius + 3.4;
+      svg.append(svgEl('line', { class: 'tick', x1: 26 + Math.cos(angle) * inner, y1: 26 + Math.sin(angle) * inner, x2: 26 + Math.cos(angle) * outer, y2: 26 + Math.sin(angle) * outer }));
+    }
+    wrap.append(svg);
+    if (progress.ready) {
+      const icon = svgEl('svg', { class: 'ready-icon', viewBox: '0 0 24 24', 'aria-label': 'Ultimate ready' });
+      icon.append(svgEl('path', { d: 'M12 1.5l2.9 6.6 7.1.7-5.4 4.8 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 8.8l7.1-.7z' }));
+      wrap.append(icon);
+    } else {
+      const label = document.createElement('b');
+      label.textContent = known ? String(progress.current) : '-';
+      wrap.append(label);
+    }
+    return wrap;
+  }
+
   function renderValorantPlayerCards(selector, players = [], side = 'home') {
     const container = $(selector);
     if (!container) return;
@@ -449,14 +506,15 @@
       card.className = `val-player-card val-player-card--${side}`;
       const name = document.createElement('strong');
       name.textContent = player?.name || `PLAYER ${index + 1}`;
+      const stats = document.createElement('div');
+      stats.className = 'val-player-stats';
       const kda = document.createElement('span');
       kda.className = 'val-player-kda';
       kda.textContent = valorantKda(player);
-      const footer = document.createElement('div');
-      footer.className = 'val-player-footer';
-      const ult = document.createElement('em');
-      ult.className = player?.ultimateState?.status === 'ready' ? 'ready' : '';
-      ult.textContent = valorantUltimateLabel(player);
+      const credits = document.createElement('span');
+      credits.className = 'val-player-credits';
+      credits.textContent = valorantCredits(player?.credits);
+      stats.append(kda, credits);
       const weaponWrap = document.createElement('span');
       weaponWrap.className = 'val-weapon-slot';
       const weaponIcon = valorantWeaponIcon(player);
@@ -467,10 +525,7 @@
         weaponWrap.classList.add('has-weapon');
         weaponWrap.append(image);
       }
-      const credits = document.createElement('b');
-      credits.textContent = valorantCredits(player?.credits);
-      footer.append(ult, weaponWrap, credits);
-      card.append(name, kda, footer);
+      card.append(valorantUltimateRing(player), name, stats, weaponWrap);
       container.append(card);
     });
   }
@@ -512,7 +567,7 @@
     setText('#val-event-detail', game.match?.round || 'IDAHO STATE ESPORTS');
     renderLogo('#val-home-logo', teams[0]);
     renderLogo('#val-away-logo', teams[1]);
-    renderValorantRoundHistory(live);
+    renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber });
     renderValorantPlayerCards('#val-home-players', observer.teams?.home?.players, 'home');
     renderValorantPlayerCards('#val-away-players', observer.teams?.away?.players, 'away');
   }

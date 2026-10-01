@@ -624,6 +624,8 @@ export function createGameState(gameKey) {
     },
     rosterFirstSide: 'home',
     showAwayRoster: false,
+    // VALORANT HUD experiment: round history bar grows one dot per round (off = classic 24 dots).
+    valorantGrowingRounds: false,
     characterArt: gameKey === 'overwatch' ? createOverwatchCharacterArt() : createBundledCharacterArt(gameKey),
     weaponArt: gameKey === 'valorant' ? createValorantWeaponArt() : {},
     mapArt: gameKey === 'overwatch'

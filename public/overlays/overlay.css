@@ -532,6 +532,15 @@ body[data-setup="game"] .val-native-fit .val-center {
   clip-path: polygon(3% 0, 97% 0, 94.5% 100%, 5.5% 100%);
   animation: val-native-round-history-in 440ms cubic-bezier(.2,.82,.18,1) 980ms both;
 }
+/* Growing round bar (experimental): width follows the number of rounds shown, 1..24.
+   Columns 13px + 3px gap + 20px padding, matching the full 418px bar at 24 rounds. */
+.val-native-fit .val-round-history.is-growing {
+  grid-template-columns: repeat(var(--val-rounds-shown, 24), 13px);
+  width: calc(var(--val-rounds-shown, 24) * 16px - 3px + 33px);
+  min-width: 58px;
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, calc(100% - 20px) 100%, 20px 100%);
+  transition: width 420ms cubic-bezier(.2,.82,.18,1);
+}
 .val-native-fit .val-round-dot {
   grid-template-rows: 10px 9px;
   font-size: 7px;
@@ -720,115 +729,126 @@ body[data-setup="game"] .val-native-fit .val-center {
   bottom: 46px;
   z-index: 6;
   display: grid;
-  gap: 6px;
-  width: 228px;
+  gap: 8px;
+  width: 285px; /* 25% larger than the old 228px card */
   opacity: 0;
   transform: translateY(18px);
   animation: val-player-panels-in 520ms cubic-bezier(.2,.82,.18,1) 1.45s forwards;
 }
 .val-players--home { left: 18px; }
 .val-players--away { right: 18px; }
+/* Card: [ult ring] [name / K-D-A + credits / weapon]. Away cards mirror it. */
 .val-player-card {
   position: relative;
   display: grid;
-  grid-template-rows: 16px 14px 19px;
-  gap: 2px;
+  grid-template-columns: 52px minmax(0, 1fr);
+  grid-template-rows: 22px 18px 20px;
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
   min-width: 0;
-  height: 60px;
-  padding: 6px 8px;
+  height: 75px;
+  padding: 6px 12px 6px 9px;
   overflow: hidden;
   background:
     linear-gradient(110deg, rgba(255,255,255,.08), transparent 34%),
-    linear-gradient(90deg, color-mix(in srgb, var(--val-teal) 18%, rgba(5,10,16,.89)), rgba(5,10,16,.7));
+    linear-gradient(90deg, color-mix(in srgb, var(--val-teal) 18%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
   border: 1px solid color-mix(in srgb, var(--home-color, var(--val-teal)) 68%, rgba(255,255,255,.16));
-  border-left: 4px solid var(--home-color, var(--val-teal));
-  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 15px, 100% 100%, 0 100%);
+  border-left: 5px solid var(--home-color, var(--val-teal));
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
   box-shadow: 0 10px 16px rgba(0,0,0,.34), inset 0 0 0 1px rgba(255,255,255,.035);
+  --val-side-color: var(--home-color, var(--val-teal));
 }
 .val-player-card--away {
+  grid-template-columns: minmax(0, 1fr) 52px;
+  padding: 6px 9px 6px 12px;
   text-align: right;
   background:
     linear-gradient(250deg, rgba(255,255,255,.08), transparent 34%),
-    linear-gradient(270deg, color-mix(in srgb, var(--val-coral) 20%, rgba(5,10,16,.89)), rgba(5,10,16,.7));
+    linear-gradient(270deg, color-mix(in srgb, var(--val-coral) 20%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
   border-color: color-mix(in srgb, var(--away-color, var(--val-coral)) 68%, rgba(255,255,255,.16));
-  border-right: 4px solid var(--away-color, var(--val-coral));
+  border-right: 5px solid var(--away-color, var(--val-coral));
   border-left-width: 1px;
-  clip-path: polygon(15px 0, 100% 0, 100% 100%, 0 100%, 0 15px);
+  clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px);
+  --val-side-color: var(--away-color, var(--val-coral));
 }
 .val-player-card strong {
+  grid-column: 2; grid-row: 1;
   min-width: 0;
   overflow: hidden;
   color: #fff;
-  font-size: 14px;
+  font-size: 19px;
   font-weight: 1000;
-  line-height: 1;
+  letter-spacing: .02em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-shadow: 0 2px 4px rgba(0,0,0,.55);
 }
-.val-player-kda {
-  color: #d9e1e8;
-  font-family: Consolas, monospace;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .04em;
-}
-.val-player-footer {
-  display: grid;
-  grid-template-columns: 53px minmax(58px, 1fr) 46px;
-  align-items: center;
-  gap: 6px;
-}
-.val-player-card--away .val-player-footer { grid-template-columns: 53px minmax(58px, 1fr) 46px; }
-.val-player-card--home .val-player-footer b { grid-column: 1; grid-row: 1; }
-.val-player-card--home .val-weapon-slot { grid-column: 2; grid-row: 1; }
-.val-player-card--home .val-player-footer em { grid-column: 3; grid-row: 1; }
-.val-player-footer em {
-  display: grid;
-  place-items: center;
+.val-player-card--away strong { grid-column: 1; }
+.val-player-stats {
+  grid-column: 2; grid-row: 2;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   min-width: 0;
-  height: 16px;
-  color: #96a3af;
-  font-size: 8px;
-  font-style: normal;
-  font-weight: 1000;
-  letter-spacing: .05em;
+  font-family: Consolas, monospace;
+  font-weight: 900;
+  line-height: 1;
 }
-.val-player-footer em.ready {
-  color: #061313;
-  background: var(--val-teal);
-  box-shadow: 0 0 12px rgba(18,216,200,.38);
-}
-.val-player-card--away .val-player-footer em.ready {
-  background: var(--val-coral);
-  box-shadow: 0 0 12px rgba(255,70,95,.42);
-}
+.val-player-card--away .val-player-stats { grid-column: 1; flex-direction: row-reverse; }
+.val-player-kda { color: #e3e9ef; font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
+.val-player-credits { color: #ffe3a3; font-size: 16px; white-space: nowrap; }
+.val-player-credits::before { content: "\00A4"; margin-right: 2px; color: #b8a77f; }
 .val-weapon-slot {
-  display: grid;
-  place-items: start center;
-  height: 18px;
+  grid-column: 2; grid-row: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 20px;
   min-width: 0;
   overflow: hidden;
-  --val-weapon-x: 0;
 }
-.val-player-card--home .val-weapon-slot { --val-weapon-x: 4px; }
-.val-player-card--away .val-weapon-slot { --val-weapon-x: -4px; }
+.val-player-card--away .val-weapon-slot { grid-column: 1; justify-content: flex-end; }
 .val-weapon-slot img {
   display: block;
-  max-width: 100%;
-  max-height: 17px;
+  height: 18px;
+  max-width: 130px;
   object-fit: contain;
   filter: brightness(0) invert(1) drop-shadow(0 2px 3px rgba(0,0,0,.5));
-  opacity: .92;
-  transform: translate(var(--val-weapon-x), -2px);
+  opacity: .95;
 }
-.val-player-footer b {
-  color: #f3f7fb;
+.val-player-card--away .val-weapon-slot img { transform: scaleX(-1); }
+/* Ultimate: radial ring, one segment per ult point (agents need 6-9). */
+.val-ult {
+  grid-column: 1; grid-row: 1 / span 3;
+  position: relative;
+  width: 52px;
+  height: 52px;
+}
+.val-player-card--away .val-ult { grid-column: 2; }
+.val-ult svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.val-ult .track { fill: rgba(0,0,0,.35); stroke: rgba(255,255,255,.14); stroke-width: 5; }
+.val-ult .fill { fill: none; stroke: var(--val-side-color); stroke-width: 5; stroke-linecap: butt; transition: stroke-dasharray 300ms ease; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--val-side-color) 70%, transparent)); }
+.val-ult .tick { stroke: rgba(5,10,16,.95); stroke-width: 2.4; }
+.val-ult b {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: #fff;
   font-family: Consolas, monospace;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 1000;
   line-height: 1;
 }
-.val-player-footer b::before { content: "\00A4 "; color: #a9b4bf; }
+.val-ult b small { display: block; margin-top: 1px; color: #9aa6b2; font-size: 9px; }
+.val-ult.is-unknown .fill { display: none; }
+.val-ult.is-unknown b { color: #6e7883; }
+.val-ult.is-ready .track { fill: var(--val-side-color); stroke: var(--val-side-color); }
+.val-ult.is-ready .tick { display: none; }
+.val-ult.is-ready { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--val-side-color) 80%, transparent)); animation: val-ult-ready 1.6s ease-in-out infinite; }
+.val-ult .ready-icon { position: absolute; inset: 11px; width: 30px; height: 30px; fill: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+@keyframes val-ult-ready { 50% { filter: drop-shadow(0 0 14px color-mix(in srgb, var(--val-side-color) 95%, transparent)); } }
 .val-footer {
   display: none;
   position: absolute;

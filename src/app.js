@@ -1085,7 +1085,8 @@ function renderValorantOcrPanel(game) {
     <label class="field"><span>CAPTURE RATE</span><input type="number" min="1" max="15" data-vo-prop="captureFps" value="${Number(ocr.captureFps) || 8}"><small>1&ndash;15 frames/sec; each field has its own OCR cadence</small></label>
     <label class="field"><span>PARALLEL GRID OCR</span><select data-vo-prop="observerConcurrency">${[1,2,4,8].map((n) => `<option value="${n}" ${Number(ocr.observerConcurrency || 4) === n ? 'selected' : ''}>${n} workers</option>`).join('')}</select><small>Last grid sweep: ${ocr.live?.observer3?.performance?.lastSweepMs ?? '--'} ms</small></label>
     <label class="field vo-range-field"><span>OBSERVER SCAN INTERVAL</span><input type="range" min="5" max="100" step="1" data-vo-prop="observerScanIntervalMs" value="${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))}"><small><b>${Math.max(5, Math.min(100, Number(ocr.observerScanIntervalMs) || 25))} ms</b> between grid batches</small></label>
-    <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>`;
+    <label class="rl-enable-toggle"><input type="checkbox" data-vo-prop="recordedVideoMode" ${ocr.recordedVideoMode ? 'checked' : ''}><i></i><span><b>RECORDED VIDEO MODE</b><small>Enable for YouTube/replay tests; leave off for live VALORANT</small></span></label>
+    <label class="rl-enable-toggle"><input type="checkbox" data-val-growing-rounds ${game.valorantGrowingRounds ? 'checked' : ''}><i></i><span><b>GROWING ROUND BAR (EXPERIMENTAL)</b><small>On: the round history starts with one dot and grows each round. Off: classic 24 dots</small></span></label>`;
   const observer3 = live.observer3 || {};
   const profileHasObserverTable = Boolean(profile.scoreboardTable);
   const timelineRounds = Array.from({ length: 24 }, (_item, index) => ({
@@ -3150,6 +3151,11 @@ root.addEventListener('change', async (event) => {
       current().rosterFirstSide = target.value === 'away' ? 'away' : 'home';
       state.activeRosterSide = current().rosterFirstSide;
     }, `${current().teams[target.value === 'away' ? 1 : 0].name} will show first on the roster overlay`);
+    render();
+    return;
+  }
+  if (target.dataset.valGrowingRounds !== undefined) {
+    commit(() => { state.games.valorant.valorantGrowingRounds = target.checked; }, target.checked ? 'Growing round bar on' : 'Classic 24-dot round bar');
     render();
     return;
   }
