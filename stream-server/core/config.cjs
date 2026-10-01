@@ -15,6 +15,7 @@ function validate(c) {
   if (!['real', 'simulation'].includes(c.engine)) throw new Error('Engine must be real or simulation');
   if (!['test', 'file', 'decklink', 'device'].includes(c.input.type)) throw new Error('Input type must be test, file, decklink or device');
   if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
+  if (c.troubleshooting !== undefined && typeof c.troubleshooting !== 'boolean') throw new Error('Invalid troubleshooting setting');
   if (c.recording !== undefined && (typeof c.recording !== 'object' || typeof c.recording.directory !== 'string' || c.recording.directory.length > 1024 || !(Number.isFinite(c.recording.segmentMinutes) && c.recording.segmentMinutes >= 1 && c.recording.segmentMinutes <= 720))) throw new Error('Invalid recording settings (segment 1-720 minutes)');
   if (c.api !== undefined) {
     const a = c.api;
@@ -37,7 +38,9 @@ function validate(c) {
     ids.add(d.id);
     if (d.serverUrl) {
       let url; try { url = new URL(d.serverUrl); } catch { throw new Error('Invalid server URL'); }
-      if (url.protocol !== `${d.protocol.toLowerCase()}:` || !url.hostname || url.username || url.password || url.search || url.hash) throw new Error('Use a matching RTMP/RTMPS server URL without credentials or query parameters');
+      // A full publish URL with the key inside (rtmps://host/app/live_xxx?bandwidthtest=true) is fine.
+      if (url.protocol !== `${d.protocol.toLowerCase()}:` || !url.hostname || url.username || url.password || url.hash) throw new Error('Use an rtmp:// or rtmps:// URL (the key may be inside it); no user:password@ or #');
+      if (/\s/.test(d.serverUrl)) throw new Error('The server URL has a space or line break in it');
     }
   }
   return c;
@@ -80,7 +83,7 @@ class ConfigStore {
       next.api = { enabled: Boolean(api.enabled), port: Number(api.port) || 3180, lan: Boolean(api.lan), key };
     } else next.api = prevApi;
     // Pasted keys often carry a trailing space/newline; Twitch then refuses with only a generic I/O error.
-    next.destinations = next.destinations.map(({ streamKey, clearKey, hasKey, ...d }) => ({ ...d, credential: clearKey ? '' : String(streamKey || '').trim() ? this.credentials.seal(String(streamKey).trim()) : previous.destinations.find(p => p.id === d.id)?.credential || '' }));
+    next.destinations = next.destinations.map(({ streamKey, clearKey, hasKey, ...d }) => ({ ...d, serverUrl: String(d.serverUrl || '').trim(), protocol: /^rtmps:/i.test(String(d.serverUrl || '').trim()) ? 'RTMPS' : /^rtmp:/i.test(String(d.serverUrl || '').trim()) ? 'RTMP' : d.protocol, credential: clearKey ? '' : String(streamKey || '').trim() ? this.credentials.seal(String(streamKey).trim()) : previous.destinations.find(p => p.id === d.id)?.credential || '' }));
     return validate(next);
   }
 }

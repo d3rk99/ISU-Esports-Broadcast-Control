@@ -69,7 +69,7 @@ class RealEngine extends EventEmitter {
     for (const d of definitions) {
       const existing = this.destinations.get(d.id);
       if (existing) { existing.definition = d; continue; }
-      const destination = new Destination({ ffmpegPath: this.ffmpeg.path, definition: d, getKey: () => this.credentials.open(this.lookup(d.id)?.credential || '') });
+      const destination = new Destination({ ffmpegPath: this.ffmpeg.path, definition: d, getKey: () => this.credentials.open(this.lookup(d.id)?.credential || ''), showSecrets: () => Boolean(this.showSecrets) });
       destination.on('state', (state) => {
         const index = definitions.findIndex((x) => x.id === d.id) + 1;
         this.logger.write(state === 'ERROR' ? 'destination.error' : state === 'RECONNECTING' ? 'reconnect.attempt' : `destination.${state.toLowerCase()}`, { state, destinationIndex: index });

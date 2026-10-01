@@ -28,4 +28,4 @@ label.inline{flex-direction:row;align-items:center;gap:8px}label.inline input{wi
 .destination .state[data-health=HEALTHY]{color:#47d16f}.destination .state[data-health=STALLED],.destination .state[data-health=LAGGING]{color:#ffce47}.destination .state[data-health=FAILED]{color:#ff6b5e}
 @media(max-width:1100px){.monitor-row{grid-template-columns:1fr 70px}.monitor-info{grid-column:1/-1}}
 .scale span:nth-child(1){bottom:100.0%}.scale span:nth-child(2){bottom:90.0%}.scale span:nth-child(3){bottom:80.0%}.scale span:nth-child(4){bottom:66.7%}.scale span:nth-child(5){bottom:50.0%}.scale span:nth-child(6){bottom:33.3%}.scale span:nth-child(7){bottom:0.0%}
-.device-box .row{display:flex;gap:8px}.device-box .row button{flex:1}.device-actions>span:first-child{visibility:hidden}
+.device-box .row{display:flex;gap:8px}.device-box .row button{flex:1}.device-actions>span:first-child{visibility:hidden}.check span{display:flex;gap:8px;align-items:center}.check input{width:auto}

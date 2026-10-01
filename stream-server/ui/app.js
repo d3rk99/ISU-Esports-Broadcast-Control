@@ -21,7 +21,7 @@ function renderConfig(view) {
   const api = config.api || { enabled: false, port: 3180, lan: false };
   $('apiEnabled').checked = api.enabled; $('apiPort').value = api.port; $('apiLan').checked = api.lan; $('apiRegenerate').checked = false; $('apiKey').hidden = true;
   renderApi(view.api);
-  $('recordDir').value = config.recording?.directory || ''; $('recordSegment').value = config.recording?.segmentMinutes || 30;
+  $('troubleshooting').checked = Boolean(config.troubleshooting); $('recordDir').value = config.recording?.directory || ''; $('recordSegment').value = config.recording?.segmentMinutes || 30;
   captureDevices = view.devices?.capture || captureDevices; renderDevices();
   syncInputFields();
   $('destinations').replaceChildren(...config.destinations.map(destinationRow));
@@ -30,7 +30,7 @@ function renderConfig(view) {
 function destinationRow(d) {
   const row = element('article', { className: 'destination' }); row.dataset.id = d.id;
   const enabled = element('input', { type: 'checkbox', checked: d.enabled }); enabled.dataset.field = 'enabled'; row.append(field('On', enabled));
-  for (const [key, label] of [['name', 'Name'], ['protocol', 'Protocol'], ['serverUrl', 'Server URL'], ['streamKey', d.hasKey ? 'Key saved · blank keeps it' : 'Stream key']]) {
+  for (const [key, label] of [['name', 'Name'], ['protocol', 'Protocol'], ['serverUrl', 'Server URL (key may go in here)'], ['streamKey', d.hasKey ? 'Key saved · blank keeps it' : 'Stream key (optional)']]) {
     let input;
     if (key === 'protocol') { input = element('select'); input.append(...['RTMP', 'RTMPS'].map(value => element('option', { value, textContent: value }))); input.value = d.protocol; }
     else input = element('input', { value: d[key] || '', type: key === 'streamKey' ? 'password' : 'text', required: key === 'name', maxLength: key === 'name' ? 100 : 2048, autocomplete: 'off' });
@@ -90,7 +90,7 @@ function syncInputFields() {
   $('simLab').hidden = $('engine').value !== 'simulation';
 }
 function collect() {
-  return { version: 2, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, api: { enabled: $('apiEnabled').checked, port: Number($('apiPort').value) || 3180, lan: $('apiLan').checked, regenerateKey: $('apiRegenerate').checked }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim(), videoDevice: $('videoDevice').value, audioDevice: $('audioDevice').value, videoSize: $('deviceMode').value.split('|')[0] || '', framerate: $('deviceMode').value.split('|')[1] || '', deviceFormat: $('deviceMode').value.split('|')[2] || '' }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
+  return { version: 2, troubleshooting: $('troubleshooting').checked, engine: $('engine').value, ffmpegPath: $('ffmpegPath').value.trim(), storageDir: $('storageDir').value.trim(), recording: { directory: $('recordDir').value.trim(), segmentMinutes: Number($('recordSegment').value) || 30 }, api: { enabled: $('apiEnabled').checked, port: Number($('apiPort').value) || 3180, lan: $('apiLan').checked, regenerateKey: $('apiRegenerate').checked }, input: { type: $('inputType').value, video: $('video').value, audio: $('audio').value, file: $('inputFile').value.trim(), device: $('inputDevice').value.trim(), formatCode: $('inputFormat').value.trim(), videoDevice: $('videoDevice').value, audioDevice: $('audioDevice').value, videoSize: $('deviceMode').value.split('|')[0] || '', framerate: $('deviceMode').value.split('|')[1] || '', deviceFormat: $('deviceMode').value.split('|')[2] || '' }, encoder: { name: $('encoderName').value, mode: $('mode').value, resolution: $('resolution').value, fps: Number($('fps').value), videoBitrate: Number($('videoBitrate').value), audioBitrate: Number($('audioBitrate').value), codec: 'H.264', audioCodec: 'AAC' }, delaySeconds: Number($('delaySeconds').value), destinations: [...$('destinations').children].map(row => {
     const d = { id: row.dataset.id }; for (const input of row.querySelectorAll('[data-field]')) d[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value; return d;
   }) };
 }

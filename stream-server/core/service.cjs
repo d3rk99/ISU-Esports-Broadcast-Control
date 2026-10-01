@@ -50,6 +50,7 @@ class StreamService extends EventEmitter {
     this.engine.on('preview', (jpeg) => this.emit('preview', jpeg));
     this.engine.on('meter', (meter) => this.emit('meter', meter));
     await this.engine.init();
+    this.engine.showSecrets = Boolean(this.config.troubleshooting);
     this.engine.configureDestinations(this.config.destinations);
     // The program (capture + encode + buffering) starts with the app; outputs never auto-start.
     try { await this.engine.startProgram(this.config); }
@@ -173,6 +174,7 @@ class StreamService extends EventEmitter {
       await this.sim.delay.configure(next.delaySeconds);
       this.sim.tick(0);
     } else if (this.engine) {
+      this.engine.showSecrets = Boolean(next.troubleshooting);
       this.engine.configureDestinations(next.destinations);
       if (programChanged || this.engine.state !== 'RUNNING') {
         try { await this.engine.startProgram(next); this.startupError = ''; }

@@ -25,11 +25,12 @@ function redact(text, key) {
 // One destination = one FFmpeg that STREAM-COPIES the delayed program (-c copy). It never
 // encodes. It is fed whole keyframe-aligned chunks through a bounded queue.
 class Destination extends EventEmitter {
-  constructor({ ffmpegPath, definition, getKey, spawnFn = spawn }) {
+  constructor({ ffmpegPath, definition, getKey, spawnFn = spawn, showSecrets = () => false }) {
     super();
     this.ffmpegPath = ffmpegPath;
     this.definition = definition;
     this.getKey = getKey;
+    this.showSecrets = showSecrets;
     this.spawn = spawnFn;
     this.state = 'STOPPED';
     this.reconnects = 0;
@@ -84,13 +85,14 @@ class Destination extends EventEmitter {
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (t) => { errorText = `${errorText}${t}`.slice(-1500); });
     child.stdin.on('error', () => {}); // EPIPE handled by exit
-    child.on('error', (error) => this.onExit(child, null, redact(error.message, key)));
+    const hide = (t) => (this.showSecrets() ? String(t || '') : redact(t, key));
+    child.on('error', (error) => this.onExit(child, null, hide(error.message)));
     // FFmpeg's last line is only a summary ("Error opening output files: Invalid argument"); the
     // real cause is on the lines before it. Keep the last few distinct lines, redacted.
     child.on('exit', (code) => {
       const lines = [...new Set(errorText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))].slice(-4);
-      this.lastDetail = redact(lines.join('\n'), key);
-      this.onExit(child, code, redact(lines.join(' · ') || `exit ${code}`, key));
+      this.lastDetail = hide(lines.join('\n'));
+      this.onExit(child, code, hide(lines.join(' · ') || `exit ${code}`));
     });
     // CONNECTED = FFmpeg is still alive and has taken media for 3 s (RTMP handshake done).
     const startSent = this.sentChunks;
