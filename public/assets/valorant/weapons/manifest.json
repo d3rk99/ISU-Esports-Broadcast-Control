@@ -35,6 +35,13 @@
     "source": "https://valorant.fandom.com/wiki/File:Sheriff_icon.png"
   },
   {
+    "weapon": "Bandit",
+    "category": "sidearms",
+    "file": "bandit.png",
+    "url": "/assets/valorant/weapons/bandit.png",
+    "source": "https://valorant.fandom.com/wiki/File:Bandit_icon.png"
+  },
+  {
     "weapon": "Stinger",
     "category": "smgs",
     "file": "stinger.png",
@@ -89,6 +96,13 @@
     "file": "vandal.png",
     "url": "/assets/valorant/weapons/vandal.png",
     "source": "https://valorant.fandom.com/wiki/File:Vandal_icon.png"
+  },
+  {
+    "weapon": "Warden",
+    "category": "rifles",
+    "file": "warden.png",
+    "url": "/assets/valorant/weapons/warden.png",
+    "source": "https://media.valorant-api.com/weapons/8db0a1bf-4a50-832a-4566-faaaa6d250ca/displayicon.png"
   },
   {
     "weapon": "Marshal",

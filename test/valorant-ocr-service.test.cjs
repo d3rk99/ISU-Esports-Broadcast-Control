@@ -13,12 +13,18 @@ function fakeFrame(now = Date.now()) {
   return { sourceName: 'VALORANT', capturedAt: now, width: 1920, height: 1080, image: {} };
 }
 
-test('Bandit is accepted as a training weapon while unknown weapons are rejected', async () => {
+test('Bandit and Warden are accepted as training weapons while unknown weapons are rejected', async () => {
   const service = new ValorantOcrService({});
   await assert.rejects(service.saveLoadoutTemplate({ weapon: 'Bandit' }), /Capture service is unavailable/);
   await assert.rejects(service.saveLoadoutTemplate({ weapon: 'not-a-weapon' }), /Choose a valid weapon/);
   const appSource = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/app.js'), 'utf8');
   assert.match(appSource, /VALORANT_LOADOUT_TEMPLATE_WEAPONS = \[[\s\S]*?'bandit'/);
+  assert.match(appSource, /VALORANT_LOADOUT_TEMPLATE_WEAPONS = \[[\s\S]*?'warden'/);
+  const manifest = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../public/assets/valorant/weapons/manifest.json'), 'utf8'));
+  for (const weapon of ['Bandit', 'Warden']) {
+    const item = manifest.find((entry) => entry.weapon === weapon);
+    assert.ok(item && require('node:fs').existsSync(require('node:path').join(__dirname, '../public/assets/valorant/weapons', item.file)), `${weapon} icon missing`);
+  }
 });
 
 test('score templates save into the selected score folder', async (t) => {

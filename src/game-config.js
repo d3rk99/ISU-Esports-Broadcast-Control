@@ -275,10 +275,10 @@ const ROCKET_LEAGUE_MAP_ART = {
 const VALORANT_MAPS = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Corrode', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Summit', 'Sunset'];
 
 export const VALORANT_WEAPON_CATEGORIES = {
-  sidearms: ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff'],
+  sidearms: ['Classic', 'Shorty', 'Frenzy', 'Ghost', 'Sheriff', 'Bandit'],
   smgs: ['Stinger', 'Spectre'],
   shotguns: ['Bucky', 'Judge'],
-  rifles: ['Bulldog', 'Guardian', 'Phantom', 'Vandal'],
+  rifles: ['Bulldog', 'Guardian', 'Phantom', 'Vandal', 'Warden'],
   snipers: ['Marshal', 'Outlaw', 'Operator'],
   heavies: ['Ares', 'Odin'],
   melee: ['Melee']

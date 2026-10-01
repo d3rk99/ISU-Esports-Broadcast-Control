@@ -78,6 +78,7 @@ const VALORANT_LOADOUT_TEMPLATE_WEAPONS = Object.freeze([
   'guardian',
   'phantom',
   'vandal',
+  'warden',
   'marshal',
   'outlaw',
   'operator',

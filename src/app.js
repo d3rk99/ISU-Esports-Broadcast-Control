@@ -78,7 +78,7 @@ const ROCKET_LEAGUE_STAT_EVENTS = [
 const VALORANT_LOADOUT_TEMPLATE_WEAPONS = [
   'classic', 'shorty', 'frenzy', 'ghost', 'sheriff', 'bandit',
   'stinger', 'spectre', 'bucky', 'judge',
-  'bulldog', 'guardian', 'phantom', 'vandal',
+  'bulldog', 'guardian', 'phantom', 'vandal', 'warden',
   'marshal', 'outlaw', 'operator', 'ares', 'odin', 'melee'
 ];
 
