@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'"><title>ISU Stream Server</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+<header><div><small>ISU ESPORTS / DIRECTOR PC</small><h1>STREAM SERVER</h1></div><span class="badge">SIMULATION • NO MEDIA SENT</span></header>
+<main>
+<div class="toolbar"><span>Capture → Encode once → Delay → Fanout</span><div><button id="startAll" class="primary" disabled>START ALL</button><button id="stopAll">STOP ALL</button></div></div>
+<div id="notice" role="status" aria-live="polite">Simulation only. All input, buffer and connection states are synthetic.</div>
+<form id="settings">
+<div class="grid">
+<section><h2>01 / INPUT</h2><div class="preview"><strong>INPUT PREVIEW</strong><span>No video rendered · simulated capture</span></div><label>Video input<select id="video"></select></label><label>Audio input<select id="audio"></select></label><p id="inputStatus">NO SIGNAL</p></section>
+<section><h2>02 / ENCODER</h2><label>Encoder<input id="encoderName" required></label><div class="pair"><label>Mode<select id="mode"><option value="hardware">Hardware</option><option value="software">Software</option></select></label><label>Resolution<input id="resolution" pattern="[0-9]{2,5}x[0-9]{2,5}" required></label></div><div class="pair"><label>Frame rate<input id="fps" type="number" min="1" max="240" step="0.01" required></label><label>Video kbps<input id="videoBitrate" type="number" min="100" max="200000" required></label></div><div class="pair"><label>Audio kbps<input id="audioBitrate" type="number" min="32" max="1024" required></label><label>Codec<input value="H.264 / AAC" disabled></label></div><p id="encoderStatus">READY</p></section>
+<section><h2>03 / BROADCAST DELAY</h2><label>Configured delay (seconds)<input id="delaySeconds" type="number" min="0" max="86400" step="1" required></label><div id="delayTime" class="time">00:00 / 05:00</div><progress id="bufferProgress" max="100" value="0" aria-label="Delay buffer fill"></progress><p id="bufferStatus">BUFFERING · 0%</p><strong id="interlock">OUTPUTS LOCKED</strong><p class="muted">Readiness here is simulated. A production buffer must validate synchronized, playable media before unlocking outputs.</p></section>
+</div>
+<section class="outputs"><div class="section-heading"><h2>04 / STREAM DESTINATIONS</h2><button type="button" id="add">+ Add destination</button></div><p class="muted">Generic RTMP / RTMPS destinations. Save edits before starting. Blank server URLs are allowed in simulation.</p><div id="destinations"></div></section>
+<div class="save"><span>Saving stops outputs and refills the buffer.</span><button class="primary" type="submit">SAVE SETTINGS</button></div>
+</form>
+<section><h2>SIMULATION LAB</h2><div class="lab"><label>Buffer clock<select id="speed"><option value="1">Real time · 1×</option><option value="30">Accelerated · 30×</option><option value="60">Accelerated · 60×</option></select></label><button id="signal">Toggle input signal</button><button id="reset">Reset buffer</button><span id="telemetry"></span></div><p class="muted">Use “Simulate failure” on a connected destination to observe ERROR → RECONNECTING → CONNECTED.</p></section>
+<footer>Independent application · No capture, encoding, buffering or network streaming engine is installed.</footer>
+</main><script src="app.js"></script></body></html>

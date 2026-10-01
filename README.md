@@ -1,5 +1,9 @@
 # ISU Esports Broadcast Control
 
+## ISU Stream Server (separate application)
+
+The Director PC stream-server scaffold runs independently: `npm --prefix stream-server start` after installing this repository's dependencies. Build its Windows executable with `npm --prefix stream-server run build`. It currently uses simulation only and sends no media. See [the architecture and developer handoff](stream-server/ARCHITECTURE.md) for all commands, file responsibilities, safety interlocks and the future capture → encode once → delay → multistream design.
+
 A local-first desktop control center for Idaho State Esports broadcasts. This foundation release provides game-aware scorekeeping, match/map planning, and Varsity/JV roster management for:
 
 - Overwatch 2

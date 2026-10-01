@@ -1,0 +1,15 @@
+{
+  "name": "isu-stream-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone simulated stream server for the ISU Director PC",
+  "author": "Idaho State Esports",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.cjs",
+    "smoke": "electron . --smoke",
+    "build": "electron-builder --config electron-builder.json --dir",
+    "package": "electron-builder --config electron-builder.json --win portable"
+  }
+}
