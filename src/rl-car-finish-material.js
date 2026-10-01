@@ -71,7 +71,10 @@ export function applyFinish(mesh, material, finish, { detailNormal = null, envMa
     envMapIntensity: params.envMapIntensity
   });
   if (envMap) physical.envMap = envMap;
-  if (params.sheen) { physical.sheen = params.sheen; physical.sheenRoughness = 0.8; physical.sheenColor = (physical.color || new THREE.Color(0xffffff)).clone().multiplyScalar(0.6); }
+  // Rainbow film and fuzz are paint effects: chassis/trim get only the base finish.
+  const isBody = (material.userData?.rlPart || 'body') === 'body';
+  if (!isBody) { params.iridescence = 0; params.sheen = 0; }
+  if (params.sheen) { physical.sheen = params.sheen; physical.sheenRoughness = 0.8; physical.sheenColor = new THREE.Color(0xffffff).multiplyScalar(0.6); }
   if (params.iridescence) { physical.iridescence = params.iridescence; physical.iridescenceIOR = params.iridescenceIOR; physical.iridescenceThicknessRange = [200, 600]; }
   // Tiling detail normal. The body's own normal keeps the panel shape, so when it has one the
   // detail rides on the clearcoat layer instead of replacing it.
@@ -89,6 +92,7 @@ export function applyFinish(mesh, material, finish, { detailNormal = null, envMa
     rlToon: { value: params.toon ? 1 : 0 }
   };
   const paintHook = material.onBeforeCompile;
+  const hasSkin = Boolean(material.userData?.rlPaint?.rlSkinMap?.value);
   const paintKey = material.customProgramCacheKey?.() || '';
   physical.onBeforeCompile = (shader, renderer) => {
     if (paintHook && paintHook !== THREE.Material.prototype.onBeforeCompile) paintHook.call(physical, shader, renderer);
@@ -96,8 +100,25 @@ export function applyFinish(mesh, material, finish, { detailNormal = null, envMa
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>\n${FINISH_PARS}`)
       .replace('#include <opaque_fragment>', `${FINISH_OUTPUT}\n#include <opaque_fragment>`);
+    // Painted bodies: BlankSkin B marks the windows. The finish (detail bumps, flakes, metal)
+    // is paint, so glass gets its plain normal back and stays smooth glossy glass.
+    if (hasSkin) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n  float rlGlass = clamp(rlSkin.b, 0.0, 1.0);\n  normal = normalize(mix(normal, nonPerturbedNormal, rlGlass));`)
+        .replace('#include <clearcoat_normal_fragment_maps>', `#include <clearcoat_normal_fragment_maps>\n#ifdef USE_CLEARCOAT\n  clearcoatNormal = normalize(mix(clearcoatNormal, nonPerturbedNormal, rlGlass));\n#endif`)
+        .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.08, clamp(texture2D(rlSkinMap, vMapUv).b, 0.0, 1.0));`)
+        .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\n  metalnessFactor = mix(metalnessFactor, 0.0, clamp(texture2D(rlSkinMap, vMapUv).b, 0.0, 1.0));`)
+        .replace('if (rlSparkle > 0.0) {', 'if (rlSparkle > 0.0 && rlGlass < 0.5) {')
+        .replace('#include <lights_physical_fragment>', `#include <lights_physical_fragment>
+#ifdef USE_IRIDESCENCE
+  material.iridescence *= 1.0 - rlGlass;
+#endif
+#ifdef USE_SHEEN
+  material.sheenColor *= diffuseColor.rgb * (1.0 - rlGlass);
+#endif`);
+    }
   };
-  physical.customProgramCacheKey = () => `${paintKey}|finish-${params.curve}-${params.sparkle > 0 ? 's' : ''}${params.toon ? 't' : ''}`;
+  physical.customProgramCacheKey = () => `${paintKey}|${hasSkin ? 'glass' : ''}|finish-${params.curve}-${params.sparkle > 0 ? 's' : ''}${params.toon ? 't' : ''}`;
   physical.userData.rlFinish = { id: finish.id, displayName: finish.displayName };
   physical.needsUpdate = true;
   if (Array.isArray(mesh.material)) {

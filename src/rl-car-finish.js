@@ -56,8 +56,10 @@ export function finishMaterialParams(finish = null) {
   }
   // A strong detail normal (fur, weave, cracks) scatters light: rougher.
   if (params.detailNormalScale > 0.9 && !metal) params.roughness = clamp(params.roughness + 0.12);
-  if (Number(finish.pearlescentStrength) > 0 || /pearl/i.test(name)) params.iridescence = 0.85;
-  if (/fur|yarn|knit|burlap|canvas|zebra|felt/i.test(name)) params.sheen = 0.25;
+  // pearlescentStrength is the game's 0..1 pearl amount (Furry 0.19, Obsidian 0.8, Pearlescent 1).
+  const pearl = Math.min(1, Math.max(0, Number(finish.pearlescentStrength) || 0));
+  if (pearl > 0 || /pearl/i.test(name)) params.iridescence = 0.85 * (pearl || 1) ** 2;
+  if (/fur|yarn|knit|burlap|canvas|zebra|felt/i.test(name)) params.sheen = 0.12;
   return params;
 }
 
