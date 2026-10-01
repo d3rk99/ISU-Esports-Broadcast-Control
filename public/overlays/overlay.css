@@ -423,6 +423,9 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
   font-size: 38px;
   text-shadow: none;
 }
+/* After halftime the teams play the other side, so the score colours swap with them. */
+.valorant-hud.sides-swapped .val-team--home > b { color: var(--val-coral-soft); }
+.valorant-hud.sides-swapped .val-team--away > b { color: var(--val-teal-soft); }
 .val-native-fit .val-team--home > b { right: 8px; }
 .val-native-fit .val-team--away > b { left: 8px; }
 .val-native-fit .val-series-dots {

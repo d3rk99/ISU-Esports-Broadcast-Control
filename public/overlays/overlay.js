@@ -397,7 +397,16 @@
   function valorantRoundNumber(live, homeScore, awayScore) {
     const timelineRound = Number(live?.observer3?.roundTimeline?.currentRound);
     if (Number.isFinite(timelineRound) && timelineRound > 0) return timelineRound;
-    return Math.max(1, Math.min(24, homeScore + awayScore + 1));
+    return Math.max(1, homeScore + awayScore + 1);
+  }
+
+  // Home starts on the side shown in teal (defense) and swaps at halftime: rounds 13-24 are
+  // the other side. Overtime (25+) swaps every round, starting back on the original side.
+  function valorantSidesSwapped(roundNumber) {
+    const round = Number(roundNumber) || 1;
+    if (round <= 12) return false;
+    if (round <= 24) return true;
+    return (round - 25) % 2 === 1;
   }
 
   function valorantSideLabel(role) {
@@ -545,6 +554,7 @@
       : trustedValorantScore(live, 'away', teams[1]?.score);
     const roundNumber = valorantRoundNumber(live, homeScore, awayScore);
     hud.classList.remove('spike-planted');
+    hud.classList.toggle('sides-swapped', valorantSidesSwapped(roundNumber));
     hud.dataset.homeName = teams[0]?.name || 'HOME';
     hud.dataset.awayName = teams[1]?.name || 'AWAY';
     setText('#val-home-name', teams[0]?.name || 'HOME');
