@@ -57,7 +57,7 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('#startAll').click()`);
   await js(`document.querySelector('#recordToggle').click()`);
   await new Promise((r) => setTimeout(r, 9000));
-  const monitor = await js(`({ previewLive: document.querySelector('.preview-box').classList.contains('live'), imgW: document.querySelector('#previewImg').naturalWidth, meterL: parseFloat(document.querySelector('#meterL').style.height) || 0, meterText: document.querySelector('#meterText').textContent, health: document.querySelector('#healthBadge').textContent, outState: document.querySelector('#destinations .state').textContent })`);
+  const monitor = await js(`({ previewLive: document.querySelector('.preview-box').classList.contains('live'), imgW: document.querySelector('#previewImg').width, canvasShown: getComputedStyle(document.querySelector('#previewImg')).display !== 'none', meterL: parseFloat(document.querySelector('#meterL').style.height) || 0, meterText: document.querySelector('#meterText').textContent, health: document.querySelector('#healthBadge').textContent, outState: document.querySelector('#destinations .state').textContent })`);
   const recLabel = await js(`document.querySelector('#recordToggle').textContent + ' | ' + document.querySelector('#recordStatus').textContent`);
   win.setSize(1400, 1100);
   fs.writeFileSync(shot, (await win.webContents.capturePage()).toPNG());
@@ -74,7 +74,7 @@ app.whenReady().then(async () => {
   try { streams = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name', '-of', 'json', rx.file]).toString()).streams.map((s) => `${s.codec_type}:${s.codec_name}`); } catch {}
   const result = { monitor, recLabel, recState, recFiles: recFiles.length, lockedEarly, unlocked, outputState: status.outputs[0]?.state, sentBytes: status.outputs[0]?.sentBytes, streams, keyInConfig, keyInView, error: status.error };
   console.log(JSON.stringify(result));
-  const pass = monitor.previewLive && monitor.imgW > 0 && monitor.meterL > 10 && /HEALTHY/.test(monitor.outState) && recState === 'RECORDING' && recFiles.length >= 1 && lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
+  const pass = monitor.previewLive && monitor.imgW > 0 && monitor.canvasShown && monitor.meterL > 10 && /HEALTHY/.test(monitor.outState) && recState === 'RECORDING' && recFiles.length >= 1 && lockedEarly && unlocked && streams.includes('video:h264') && streams.includes('audio:aac') && !keyInView && !keyInConfig;
   console.log(pass ? 'UI REAL PASS' : 'UI REAL FAIL');
   fs.rmSync(dir, { recursive: true, force: true });
   app.exit(pass ? 0 : 1);

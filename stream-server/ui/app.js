@@ -164,14 +164,27 @@ function setMeters(m) {
   const f = (d) => d <= -89 ? '—' : d.toFixed(0);
   $('meterText').textContent = `L ${f(m.peak[0])} · R ${f(m.peak[1])} dBFS peak`;
 }
-let previewUrl = '';
+// Latest-frame-wins: decode off the main thread, draw on the next animation frame, and drop
+// any frame that arrives while one is still decoding, so the preview never lags or piles up.
+let pendingFrame = null;
+let decoding = false;
+async function drawPreview() {
+  if (decoding || !pendingFrame) return;
+  decoding = true;
+  const bytes = pendingFrame; pendingFrame = null;
+  try {
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+    const canvas = $('previewImg');
+    if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) { canvas.width = bitmap.width; canvas.height = bitmap.height; }
+    requestAnimationFrame(() => { canvas.getContext('2d').drawImage(bitmap, 0, 0); bitmap.close(); canvas.closest('.preview-box').classList.add('live'); });
+  } catch { /* a bad frame is skipped, never shown */ }
+  decoding = false;
+  if (pendingFrame) drawPreview();
+}
 window.stream.onPreview((bytes) => {
   if (!$('previewOn').checked) return;
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' }));
-  const img = $('previewImg');
-  img.onload = () => { if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = url; };
-  img.src = url;
-  img.closest('.preview-box').classList.add('live');
+  pendingFrame = bytes;
+  drawPreview();
 });
 window.stream.onMeter(setMeters);
 $('previewOn').onchange = () => { command('preview', { enabled: $('previewOn').checked }); if (!$('previewOn').checked) $('previewImg').closest('.preview-box').classList.remove('live'); };
