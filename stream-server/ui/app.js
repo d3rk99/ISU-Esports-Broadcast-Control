@@ -47,20 +47,38 @@ let deviceModes = [];
 const option = (value, text) => element('option', { value, textContent: text });
 // Device lists from the server. Keeps the saved choice even if it's unplugged right now, so
 // opening the app with a camera unplugged never silently changes the config.
+// Each engine names devices its own way (FFmpeg: "@device_..." ids or names; OBS engine: friendly
+// names). When the shown list changes, carry the pick over by display name; a saved pick that isn't
+// in the current list only stays (marked "not found") if it belongs to THIS engine's saved config.
+function pickFor(list, selectEl, savedId, savedForThisType) {
+  const current = selectEl.value || '';
+  if (list.some((d) => d.id === current)) return current;
+  const all = [...(captureDevices?.video || []), ...(captureDevices?.audio || []), ...(captureDevices?.obs?.video || []), ...(captureDevices?.obs?.audio || [])];
+  const name = all.find((d) => d.id === current)?.name?.replace(/ \(.*\)$/, '');
+  const byName = name && list.find((d) => d.name === name || d.name.replace(/ \(.*\)$/, '') === name);
+  if (byName) return byName.id;
+  return savedForThisType ? savedId : '';
+}
 function renderDevices() {
   const saved = config?.input || {};
-  const obsEngine = $('inputType')?.value === 'obs-device';
+  const type = $('inputType')?.value;
+  const obsEngine = type === 'obs-device';
   const cap = (obsEngine ? captureDevices?.obs : captureDevices) || { video: [], audio: [] };
-  const vids = cap.video.map((d) => option(d.id, d.name));
-  if (saved.videoDevice && !cap.video.some((d) => d.id === saved.videoDevice)) vids.unshift(option(saved.videoDevice, `${saved.videoDevice} (not found)`));
-  $('videoDevice').replaceChildren(option('', vids.length ? 'Choose a device…' : 'No devices found · Refresh'), ...vids);
-  $('videoDevice').value = saved.videoDevice || '';
-  const auds = cap.audio.map((d) => option(d.id, d.name));
-  if (saved.audioDevice && !cap.audio.some((d) => d.id === saved.audioDevice)) auds.unshift(option(saved.audioDevice, `${saved.audioDevice} (not found)`));
-  $('audioDevice').replaceChildren(option('', 'None (silent audio)'), ...auds);
-  $('audioDevice').value = saved.audioDevice || '';
+  const savedHere = saved.type === type;
+  const fill = (select, list, empty, savedId) => {
+    const keep = pickFor(list, select, savedId, savedHere);
+    const opts = list.map((d) => option(d.id, d.name));
+    if (keep && !list.some((d) => d.id === keep)) opts.unshift(option(keep, `${keep} (not found)`));
+    select.replaceChildren(option('', empty(list)), ...opts);
+    select.value = keep;
+  };
+  // First render after load: start from the saved choice.
+  if (!$('videoDevice').options.length) { $('videoDevice').append(option(saved.videoDevice || '', '')); $('videoDevice').value = saved.videoDevice || ''; }
+  if (!$('audioDevice').options.length) { $('audioDevice').append(option(saved.audioDevice || '', '')); $('audioDevice').value = saved.audioDevice || ''; }
+  fill($('videoDevice'), cap.video, (l) => (l.length ? 'Choose a device…' : 'No devices found · Refresh'), saved.videoDevice);
+  fill($('audioDevice'), cap.audio, () => 'None (silent audio)', saved.audioDevice);
   renderModes();
-  $('deviceNote').textContent = cap.error ? `Device scan: ${cap.error}` : `${cap.video.length} video / ${cap.audio.length} audio device(s) found${cap.backend ? ` via ${cap.backend}` : ''}. Webcams, capture cards, OBS Virtual Camera and DeckLink all appear here.`;
+  $('deviceNote').textContent = cap.error ? `Device scan: ${cap.error}` : `${cap.video.length} video / ${cap.audio.length} audio device(s) found${cap.backend ? ` via ${cap.backend === 'obs' ? 'the OBS engine' : cap.backend}` : ''}. Webcams, capture cards, OBS Virtual Camera and DeckLink all appear here.`;
 }
 function modeValue(m) { return [m.size, m.fps, m.format].join('|'); }
 function renderModes() {

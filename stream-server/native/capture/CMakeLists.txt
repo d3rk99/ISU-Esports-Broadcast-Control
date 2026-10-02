@@ -21,7 +21,7 @@ FetchContent_MakeAvailable(libdshowcapture)
 add_executable(isu-capture src/main.cpp src/mkv_writer.hpp)
 target_include_directories(isu-capture PRIVATE ${libdshowcapture_SOURCE_DIR} src)
 target_compile_definitions(isu-capture PRIVATE UNICODE _UNICODE NOMINMAX)
-target_link_libraries(isu-capture PRIVATE libdshowcapture ole32)
+target_link_libraries(isu-capture PRIVATE libdshowcapture ole32 oleaut32 uuid)
 # Keep the DLL next to the exe (LGPL: shipped as a separate, replaceable library).
 add_custom_command(TARGET isu-capture POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
   $<TARGET_FILE:libdshowcapture> $<TARGET_FILE_DIR:isu-capture>)

@@ -15,6 +15,8 @@
 // Logs go to stderr as single lines ("isu-capture: ..."). Exit code != 0 = could not start.
 #include <windows.h>
 #include <objbase.h>
+#include <oleauto.h>
+#include <ocidl.h>
 #include "dshowcapture.hpp"
 #include "mkv_writer.hpp"
 #include <algorithm>
@@ -58,6 +60,47 @@ static std::string json(const std::string &s) {
 	return o + "\"";
 }
 static void log(const char *fmt, const std::string &a = "") { std::fprintf(stderr, "isu-capture: "); std::fprintf(stderr, fmt, a.c_str()); std::fprintf(stderr, "\n"); std::fflush(stderr); }
+
+// FFmpeg lists DirectShow devices by moniker display name ("@device_cm_{...}\wave_{...}",
+// "@device_pnp_..."). libdshowcapture only knows friendly names and device paths, so turn a moniker
+// name into its FriendlyName (and DevicePath when it has one) before matching.
+static bool monikerInfo(const std::string &id, std::wstring &friendly, std::wstring &devicePath) {
+	if (id.rfind("@device", 0) != 0) return false;
+	IBindCtx *ctx = nullptr;
+	if (FAILED(CreateBindCtx(0, &ctx))) return false;
+	IMoniker *mon = nullptr;
+	ULONG eaten = 0;
+	std::wstring wid = wide(id);
+	HRESULT hr = MkParseDisplayName(ctx, wid.c_str(), &eaten, &mon);
+	bool ok = false;
+	if (SUCCEEDED(hr) && mon) {
+		IPropertyBag *bag = nullptr;
+		if (SUCCEEDED(mon->BindToStorage(ctx, nullptr, IID_IPropertyBag, reinterpret_cast<void **>(&bag))) && bag) {
+			VARIANT v; VariantInit(&v);
+			if (SUCCEEDED(bag->Read(L"FriendlyName", &v, nullptr)) && v.vt == VT_BSTR) { friendly = v.bstrVal; ok = true; }
+			VariantClear(&v);
+			VariantInit(&v);
+			if (SUCCEEDED(bag->Read(L"DevicePath", &v, nullptr)) && v.vt == VT_BSTR) devicePath = v.bstrVal;
+			VariantClear(&v);
+			bag->Release();
+		}
+		mon->Release();
+	}
+	ctx->Release();
+	return ok;
+}
+
+// Match by path, then friendly name, then moniker id (resolved to path/name).
+template <typename T> static const T *findDevice(const std::vector<T> &list, const std::string &arg) {
+	for (const auto &d : list) if (!d.path.empty() && utf8(d.path) == arg) return &d;
+	for (const auto &d : list) if (utf8(d.name) == arg) return &d;
+	std::wstring friendly, path;
+	if (monikerInfo(arg, friendly, path)) {
+		for (const auto &d : list) if (!path.empty() && d.path == path) return &d;
+		for (const auto &d : list) if (d.name == friendly) return &d;
+	}
+	return nullptr;
+}
 
 static const char *formatName(VideoFormat f) {
 	switch (f) {
@@ -261,10 +304,8 @@ int main(int argc, char **argv) {
 	// Match the video device by path, then by name (same rules OBS uses for its device id).
 	std::vector<VideoDevice> vids;
 	Device::EnumVideoDevices(vids);
-	const VideoDevice *vd = nullptr;
-	for (const auto &d : vids) if (utf8(d.path) == videoArg) vd = &d;
-	if (!vd) for (const auto &d : vids) if (utf8(d.name) == videoArg) { vd = &d; break; }
-	if (!vd) { log("video device not found: %s", videoArg); return 3; }
+	const VideoDevice *vd = findDevice(vids, videoArg);
+	if (!vd) { log("video device not found: %s (run isu-capture --list to see the names)", videoArg); return 3; }
 
 	vc.name = vd->name;
 	vc.path = vd->path;
@@ -293,10 +334,13 @@ int main(int argc, char **argv) {
 			ac.useVideoDevice = !vd->separateAudioFilter;
 			ac.useSeparateAudioFilter = vd->separateAudioFilter;
 		} else {
-			const AudioDevice *ad = nullptr;
-			for (const auto &d : auds) if (utf8(d.path) == audioArg) ad = &d;
-			if (!ad) for (const auto &d : auds) if (utf8(d.name) == audioArg) { ad = &d; break; }
-			if (!ad) { log("audio device not found: %s", audioArg); return 5; }
+			const AudioDevice *ad = findDevice(auds, audioArg);
+			if (!ad) {
+				std::string names;
+				for (const auto &d : auds) names += (names.empty() ? "" : ", ") + utf8(d.name);
+				log("audio device not found: %s", audioArg + " (audio devices: " + (names.empty() ? "none" : names) + ")");
+				return 5;
+			}
 			ac.name = ad->name;
 			ac.path = ad->path;
 		}
