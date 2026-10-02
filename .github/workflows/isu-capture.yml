@@ -28,12 +28,24 @@ jobs:
         run: |
           $pipe = "\\.\pipe\isu-ci-$PID"
           $err = "$env:RUNNER_TEMP\cap.err"
-          $cap = Start-Process build/Release/isu-capture.exe -ArgumentList '--test-pattern','--pipe',$pipe,'--parent-pid',"$PID" -RedirectStandardError $err -RedirectStandardInput NUL -PassThru -NoNewWindow
-          for ($i = 0; $i -lt 50 -and -not ((Test-Path $err) -and (Get-Content $err -Raw) -match 'pipe ready'); $i++) { Start-Sleep -Milliseconds 100 }
-          Get-Content $err
+          # stdin = a file that never ends (keeps reading 0 bytes = EOF would stop it), so give it an
+          # open handle via a process we control instead: .NET Process with redirected stdin.
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path build/Release/isu-capture.exe).Path
+          $psi.Arguments = "--test-pattern --pipe $pipe --parent-pid $PID"
+          $psi.UseShellExecute = $false; $psi.RedirectStandardInput = $true; $psi.RedirectStandardError = $true
+          $cap = [System.Diagnostics.Process]::Start($psi)
+          $errTask = $cap.StandardError.ReadLineAsync()
+          if (-not $errTask.Wait(5000)) { throw "isu-capture did not report 'pipe ready'" }
+          Write-Host "isu-capture: $($errTask.Result)"
+          $rest = $cap.StandardError.ReadToEndAsync()
           ffmpeg -hide_banner -loglevel error -f matroska -probesize 32M -analyzeduration 0 -fflags nobuffer -i $pipe -t 8 -map 0:v:0 -map 0:a:0 -c:v libx264 -preset ultrafast -c:a aac -y "$env:RUNNER_TEMP\out.mkv"
-          if ($LASTEXITCODE -ne 0) { Get-Content $err; throw "FFmpeg could not read the isu-capture pipe" }
-          Stop-Process -Id $cap.Id -ErrorAction SilentlyContinue
+          $ffrc = $LASTEXITCODE
+          $cap.StandardInput.Close()   # same stop signal the app uses: stdin EOF
+          if (-not $cap.WaitForExit(5000)) { $cap.Kill(); throw "isu-capture did not stop when its stdin closed" }
+          Write-Host "isu-capture log: $($rest.Result)"
+          Write-Host "isu-capture exit code: $($cap.ExitCode)"
+          if ($ffrc -ne 0) { throw "FFmpeg could not read the isu-capture pipe" }
           ffprobe -v error -show_entries stream=codec_type,codec_name,width,height -of compact "$env:RUNNER_TEMP\out.mkv"
           $o = "$env:RUNNER_TEMP\out.mkv" -replace '\\','/' -replace ':','\:'
           $v = ffprobe -v error -f lavfi -i "movie='$o',signalstats" -show_entries frame=pts_time:frame_tags=lavfi.signalstats.YAVG -of csv=p=0
