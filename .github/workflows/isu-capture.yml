@@ -55,7 +55,8 @@ jobs:
           $d = foreach ($f in $fl) { $b = $bp | Sort-Object { [math]::Abs($_ - $f) } | Select-Object -First 1; [math]::Round(($b - $f) * 1000) }
           Write-Host "flashes: $($fl.Count)  beep-flash ms: $($d -join ' ')"
           if ($fl.Count -lt 5) { throw "too few flashes in the encoded output" }
-          foreach ($x in $d) { if ([math]::Abs($x) -gt 20) { throw "A/V out of sync: $x ms" } }
+          # Skip the first flash: the encode starts mid-way into it, so its onset isn't a real edge.
+          foreach ($x in ($d | Select-Object -Skip 1)) { if ([math]::Abs($x) -gt 20) { throw "A/V out of sync: $x ms" } }
       - name: Package
         shell: pwsh
         run: |
