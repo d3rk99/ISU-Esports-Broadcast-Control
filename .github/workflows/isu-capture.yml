@@ -20,6 +20,30 @@ jobs:
           $out = & build/Release/isu-capture.exe --list
           $out | ConvertFrom-Json | Out-Null
           Write-Host $out
+      - name: Install FFmpeg
+        shell: pwsh
+        run: choco install ffmpeg -y --no-progress
+      - name: End-to-end on Windows (isu-capture test pattern -> named pipe -> FFmpeg encode, A/V sync check)
+        shell: pwsh
+        run: |
+          $pipe = "\\.\pipe\isu-ci-$PID"
+          $err = "$env:RUNNER_TEMP\cap.err"
+          $cap = Start-Process build/Release/isu-capture.exe -ArgumentList '--test-pattern','--pipe',$pipe,'--parent-pid',"$PID" -RedirectStandardError $err -RedirectStandardInput NUL -PassThru -NoNewWindow
+          for ($i = 0; $i -lt 50 -and -not ((Test-Path $err) -and (Get-Content $err -Raw) -match 'pipe ready'); $i++) { Start-Sleep -Milliseconds 100 }
+          Get-Content $err
+          ffmpeg -hide_banner -loglevel error -f matroska -probesize 32M -analyzeduration 0 -fflags nobuffer -i $pipe -t 8 -map 0:v:0 -map 0:a:0 -c:v libx264 -preset ultrafast -c:a aac -y "$env:RUNNER_TEMP\out.mkv"
+          if ($LASTEXITCODE -ne 0) { Get-Content $err; throw "FFmpeg could not read the isu-capture pipe" }
+          Stop-Process -Id $cap.Id -ErrorAction SilentlyContinue
+          ffprobe -v error -show_entries stream=codec_type,codec_name,width,height -of compact "$env:RUNNER_TEMP\out.mkv"
+          $o = "$env:RUNNER_TEMP\out.mkv" -replace '\\','/' -replace ':','\:'
+          $v = ffprobe -v error -f lavfi -i "movie='$o',signalstats" -show_entries frame=pts_time:frame_tags=lavfi.signalstats.YAVG -of csv=p=0
+          $a = ffprobe -v error -f lavfi -i "amovie='$o',asetnsamples=48,astats=metadata=1:reset=1" -show_entries frame=pts_time:frame_tags=lavfi.astats.Overall.Peak_level -of csv=p=0
+          function Onsets($rows, $th) { $out = @(); $on = $false; foreach ($r in $rows) { $p = $r -split ','; $t = [double]$p[0]; $x = -200; [double]::TryParse($p[-1], [ref]$x) | Out-Null; $hit = $x -gt $th; if ($hit -and -not $on) { $out += $t }; $on = $hit }; return $out }
+          $fl = Onsets $v 120; $bp = Onsets $a -20
+          $d = foreach ($f in $fl) { $b = $bp | Sort-Object { [math]::Abs($_ - $f) } | Select-Object -First 1; [math]::Round(($b - $f) * 1000) }
+          Write-Host "flashes: $($fl.Count)  beep-flash ms: $($d -join ' ')"
+          if ($fl.Count -lt 5) { throw "too few flashes in the encoded output" }
+          foreach ($x in $d) { if ([math]::Abs($x) -gt 20) { throw "A/V out of sync: $x ms" } }
       - name: Package
         shell: pwsh
         run: |

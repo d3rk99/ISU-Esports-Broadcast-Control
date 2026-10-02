@@ -7,13 +7,29 @@
 #include <thread>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <string>
+#include <cstdio>
 int main(int argc, char **argv) {
 	for (int i = 1; i < argc; ++i) if (std::string(argv[i]) == "--list") { std::puts("{\"video\":[{\"name\":\"Fake Web Presenter\",\"path\":\"fake\",\"audioAttached\":false,\"modes\":[{\"format\":\"NV12\",\"maxWidth\":1280,\"maxHeight\":720,\"minInterval\":166833,\"maxInterval\":166833}]}],\"audio\":[{\"name\":\"Fake Web Presenter Audio\",\"path\":\"fake-a\"}]}"); return 0; }
+	// Same contract as isu-capture.exe: --pipe NAME -> create it, print "pipe ready" to stderr, wait
+	// for the reader (here a FIFO; on Windows a named pipe), then stream into it.
+	std::string pipe;
+	for (int i = 1; i + 1 < argc; ++i) if (std::string(argv[i]) == "--pipe") pipe = argv[i + 1];
+	FILE *out = stdout;
+	if (!pipe.empty()) {
+		unlink(pipe.c_str());
+		if (mkfifo(pipe.c_str(), 0600) != 0) { std::fprintf(stderr, "isu-capture: could not create the output pipe\n"); return 9; }
+		std::fprintf(stderr, "isu-capture: pipe ready\n"); std::fflush(stderr);
+		out = std::fopen(pipe.c_str(), "wb"); // blocks until FFmpeg opens it
+		unlink(pipe.c_str());
+		if (!out) return 11;
+	}
 	fcntl(0, F_SETFL, O_NONBLOCK);
 	const int W = 1280, H = 720;
 	mkv::VideoTrack v; v.width = W; v.height = H; v.fourcc = "NV12"; v.frameInterval100ns = 166833;
 	mkv::AudioTrack a;
-	mkv::Writer w(stdout);
+	mkv::Writer w(out);
 	w.header(&v, &a);
 	std::vector<uint8_t> frame(W * H * 3 / 2);
 	std::vector<int16_t> pcm(480 * 2);

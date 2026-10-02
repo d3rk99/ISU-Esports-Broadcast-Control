@@ -34,10 +34,14 @@ function obsCaptureInput(input, { exe = findCaptureExe(input.captureExe), platfo
   if (input.framerate) args.push('--fps', String(input.framerate));
   if (input.deviceFormat) args.push('--format', String(input.deviceFormat).toUpperCase());
   args.push('--audio-buffer', String(Math.max(1, Math.min(500, Number(input.audioBufferMs) || 10))));
-  const ffInput = ['-f', 'matroska', '-thread_queue_size', '1024', '-probesize', '32M', '-analyzeduration', '0', '-fflags', 'nobuffer', '-i', 'pipe:0'];
+  // The helper serves the stream on a Windows named pipe and FFmpeg opens it by name. (Passing a
+  // Node-created pipe to FFmpeg's stdin fails on Windows with "Error opening input files: I/O error".)
+  const pipe = `\\\\.\\pipe\\isu-capture-${process.pid}-${Date.now().toString(36)}`;
+  args.push('--pipe', pipe, '--parent-pid', String(process.pid));
+  const ffInput = ['-f', 'matroska', '-thread_queue_size', '1024', '-probesize', '32M', '-analyzeduration', '0', '-fflags', 'nobuffer', '-i', pipe];
   return audio
-    ? { args: ffInput, video: '0:v:0', audio: '0:a:0', helper: { command: exe, args } }
-    : { args: [...ffInput, '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'], video: '0:v:0', audio: '1:a:0', helper: { command: exe, args } };
+    ? { args: ffInput, video: '0:v:0', audio: '0:a:0', helper: { command: exe, args, pipe } }
+    : { args: [...ffInput, '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'], video: '0:v:0', audio: '1:a:0', helper: { command: exe, args, pipe } };
 }
 
 // Device list from the helper (DirectShow names exactly as libdshowcapture sees them).

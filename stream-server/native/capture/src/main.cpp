@@ -21,6 +21,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdlib>
+#include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <deque>
@@ -133,13 +134,21 @@ static void push(bool video, long long ts, const unsigned char *data, size_t siz
 	qcv.notify_one();
 }
 
-static BOOL WINAPI onCtrl(DWORD) { running = false; qcv.notify_all(); return TRUE; }
+static std::atomic<bool> outputConnected{false};
+static void requestStop() {
+	running = false;
+	qcv.notify_all();
+	if (!outputConnected) std::_Exit(0); // still waiting for the encoder to connect: nothing to flush
+}
+static BOOL WINAPI onCtrl(DWORD) { requestStop(); return TRUE; }
 
 int main(int argc, char **argv) {
 	_setmode(_fileno(stdout), _O_BINARY);
 	std::string videoArg, audioArg, size, format = "", fpsArg;
-	bool list = false, deviceAudio = false;
+	std::string pipeName;
+	bool list = false, deviceAudio = false, testPattern = false;
 	int audioBuffer = 10;
+	DWORD parentPid = 0;
 	for (int i = 1; i < argc; ++i) {
 		std::string a = argv[i];
 		auto next = [&]() { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
@@ -151,12 +160,104 @@ int main(int argc, char **argv) {
 		else if (a == "--fps") fpsArg = next();
 		else if (a == "--format") format = next();
 		else if (a == "--audio-buffer") audioBuffer = std::max(1, std::min(500, std::atoi(next().c_str())));
+		else if (a == "--pipe") pipeName = next();
+		else if (a == "--parent-pid") parentPid = DWORD(std::strtoul(next().c_str(), nullptr, 10));
+		else if (a == "--test-pattern") testPattern = true;
 	}
 	CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 	SetLogCallback([](LogType t, const wchar_t *m, void *) { if (t <= LogType::Warning) log("dshow: %s", utf8(m)); }, nullptr);
 	if (list) return listDevices();
-	if (videoArg.empty()) { log("%s", "missing --video"); return 2; }
+	if (videoArg.empty() && !testPattern) { log("%s", "missing --video"); return 2; }
+	SetConsoleCtrlHandler(onCtrl, TRUE);
+	// Stop when the parent closes our stdin (normal stop) or the parent process dies. Only a clean EOF
+	// or a broken pipe counts: any other stdin read error must never stop a live capture.
+	std::thread([]() {
+		HANDLE in = GetStdHandle(STD_INPUT_HANDLE);
+		if (!in || in == INVALID_HANDLE_VALUE) return;
+		char b[64]; DWORD n = 0;
+		for (;;) {
+			if (ReadFile(in, b, sizeof b, &n, nullptr)) { if (n == 0) break; continue; }
+			if (GetLastError() == ERROR_BROKEN_PIPE) break;
+			return;
+		}
+		requestStop();
+	}).detach();
+	if (parentPid) std::thread([parentPid]() {
+		HANDLE p = OpenProcess(SYNCHRONIZE, FALSE, parentPid);
+		if (!p) return;
+		WaitForSingleObject(p, INFINITE);
+		CloseHandle(p);
+		requestStop();
+	}).detach();
 
+	// Output: a synchronous Windows named pipe that FFmpeg opens by name (-i \\.\pipe\...).
+	// Handing FFmpeg a pipe created by Node does not work on Windows (overlapped handle -> FFmpeg
+	// "I/O error"), so the data path is helper -> named pipe -> FFmpeg with nothing in between.
+	FILE *outFile = stdout;
+	if (!pipeName.empty()) {
+		HANDLE h = CreateNamedPipeW(wide(pipeName).c_str(), PIPE_ACCESS_OUTBOUND, PIPE_TYPE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, 1, 8 * 1024 * 1024, 0, 0, nullptr);
+		if (h == INVALID_HANDLE_VALUE) { log("could not create the output pipe %s", pipeName); return 9; }
+		log("%s", "pipe ready");
+		if (!ConnectNamedPipe(h, nullptr) && GetLastError() != ERROR_PIPE_CONNECTED) { log("%s", "the encoder never opened the pipe"); return 10; }
+		outputConnected = true;
+		int fd = _open_osfhandle(reinterpret_cast<intptr_t>(h), 0);
+		outFile = fd >= 0 ? _fdopen(fd, "wb") : nullptr;
+		if (!outFile) { log("%s", "could not open the output pipe"); return 11; }
+	}
+	outputConnected = true;
+	std::setvbuf(outFile, nullptr, _IOFBF, 4 * 1024 * 1024);
+
+	mkv::Writer writer(outFile);
+	std::atomic<bool> headerDone{false};
+	std::mutex hm;
+	VideoFormat gotFormat = VideoFormat::Any;
+	int gotW = 0, gotH = 0;
+	long long gotInterval = 0;
+	int aRate = 0, aCh = 0, aBits = 16;
+	bool aFloat = false, haveAudio = false;
+	long long t0 = -1;
+	std::mutex t0m;
+	auto rel = [&](long long ts) { std::lock_guard<std::mutex> lk(t0m); if (t0 < 0) t0 = ts; return ts - t0; };
+	Device dev(InitGraph::True);
+	VideoConfig vc;
+	AudioConfig ac;
+	std::thread gen;
+
+	if (testPattern) {
+		// Built-in source for testing the whole helper -> encoder path without a device: 1280x720 NV12
+		// at 59.94 fps that flashes white at each whole second + a 1 kHz beep at the same instants.
+		gotFormat = VideoFormat::NV12; gotW = 1280; gotH = 720; gotInterval = 166833;
+		aRate = 48000; aCh = 2; aBits = 16; haveAudio = true;
+		gen = std::thread([]() {
+			const int W = 1280, H = 720;
+			std::vector<unsigned char> frame(W * H * 3 / 2);
+			std::vector<int16_t> pcm(480 * 2);
+			const auto start = std::chrono::steady_clock::now();
+			long long vf = 0, at = 0;
+			while (running) {
+				const long long now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count() / 100;
+				while (at <= now) {
+					for (int i = 0; i < 480; ++i) {
+						const long long t = at + (long long)i * 10000000 / 48000;
+						const int16_t v = (t % 10000000) < 1000000 ? int16_t(16000 * std::sin(2 * 3.14159265358979 * 1000.0 * t / 1e7)) : 0;
+						pcm[i * 2] = pcm[i * 2 + 1] = v;
+					}
+					push(false, at, reinterpret_cast<unsigned char *>(pcm.data()), pcm.size() * 2);
+					at += 100000;
+				}
+				while (vf * 1001LL * 10000000LL / 60000LL <= now) {
+					const long long vt = vf * 1001LL * 10000000LL / 60000LL;
+					const bool flash = (vt % 10000000) < 1000000;
+					std::fill(frame.begin(), frame.begin() + W * H, (unsigned char)(flash ? 235 : 16));
+					std::fill(frame.begin() + W * H, frame.end(), (unsigned char)128);
+					push(true, vt, frame.data(), frame.size());
+					++vf;
+				}
+				Sleep(2);
+			}
+		});
+		log("%s", "capturing built-in test pattern");
+	} else {
 	// Match the video device by path, then by name (same rules OBS uses for its device id).
 	std::vector<VideoDevice> vids;
 	Device::EnumVideoDevices(vids);
@@ -165,8 +266,6 @@ int main(int argc, char **argv) {
 	if (!vd) for (const auto &d : vids) if (utf8(d.name) == videoArg) { vd = &d; break; }
 	if (!vd) { log("video device not found: %s", videoArg); return 3; }
 
-	Device dev(InitGraph::True);
-	VideoConfig vc;
 	vc.name = vd->name;
 	vc.path = vd->path;
 	vc.useDefaultConfig = size.empty() && format.empty() && fpsArg.empty();
@@ -180,18 +279,6 @@ int main(int argc, char **argv) {
 	}
 	vc.internalFormat = vc.format = parseFormat(format);
 
-	mkv::Writer writer(stdout);
-	std::atomic<bool> headerDone{false};
-	std::mutex hm;
-	VideoFormat gotFormat = VideoFormat::Any;
-	int gotW = 0, gotH = 0;
-	long long gotInterval = 0;
-	int aRate = 0, aCh = 0, aBits = 16;
-	bool aFloat = false, haveAudio = false;
-	long long t0 = -1;
-	std::mutex t0m;
-	auto rel = [&](long long ts) { std::lock_guard<std::mutex> lk(t0m); if (t0 < 0) t0 = ts; return ts - t0; };
-
 	vc.callback = [&](const VideoConfig &c, unsigned char *data, size_t sz, long long start, long long, long) {
 		if (!headerDone) { std::lock_guard<std::mutex> lk(hm); gotFormat = c.format; gotW = c.cx; gotH = c.cy_abs; gotInterval = c.frameInterval; }
 		long long r = rel(start);
@@ -199,7 +286,6 @@ int main(int argc, char **argv) {
 	};
 	if (!dev.SetVideoConfig(&vc)) { log("%s", "could not configure the video device (mode not supported?)"); return 4; }
 
-	AudioConfig ac;
 	if (deviceAudio || !audioArg.empty()) {
 		std::vector<AudioDevice> auds;
 		Device::EnumAudioDevices(auds);
@@ -229,7 +315,7 @@ int main(int argc, char **argv) {
 	Result r = dev.Start();
 	if (r == Result::InUse) { log("%s", "the device is in use by another program (close OBS / the other app)"); return 7; }
 	if (r != Result::Success) { log("%s", "could not start capture"); return 8; }
-	SetConsoleCtrlHandler(onCtrl, TRUE);
+	} // device
 
 	// Writer: wait for the first video frame (and audio when expected) to learn the real formats,
 	// then emit the header and stream samples in timestamp order with a small reorder window.
@@ -270,12 +356,11 @@ int main(int argc, char **argv) {
 			writer.flush();
 		}
 	});
-	// stdin closing (parent exited) or Ctrl+C stops capture.
-	std::thread watch([]() { char b[64]; while (std::fread(b, 1, sizeof b, stdin) > 0) {} running = false; qcv.notify_all(); });
-	watch.detach();
 	while (running) Sleep(100);
-	dev.Stop();
+	if (gen.joinable()) gen.join();
+	else dev.Stop();
 	out.join();
+	std::fclose(outFile); // EOF tells FFmpeg the capture ended
 	if (droppedSamples) log("dropped %s samples because the encoder fell behind", std::to_string(droppedSamples.load()));
 	CoUninitialize();
 	return 0;

@@ -26,7 +26,13 @@ const rows = (args) => execFileSync('ffprobe', args).toString().trim().split('\n
   const real = obs.obsCaptureInput;
   require('../../core/media/sources.cjs');
   const sourcesPath = require.resolve('../../core/media/sources.cjs');
-  require.cache[require.resolve('../../core/media/obs-capture.cjs')].exports.obsCaptureInput = (input) => real(input, { exe: fake, platform: 'win32' });
+  // Same args the app builds for Windows, but the named pipe becomes a FIFO path on this machine.
+  require.cache[require.resolve('../../core/media/obs-capture.cjs')].exports.obsCaptureInput = (input) => {
+    const s = real(input, { exe: fake, platform: 'win32' });
+    const fifo = path.join(dir, `isu-capture-${Date.now()}.fifo`);
+    const swap = (a) => (a === s.helper.pipe ? fifo : a);
+    return { ...s, args: s.args.map(swap), helper: { ...s.helper, pipe: fifo, args: s.helper.args.map(swap) } };
+  };
   delete require.cache[sourcesPath]; delete require.cache[require.resolve('../../core/media/encoder.cjs')]; delete require.cache[require.resolve('../../core/media/engine.cjs')];
   const { RealEngine: Engine } = require('../../core/media/engine.cjs');
 
