@@ -11,15 +11,22 @@ const { ApiServer } = require('./core/api.cjs');
 const smoke = process.argv.includes('--smoke');
 app.setName('ISU Stream Server');
 app.setPath('userData', smoke ? fs.mkdtempSync(path.join(os.tmpdir(), 'isu-stream-smoke-')) : path.join(app.getPath('appData'), 'ISU Stream Server'));
-let service, timer, window, api, closing = false;
+let service, timer, window, api, logger, closing = false;
+// A BrowserWindow throws "Object has been destroyed" on almost any call after it closes, so every
+// background sender (status/preview/meter events, second-instance) goes through these guards.
+const alive = () => Boolean(window) && !window.isDestroyed() && !window.webContents.isDestroyed();
+const send = (channel, value) => { try { if (alive()) window.webContents.send(channel, value); } catch {} };
 // Serialize commands and ticks so future async adapters cannot race UI/API commands.
 let queue = Promise.resolve();
 function enqueue(fn) { const result = queue.then(fn); queue = result.catch(() => {}); return result; }
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-  app.on('second-instance', () => { window?.restore(); window?.focus(); });
+  app.on('second-instance', () => {
+    // Opening the app again while it's running just brings the existing window forward.
+    try { if (!alive()) return; if (window.isMinimized()) window.restore(); window.show(); window.focus(); } catch {}
+  });
   app.whenReady().then(async () => {
-    const logger = new Logger(path.join(app.getPath('userData'), 'logs'));
+    logger = new Logger(path.join(app.getPath('userData'), 'logs'));
     const store = new ConfigStore(app.getPath('userData'), new ElectronCredentialStore(safeStorage));
     if (smoke) store.save({ ...require('./core/config.cjs').defaults(), engine: process.env.SMOKE_ENGINE || 'simulation' });
     service = new StreamService(store, logger, { dataDir: app.getPath('userData') });
@@ -49,11 +56,11 @@ else {
         catch (error) { logger.write('command.error', { code: 'COMMAND_FAILED' }); return { ok: false, error: error.message }; }
       });
     });
-    function authorize(event) { if (event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender'); }
-    service.on('status', () => { if (!window.isDestroyed()) window.webContents.send('stream:status', service.fullStatus()); });
+    function authorize(event) { if (!alive() || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame) throw new Error('Untrusted IPC sender'); }
+    service.on('status', () => { if (alive()) send('stream:status', service.fullStatus()); });
     // Preview: <= 5 small JPEGs/s and 10 meter updates/s on their own channels, never in status.
-    service.on('preview', jpeg => { if (!window.isDestroyed() && !window.isMinimized()) window.webContents.send('stream:preview', jpeg); });
-    service.on('meter', meter => { if (!window.isDestroyed()) window.webContents.send('stream:meter', meter); });
+    service.on('preview', jpeg => { if (alive() && !window.isMinimized()) send('stream:preview', jpeg); });
+    service.on('meter', meter => send('stream:meter', meter));
     ipcMain.handle('stream:apiKey', event => { authorize(event); return store.apiKey(service.config); });
     await window.loadFile(path.join(__dirname, 'ui/index.html'));
     let last = performance.now();
@@ -94,6 +101,11 @@ else {
   app.on('before-quit', event => {
     if (!service || closing) return;
     event.preventDefault(); closing = true; clearInterval(timer);
-    enqueue(async () => { await api?.stop(); await service.close(); }).finally(() => app.quit());
+    service.removeAllListeners('status'); service.removeAllListeners('preview'); service.removeAllListeners('meter');
+    // Stop the API, recorder, outputs, encoder and delay buffer. Each step may fail on its own
+    // without leaving the app half-alive in the background; after 8 s we exit regardless.
+    const forced = setTimeout(() => app.exit(0), 8000);
+    const step = (fn) => Promise.resolve().then(fn).catch((error) => { try { logger?.write('application.error', { code: 'SHUTDOWN_STEP_FAILED' }); } catch {} });
+    step(() => api?.stop()).then(() => step(() => service.close())).finally(() => { clearTimeout(forced); app.exit(0); });
   });
 }
