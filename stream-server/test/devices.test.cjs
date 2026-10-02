@@ -88,9 +88,13 @@ test('A/V sync like OBS: one dshow graph, device timestamps (no wall-clock resta
 test('OBS engine source: helper command + FFmpeg reads live Matroska from the pipe; clear errors', () => {
   const { obsCaptureInput } = require('../core/media/obs-capture.cjs');
   const s = obsCaptureInput({ videoDevice: 'Blackmagic Web Presenter', audioDevice: 'Blackmagic Web Presenter Audio', videoSize: '1920x1080', framerate: '59.94', deviceFormat: 'nv12' }, { exe: 'C:\\isu\\isu-capture.exe', platform: 'win32' });
-  assert.deepEqual(s.helper.args, ['--video', 'Blackmagic Web Presenter', '--audio', 'Blackmagic Web Presenter Audio', '--size', '1920x1080', '--fps', '59.94', '--format', 'NV12', '--audio-buffer', '10']);
+  assert.deepEqual(s.helper.args.slice(0, 12), ['--video', 'Blackmagic Web Presenter', '--audio', 'Blackmagic Web Presenter Audio', '--size', '1920x1080', '--fps', '59.94', '--format', 'NV12', '--audio-buffer', '10']);
+  // Helper serves a named pipe; FFmpeg opens that same pipe by name (not Node-provided stdin).
+  assert.match(s.helper.pipe, /^\\\\\.\\pipe\\isu-capture-/);
+  assert.equal(s.helper.args[s.helper.args.indexOf('--pipe') + 1], s.helper.pipe);
+  assert.equal(s.helper.args[s.helper.args.indexOf('--parent-pid') + 1], String(process.pid));
   assert.deepEqual(s.args.slice(0, 2), ['-f', 'matroska']);
-  assert.equal(s.args[s.args.indexOf('-i') + 1], 'pipe:0');
+  assert.equal(s.args[s.args.indexOf('-i') + 1], s.helper.pipe);
   assert.equal(s.audio, '0:a:0');
   const silent = obsCaptureInput({ videoDevice: 'V' }, { exe: 'x.exe', platform: 'win32' });
   assert.equal(silent.audio, '1:a:0');
