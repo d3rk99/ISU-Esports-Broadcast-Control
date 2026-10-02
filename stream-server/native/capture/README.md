@@ -22,6 +22,8 @@ Or by hand with Visual Studio 2022 + CMake:
 
 Copy `isu-capture.exe` **and** `libdshowcapture.dll` into `stream-server/vendor/capture/`.
 
+First build: GitHub Actions run 37046779248 (windows-latest, MSVC) on commit 714e273, `--list` smoke test passed.
+
 ## Licenses
 
 - libdshowcapture: LGPL-2.1 (OBS Project). Fetched at build time at a pinned commit, unmodified, built
