@@ -49,7 +49,8 @@ const option = (value, text) => element('option', { value, textContent: text });
 // opening the app with a camera unplugged never silently changes the config.
 function renderDevices() {
   const saved = config?.input || {};
-  const cap = captureDevices || { video: [], audio: [] };
+  const obsEngine = $('inputType')?.value === 'obs-device';
+  const cap = (obsEngine ? captureDevices?.obs : captureDevices) || { video: [], audio: [] };
   const vids = cap.video.map((d) => option(d.id, d.name));
   if (saved.videoDevice && !cap.video.some((d) => d.id === saved.videoDevice)) vids.unshift(option(saved.videoDevice, `${saved.videoDevice} (not found)`));
   $('videoDevice').replaceChildren(option('', vids.length ? 'Choose a device…' : 'No devices found · Refresh'), ...vids);
@@ -76,9 +77,30 @@ async function scanDevices() {
   if (!result.ok) { $('deviceNote').textContent = result.error; return; }
   captureDevices = result.view.devices.capture; renderDevices();
 }
+// DirectShow caps -> the same mode shape the FFmpeg path uses (size, fps, format). Interval is in
+// 100 ns units; minInterval = the fastest fps the mode allows.
+function obsModes(caps) {
+  const seen = new Set(); const out = [];
+  for (const c of caps) {
+    if (!c.maxWidth || !c.minInterval || c.format === 'Any') continue;
+    const raw = 1e7 / c.minInterval;
+    const fps = [23.976, 24, 25, 29.97, 30, 50, 59.94, 60, 119.88, 120].find((f) => Math.abs(f - raw) < 0.02) ?? Math.round(raw * 100) / 100;
+    const m = { size: `${c.maxWidth}x${c.maxHeight}`, fps, format: c.format, label: `${c.maxWidth}x${c.maxHeight} @ ${fps} fps · ${c.format}` };
+    if (!seen.has(m.label)) { seen.add(m.label); out.push(m); }
+  }
+  return out.sort((a, b) => b.size.split('x').reduce((x, y) => x * y) - a.size.split('x').reduce((x, y) => x * y) || b.fps - a.fps);
+}
 async function loadModes() {
   const device = $('videoDevice').value;
   if (!device) { $('deviceNote').textContent = 'Pick a video device first.'; return; }
+  if ($('inputType').value === 'obs-device') {
+    // OBS engine: modes come with isu-capture's device list (DirectShow caps), no extra probe.
+    const dev = (captureDevices?.obs?.video || []).find((d) => d.id === device);
+    deviceModes = obsModes(dev?.modes || []);
+    renderModes();
+    $('deviceNote').textContent = deviceModes.length ? `${deviceModes.length} mode(s) from the OBS engine. Pick one, or Device default.` : 'No modes listed. Device default still works.';
+    return;
+  }
   $('deviceNote').textContent = 'Asking the device for its modes…';
   const result = await window.stream.command('deviceModes', { device });
   if (!result.ok) { $('deviceNote').textContent = result.error; return; }
@@ -87,7 +109,8 @@ async function loadModes() {
   $('deviceNote').textContent = deviceModes.length ? `${deviceModes.length} mode(s). Pick one, or Device default.` : 'The device did not list its modes (it may be busy in another app). Device default still works.';
 }
 function syncInputFields() {
-  for (const el of document.querySelectorAll('[data-input]')) el.hidden = el.dataset.input !== $('inputType').value;
+  for (const el of document.querySelectorAll('[data-input]')) el.hidden = !el.dataset.input.split(' ').includes($('inputType').value);
+  renderDevices();
   $('simLab').hidden = $('engine').value !== 'simulation';
 }
 function collect() {

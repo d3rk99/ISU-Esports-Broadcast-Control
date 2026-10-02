@@ -1,5 +1,6 @@
 'use strict';
 const { deviceInput } = require('./devices.cjs');
+const { obsCaptureInput } = require('./obs-capture.cjs');
 // Capture sources expressed as FFmpeg input arguments. The encoder process owns capture, so
 // raw frames never pass through Node or Electron.
 
@@ -52,6 +53,8 @@ function sourceInput(input, encoder, options = {}) {
     case 'decklink': return { args: decklinkSourceArgs(input), video: '0:v:0', audio: '0:a:0?' };
     // Webcams, capture cards, OBS Virtual Camera... (DirectShow on Windows, v4l2 on Linux).
     case 'device': return deviceInput(input, options);
+    // Same devices, captured by OBS's libdshowcapture through the isu-capture helper (Windows).
+    case 'obs-device': return obsCaptureInput(input, options);
     default: throw new Error(`Unknown input type: ${input.type}`);
   }
 }

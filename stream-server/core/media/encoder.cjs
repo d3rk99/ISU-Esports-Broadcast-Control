@@ -29,6 +29,7 @@ class ProgramEncoder extends EventEmitter {
       : ['-c:v', 'libx264', '-preset', encoder.x264Preset || 'veryfast', '-tune', 'zerolatency', '-x264-params', 'nal-hrd=cbr'];
     const [width, height] = encoder.resolution.split('x');
     const source = sourceInput(input, encoder);
+    this.lastSource = source;
     const offsetMs = Math.max(-2000, Math.min(2000, Math.round(Number(input.audioOffsetMs) || 0)));
     return [
       '-hide_banner', '-nostdin', '-loglevel', 'error', '-stats_period', '1', '-progress', 'pipe:2',
@@ -60,7 +61,23 @@ class ProgramEncoder extends EventEmitter {
     this.stats.codec = encoder.mode === 'hardware' ? 'h264_nvenc' : 'libx264';
     const reader = new TsReader();
     this.reader = reader;
-    const child = spawn(this.ffmpeg.path, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    // Sources with a capture helper (OBS engine): helper stdout -> encoder stdin, an OS pipe.
+    const source = this.lastSource;
+    let helper = null;
+    if (source.helper) {
+      helper = spawn(source.helper.command, source.helper.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      helper.stdin.on('error', () => {});
+      let helperLog = '';
+      helper.stderr.setEncoding('utf8');
+      helper.stderr.on('data', (t) => { helperLog = `${helperLog}${t}`.slice(-2000); this.helperLog = helperLog; });
+      this.helper = helper;
+    }
+    const child = spawn(this.ffmpeg.path, args, { stdio: [helper ? helper.stdout : 'ignore', 'pipe', 'pipe'], windowsHide: true });
+    if (helper) {
+      // Either side dying takes the other down, so a broken capture never looks like a live program.
+      helper.on('exit', (code) => { if (this.helper === helper) this.helper = null; if (this.child === child && !this.stopping) { try { child.kill('SIGTERM'); } catch {} } this.helperExit = code; });
+      child.on('exit', () => { try { helper.stdin.end(); } catch {} setTimeout(() => { try { helper.kill(); } catch {} }, 2000).unref?.(); });
+    }
     this.child = child;
     let carry = Buffer.alloc(0);
     let lastBytes = 0;
@@ -124,6 +141,16 @@ class ProgramEncoder extends EventEmitter {
       try { child.kill('SIGTERM'); } catch { resolve(); }
     });
     this.child = null;
+    const helper = this.helper;
+    if (helper) {
+      // Closing stdin asks isu-capture to stop the DirectShow graph cleanly (releases the device).
+      await new Promise((resolve) => {
+        const t = setTimeout(() => { try { helper.kill('SIGKILL'); } catch {} resolve(); }, 3000);
+        helper.once('exit', () => { clearTimeout(t); resolve(); });
+        try { helper.stdin.end(); } catch { resolve(); }
+      });
+      this.helper = null;
+    }
     this.stopping = false;
   }
 

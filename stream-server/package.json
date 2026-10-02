@@ -26,6 +26,7 @@
     "buildinfo": "node scripts/build-info.cjs",
     "prestart": "node scripts/build-info.cjs",
     "prebuild": "node scripts/build-info.cjs",
-    "prepackage": "node scripts/build-info.cjs"
+    "prepackage": "node scripts/build-info.cjs",
+    "test:obs-capture": "node test/media/obs-capture.e2e.cjs"
   }
 }

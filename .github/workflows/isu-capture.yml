@@ -1,0 +1,32 @@
+# Builds stream-server/native/capture (isu-capture.exe + OBS's libdshowcapture.dll) on a real
+# Windows runner with MSVC, checks it starts, and uploads the two files as a build artifact.
+name: isu-capture (Windows)
+on:
+  push:
+    paths: ['stream-server/native/capture/**', '.github/workflows/isu-capture.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S stream-server/native/capture -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Smoke test (device list must print valid JSON; runners have no cameras)
+        shell: pwsh
+        run: |
+          $out = & build/Release/isu-capture.exe --list
+          $out | ConvertFrom-Json | Out-Null
+          Write-Host $out
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item build/Release/isu-capture.exe, build/Release/libdshowcapture.dll dist/
+          Copy-Item build/_deps/libdshowcapture-src/COPYING dist/LICENSE-libdshowcapture-LGPL-2.1.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isu-capture-win-x64
+          path: dist/

@@ -84,3 +84,19 @@ test('A/V sync like OBS: one dshow graph, device timestamps (no wall-clock resta
   assert.doesNotMatch(enc.args({ type: 'test' }, settings).join(' '), /setpts/);
   assert.throws(() => validate({ ...defaults(), input: { ...defaults().input, audioOffsetMs: 5000 } }), /Audio sync offset/);
 });
+
+test('OBS engine source: helper command + FFmpeg reads live Matroska from the pipe; clear errors', () => {
+  const { obsCaptureInput } = require('../core/media/obs-capture.cjs');
+  const s = obsCaptureInput({ videoDevice: 'Blackmagic Web Presenter', audioDevice: 'Blackmagic Web Presenter Audio', videoSize: '1920x1080', framerate: '59.94', deviceFormat: 'nv12' }, { exe: 'C:\\isu\\isu-capture.exe', platform: 'win32' });
+  assert.deepEqual(s.helper.args, ['--video', 'Blackmagic Web Presenter', '--audio', 'Blackmagic Web Presenter Audio', '--size', '1920x1080', '--fps', '59.94', '--format', 'NV12', '--audio-buffer', '10']);
+  assert.deepEqual(s.args.slice(0, 2), ['-f', 'matroska']);
+  assert.equal(s.args[s.args.indexOf('-i') + 1], 'pipe:0');
+  assert.equal(s.audio, '0:a:0');
+  const silent = obsCaptureInput({ videoDevice: 'V' }, { exe: 'x.exe', platform: 'win32' });
+  assert.equal(silent.audio, '1:a:0');
+  assert.throws(() => obsCaptureInput({ videoDevice: 'V' }, { exe: '', platform: 'win32' }), /isu-capture\.exe was not found/);
+  assert.throws(() => obsCaptureInput({ videoDevice: 'V' }, { exe: 'x', platform: 'linux' }), /Windows-only/);
+  const c = defaults(); c.input = { ...c.input, type: 'obs-device', videoDevice: 'V', deviceFormat: 'NV12' };
+  assert.equal(validate(c).input.type, 'obs-device');
+  assert.throws(() => validate({ ...c, input: { ...c.input, deviceFormat: 'nv12 -x' } }), /pixel format|OBS engine format/);
+});
