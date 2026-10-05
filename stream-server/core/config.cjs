@@ -13,7 +13,7 @@ function migrate(c) {
 function validate(c) {
   if (c?.version !== 2 || !c.input || !c.encoder || !Array.isArray(c.destinations)) throw new Error('Invalid configuration schema');
   if (!['real', 'simulation'].includes(c.engine)) throw new Error('Engine must be real or simulation');
-  if (!['test', 'file', 'decklink', 'device'].includes(c.input.type)) throw new Error('Input type must be test, file, decklink or device');
+  if (!['test', 'file', 'decklink', 'device', 'obs-device'].includes(c.input.type)) throw new Error('Input type must be test, file, decklink, device or obs-device');
   if (typeof c.ffmpegPath !== 'string' || c.ffmpegPath.length > 1024 || typeof c.storageDir !== 'string' || c.storageDir.length > 1024) throw new Error('Invalid FFmpeg or storage path');
   if (c.troubleshooting !== undefined && typeof c.troubleshooting !== 'boolean') throw new Error('Invalid troubleshooting setting');
   if (c.recording !== undefined && (typeof c.recording !== 'object' || typeof c.recording.directory !== 'string' || c.recording.directory.length > 1024 || !(Number.isFinite(c.recording.segmentMinutes) && c.recording.segmentMinutes >= 1 && c.recording.segmentMinutes <= 720))) throw new Error('Invalid recording settings (segment 1-720 minutes)');
@@ -27,7 +27,9 @@ function validate(c) {
   if (c.input.framerate && !/^\d{1,6}(\.\d{1,4})?(\/\d{1,5})?$/.test(c.input.framerate)) throw new Error('Capture frame rate must be a number like 59.94 or 60000/1001 (or blank)');
   if (c.input.deviceFormat && !/^[a-z0-9_]{1,32}$/i.test(c.input.deviceFormat)) throw new Error('Invalid capture pixel format');
   for (const [k, lo, hi] of [['audioOffsetMs', -2000, 2000], ['audioBufferMs', 5, 500]]) if (c.input[k] !== undefined && c.input[k] !== '' && !(Number.isFinite(Number(c.input[k])) && Number(c.input[k]) >= lo && Number(c.input[k]) <= hi)) throw new Error(`${k === 'audioOffsetMs' ? 'Audio sync offset' : 'Audio buffer'} must be ${lo} to ${hi} ms`);
-  if (c.input.type === 'device' && !c.input.videoDevice) throw new Error('Pick a video capture device before saving');
+  if (c.input.captureExe !== undefined && (typeof c.input.captureExe !== 'string' || c.input.captureExe.length > 1024)) throw new Error('Invalid isu-capture path');
+  if (c.input.deviceFormat && c.input.type === 'obs-device' && !/^(NV12|YUY2|UYVY|I420|YV12|MJPEG|ARGB|XRGB|HDYC|YVYU)$/i.test(c.input.deviceFormat)) throw new Error('OBS engine format must be NV12, YUY2, UYVY, I420, YV12, MJPEG, ARGB or XRGB');
+  if (['device', 'obs-device'].includes(c.input.type) && !c.input.videoDevice) throw new Error('Pick a video capture device before saving');
   const num = (v, min, max) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
   const str = (v, max = 512) => typeof v === 'string' && v.length <= max;
   if (!num(c.delaySeconds, 0, 86400) || !str(c.input.video) || !str(c.input.audio)) throw new Error('Invalid input or delay (0–86400 seconds)');

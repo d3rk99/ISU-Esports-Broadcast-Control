@@ -1,0 +1,76 @@
+# Builds stream-server/native/capture (isu-capture.exe + OBS's libdshowcapture.dll) on a real
+# Windows runner with MSVC, checks it starts, and uploads the two files as a build artifact.
+name: isu-capture (Windows)
+on:
+  push:
+    paths: ['stream-server/native/capture/**', '.github/workflows/isu-capture.yml']
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S stream-server/native/capture -B build -A x64
+      - name: Build
+        run: cmake --build build --config Release
+      - name: Smoke test (device list must print valid JSON; runners have no cameras)
+        shell: pwsh
+        run: |
+          $out = & build/Release/isu-capture.exe --list
+          $out | ConvertFrom-Json | Out-Null
+          Write-Host $out
+      - name: Device ids (an FFmpeg "@device_..." id must resolve, a wrong one must say so clearly)
+        shell: pwsh
+        run: |
+          $out = & build/Release/isu-capture.exe --video '@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\wave_{00000000-0000-0000-0000-000000000000}' 2>&1 | Out-String
+          Write-Host $out
+          if ($out -notmatch 'video device not found') { throw "expected a clear 'not found' message" }
+          $global:LASTEXITCODE = 0   # the helper exiting 3 here is the expected result
+      - name: Install FFmpeg
+        shell: pwsh
+        run: choco install ffmpeg -y --no-progress
+      - name: End-to-end on Windows (isu-capture test pattern -> named pipe -> FFmpeg encode, A/V sync check)
+        shell: pwsh
+        run: |
+          $pipe = "\\.\pipe\isu-ci-$PID"
+          $err = "$env:RUNNER_TEMP\cap.err"
+          # stdin = a file that never ends (keeps reading 0 bytes = EOF would stop it), so give it an
+          # open handle via a process we control instead: .NET Process with redirected stdin.
+          $psi = New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName = (Resolve-Path build/Release/isu-capture.exe).Path
+          $psi.Arguments = "--test-pattern --pipe $pipe --parent-pid $PID"
+          $psi.UseShellExecute = $false; $psi.RedirectStandardInput = $true; $psi.RedirectStandardError = $true
+          $cap = [System.Diagnostics.Process]::Start($psi)
+          $errTask = $cap.StandardError.ReadLineAsync()
+          if (-not $errTask.Wait(5000)) { throw "isu-capture did not report 'pipe ready'" }
+          Write-Host "isu-capture: $($errTask.Result)"
+          $rest = $cap.StandardError.ReadToEndAsync()
+          ffmpeg -hide_banner -loglevel error -f matroska -probesize 32M -analyzeduration 0 -fflags nobuffer -i $pipe -t 8 -map 0:v:0 -map 0:a:0 -c:v libx264 -preset ultrafast -c:a aac -y "$env:RUNNER_TEMP\out.mkv"
+          $ffrc = $LASTEXITCODE
+          $cap.StandardInput.Close()   # same stop signal the app uses: stdin EOF
+          if (-not $cap.WaitForExit(5000)) { $cap.Kill(); throw "isu-capture did not stop when its stdin closed" }
+          Write-Host "isu-capture log: $($rest.Result)"
+          Write-Host "isu-capture exit code: $($cap.ExitCode)"
+          if ($ffrc -ne 0) { throw "FFmpeg could not read the isu-capture pipe" }
+          ffprobe -v error -show_entries stream=codec_type,codec_name,width,height -of compact "$env:RUNNER_TEMP\out.mkv"
+          $o = "$env:RUNNER_TEMP\out.mkv" -replace '\\','/' -replace ':','\:'
+          $v = ffprobe -v error -f lavfi -i "movie='$o',signalstats" -show_entries frame=pts_time:frame_tags=lavfi.signalstats.YAVG -of csv=p=0
+          $a = ffprobe -v error -f lavfi -i "amovie='$o',asetnsamples=48,astats=metadata=1:reset=1" -show_entries frame=pts_time:frame_tags=lavfi.astats.Overall.Peak_level -of csv=p=0
+          function Onsets($rows, $th) { $out = @(); $on = $false; foreach ($r in $rows) { $p = $r -split ','; $t = [double]$p[0]; $x = -200; [double]::TryParse($p[-1], [ref]$x) | Out-Null; $hit = $x -gt $th; if ($hit -and -not $on) { $out += $t }; $on = $hit }; return $out }
+          $fl = Onsets $v 120; $bp = Onsets $a -20
+          $d = foreach ($f in $fl) { $b = $bp | Sort-Object { [math]::Abs($_ - $f) } | Select-Object -First 1; [math]::Round(($b - $f) * 1000) }
+          Write-Host "flashes: $($fl.Count)  beep-flash ms: $($d -join ' ')"
+          if ($fl.Count -lt 5) { throw "too few flashes in the encoded output" }
+          # Skip the first flash: the encode starts mid-way into it, so its onset isn't a real edge.
+          foreach ($x in ($d | Select-Object -Skip 1)) { if ([math]::Abs($x) -gt 20) { throw "A/V out of sync: $x ms" } }
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item build/Release/isu-capture.exe, build/Release/libdshowcapture.dll dist/
+          Copy-Item build/_deps/libdshowcapture-src/COPYING dist/LICENSE-libdshowcapture-LGPL-2.1.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isu-capture-win-x64
+          path: dist/

@@ -6,6 +6,9 @@ const { TsReader, PACKET } = require('./ts.cjs');
 
 // THE program encoder: exactly one FFmpeg process captures the input and encodes H.264/AAC
 // once into MPEG-TS on stdout. Every destination later re-muxes these same bytes (stream copy).
+// Last meaningful line of a helper/FFmpeg log, without the tool prefix.
+function lastLine(text) { return String(text || '').trim().split(/\r?\n/).filter((l) => l && !/pipe ready/.test(l)).pop()?.replace(/^isu-capture:\s*/, '') || ''; }
+
 class ProgramEncoder extends EventEmitter {
   constructor(ffmpeg) {
     super();
@@ -29,6 +32,7 @@ class ProgramEncoder extends EventEmitter {
       : ['-c:v', 'libx264', '-preset', encoder.x264Preset || 'veryfast', '-tune', 'zerolatency', '-x264-params', 'nal-hrd=cbr'];
     const [width, height] = encoder.resolution.split('x');
     const source = sourceInput(input, encoder);
+    this.lastSource = source;
     const offsetMs = Math.max(-2000, Math.min(2000, Math.round(Number(input.audioOffsetMs) || 0)));
     return [
       '-hide_banner', '-nostdin', '-loglevel', 'error', '-stats_period', '1', '-progress', 'pipe:2',
@@ -60,7 +64,31 @@ class ProgramEncoder extends EventEmitter {
     this.stats.codec = encoder.mode === 'hardware' ? 'h264_nvenc' : 'libx264';
     const reader = new TsReader();
     this.reader = reader;
+    // Sources with a capture helper (OBS engine): the helper opens the device, then serves the raw
+    // A/V on a named pipe; only after it says "pipe ready" is FFmpeg started reading that pipe.
+    const source = this.lastSource;
+    let helper = null;
+    let helperLog = '';
+    if (source.helper) {
+      helper = spawn(source.helper.command, source.helper.args, { stdio: ['pipe', 'ignore', 'pipe'], windowsHide: true });
+      helper.stdin.on('error', () => {});
+      helper.stderr.setEncoding('utf8');
+      this.helper = helper;
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => done(new Error('Capture helper did not start within 15 s (device busy or not responding)')), 15000);
+        const done = (error) => { clearTimeout(timer); helper.off('exit', onExit); helper.off('error', onError); error ? reject(Object.assign(error, { code: 'CAPTURE_START' })) : resolve(); };
+        const onExit = (code) => done(new Error(`Capture helper stopped (code ${code}): ${lastLine(helperLog) || 'no message'}`));
+        const onError = (error) => done(new Error(`Could not run the capture helper: ${error.message}`));
+        helper.on('exit', onExit); helper.on('error', onError);
+        helper.stderr.on('data', (t) => { helperLog = `${helperLog}${t}`.slice(-4000); this.helperLog = helperLog; if (/pipe ready/.test(helperLog)) done(); });
+      }).catch(async (error) => { try { helper.kill(); } catch {} this.helper = null; throw error; });
+    }
     const child = spawn(this.ffmpeg.path, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    if (helper) {
+      // Either side dying takes the other down, so a broken capture never looks like a live program.
+      helper.on('exit', (code) => { if (this.helper === helper) this.helper = null; this.helperExit = code; if (this.child === child && !this.stopping) { try { child.kill('SIGTERM'); } catch {} } });
+      child.on('exit', () => { try { helper.stdin.end(); } catch {} setTimeout(() => { try { helper.kill(); } catch {} }, 3000).unref?.(); });
+    }
     this.child = child;
     let carry = Buffer.alloc(0);
     let lastBytes = 0;
@@ -100,7 +128,7 @@ class ProgramEncoder extends EventEmitter {
       const fail = (error) => { cleanup(); reject(error); };
       const ok = () => { cleanup(); resolve(); };
       const cleanup = () => { child.off('error', fail); child.off('exit', early); child.stdout.off('data', firstData); };
-      const early = (code) => fail(Object.assign(new Error(`Encoder exited during startup (code ${code}). ${errorText.trim().split('\n').pop() || ''}`.trim()), { code: 'ENCODER_EXIT' }));
+      const early = (code) => fail(Object.assign(new Error(`Encoder exited during startup (code ${code}). ${errorText.trim().split('\n').pop() || ''}${helperLog ? ` · Capture helper: ${lastLine(helperLog)}` : ''}`.trim()), { code: 'ENCODER_EXIT' }));
       const firstData = () => ok();
       child.once('error', fail);
       child.once('exit', early);
@@ -124,6 +152,16 @@ class ProgramEncoder extends EventEmitter {
       try { child.kill('SIGTERM'); } catch { resolve(); }
     });
     this.child = null;
+    const helper = this.helper;
+    if (helper) {
+      // Closing stdin asks isu-capture to stop the DirectShow graph cleanly (releases the device).
+      await new Promise((resolve) => {
+        const t = setTimeout(() => { try { helper.kill('SIGKILL'); } catch {} resolve(); }, 3000);
+        helper.once('exit', () => { clearTimeout(t); resolve(); });
+        try { helper.stdin.end(); } catch { resolve(); }
+      });
+      this.helper = null;
+    }
     this.stopping = false;
   }
 

@@ -5,6 +5,7 @@ const { SimStreamService } = require('./sim-service.cjs');
 const { RealEngine } = require('./media/engine.cjs');
 const { findFfmpeg } = require('./media/ffmpeg.cjs');
 const { listDevices, listModes } = require('./media/devices.cjs');
+const { listObsDevices, findCaptureExe } = require('./media/obs-capture.cjs');
 const { HealthTracker } = require('./health.cjs');
 
 // Transport-independent command facade used by the UI and the local API. The engine is chosen
@@ -118,6 +119,9 @@ class StreamService extends EventEmitter {
   async scanDevices() {
     if (!this.ffmpeg) throw new Error(this.startupError || 'FFmpeg is not available, so devices cannot be listed');
     this.captureDevices = { ...(await this.listDevicesFn(this.ffmpeg.path)), scannedAt: Date.now() };
+    // OBS engine: same devices as libdshowcapture sees them (only when isu-capture is installed).
+    const exe = findCaptureExe(this.config.input?.captureExe);
+    this.captureDevices.obs = exe ? await listObsDevices(exe) : { backend: 'obs', video: [], audio: [], error: 'isu-capture.exe not installed (stream-server/vendor/capture/)' };
     return this.captureDevices;
   }
 
