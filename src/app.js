@@ -7,6 +7,7 @@ import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
+import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel } from './overwatch-ocr-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
@@ -560,6 +561,7 @@ function renderControl(config) {
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
       ${state.selectedGame === 'valorant' ? renderValorantOcrPanel(game) : ''}
+      ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
           <div class="panel-title"><span class="section-number">02</span><div><h2>Match details</h2><p>Information shared across graphics</p></div></div>
@@ -2245,6 +2247,20 @@ window.isuDesktop?.onRocketLeagueStatus((status) => {
 
 window.isuDesktop?.onRocketLeagueEvent(handleRocketLeagueEvent);
 
+// Overwatch scoreboard OCR. Settings/status live here; the player board is mirrored into
+// state.games.overwatch.overwatchOcr.live so overlays get it through the normal state publish.
+let overwatchOcr = emptyOverwatchOcr();
+let overwatchOcrRenderTimer = null;
+function publishOverwatchOcr() {
+  if (state.games.overwatch) state.games.overwatch.overwatchOcr = { live: overwatchOcr.live };
+  if (!livePublishTimer) livePublishTimer = window.setTimeout(() => { livePublishTimer = null; window.isuDesktop?.publishState(state); }, 100);
+  if (state.selectedGame !== 'overwatch' || overwatchOcrRenderTimer) return;
+  overwatchOcrRenderTimer = window.setTimeout(() => { overwatchOcrRenderTimer = null; render(); }, 250);
+}
+window.isuDesktop?.getOverwatchOcrSettings?.().then((info) => { overwatchOcr = { ...overwatchOcr, ...info }; publishOverwatchOcr(); }).catch(() => {});
+window.isuDesktop?.onOverwatchOcrState?.((snapshot) => { overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, snapshot); publishOverwatchOcr(); });
+window.isuDesktop?.onOverwatchOcrStatus?.((status) => { overwatchOcr = { ...overwatchOcr, status }; publishOverwatchOcr(); });
+
 window.isuDesktop?.onValorantOcrState((snapshot) => {
   const ocr = state.games.valorant.valorantOcr;
   const nextObserver3 = snapshot?.observer3 && typeof snapshot.observer3 === 'object'
@@ -2598,6 +2614,17 @@ root.addEventListener('click', async (event) => {
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? `Stage preset: ${result.preset}` : result?.error || 'Stage preset unavailable');
     render();
+    return;
+  }
+  if (button.dataset.action === 'ow-ocr-test') {
+    try { overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.testOverwatchOcr()); publishOverwatchOcr(); toast('Read the scoreboard once'); }
+    catch (error) { toast(`Test read failed: ${error.message || error}`); }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'ow-ocr-clear') {
+    overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.clearOverwatchOcr());
+    publishOverwatchOcr(); render();
     return;
   }
   if (button.dataset.action === 'pick-team-logo') {
@@ -3058,6 +3085,15 @@ root.addEventListener('change', async (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
+    render();
+    return;
+  }
+  if (target.dataset.owOcr) {
+    const key = target.dataset.owOcr;
+    const value = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
+    const result = await window.isuDesktop?.configureOverwatchOcr({ [key]: value });
+    if (result) overwatchOcr = { ...overwatchOcr, settings: result.settings, status: result.status };
+    toast(key === 'enabled' ? (value ? 'Overwatch scoreboard OCR on' : 'Overwatch scoreboard OCR off') : 'Overwatch OCR settings saved');
     render();
     return;
   }

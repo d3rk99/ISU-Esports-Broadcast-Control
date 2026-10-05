@@ -61,6 +61,20 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   setValorantTimelineRound: (details) => ipcRenderer.invoke('valorant-ocr:set-timeline-round', details),
   startValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:start-simulator'),
   stopValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:stop-simulator'),
+  getOverwatchOcrSettings: () => ipcRenderer.invoke('overwatch-ocr:get-settings'),
+  configureOverwatchOcr: (settings) => ipcRenderer.invoke('overwatch-ocr:configure', settings),
+  clearOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:clear'),
+  testOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:test-read'),
+  onOverwatchOcrState: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('overwatch-ocr:state', listener);
+    return () => ipcRenderer.removeListener('overwatch-ocr:state', listener);
+  },
+  onOverwatchOcrStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('overwatch-ocr:status', listener);
+    return () => ipcRenderer.removeListener('overwatch-ocr:status', listener);
+  },
   onRocketLeagueEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('rocket-league:event', listener);

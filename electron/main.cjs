@@ -12,6 +12,7 @@ const { ValorantWindowCapture } = require('./valorant-capture.cjs');
 const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
+const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
 const { StageDisplayManager } = require('./stage-displays/stage-display-manager.cjs');
 
 const isDev = !app.isPackaged;
@@ -27,6 +28,7 @@ const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
 let valorantOcrService;
+let overwatchOcrService;
 let companionApiService;
 let stageDisplayManager;
 let companionRequestId = 0;
@@ -810,6 +812,21 @@ function saveRocketLeagueConnection(settings = {}) {
   fs.writeFileSync(rocketLeagueSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
 }
 
+function overwatchOcrSettingsPath() {
+  return path.join(app.getPath('userData'), 'overwatch-ocr-settings.json');
+}
+
+function readOverwatchOcrSettings() {
+  try { return normalizeOverwatchOcrSettings(JSON.parse(fs.readFileSync(overwatchOcrSettingsPath(), 'utf8'))); } catch {}
+  return normalizeOverwatchOcrSettings();
+}
+
+function saveOverwatchOcrSettings(settings = {}) {
+  const saved = normalizeOverwatchOcrSettings({ ...readOverwatchOcrSettings(), ...settings });
+  fs.writeFileSync(overwatchOcrSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
+  return saved;
+}
+
 function valorantOcrSettingsPath() {
   return path.join(app.getPath('userData'), 'valorant-ocr-settings.json');
 }
@@ -1114,6 +1131,13 @@ function registerIpc() {
   ipcMain.handle('valorant-ocr:set-timeline-round', (_event, details = {}) => valorantOcrService.setObserverTimelineRound(details));
   ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
   ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
+  ipcMain.handle('overwatch-ocr:get-settings', () => ({ settings: readOverwatchOcrSettings(), status: overwatchOcrService.getStatus() }));
+  ipcMain.handle('overwatch-ocr:configure', (_event, settings = {}) => {
+    const saved = saveOverwatchOcrSettings(settings);
+    return { settings: saved, status: overwatchOcrService.configure(saved) };
+  });
+  ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
+  ipcMain.handle('overwatch-ocr:test-read', async () => { await overwatchOcrService.sweep(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
     const parent = BrowserWindow.fromWebContents(event.sender);
     const imageType = details.type === 'teamLogo' ? 'team logo' : details.type === 'characterImage' ? 'character' : 'player';
@@ -1358,6 +1382,18 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:status', status);
     }
   });
+  // Overwatch scoreboard OCR shares the window-capture stack and Tesseract engine design with
+  // VALORANT but has its own engine instance (its own worker pool) and its own window.
+  overwatchOcrService = new OverwatchOcrService({
+    capture: new HybridValorantWindowCapture({
+      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
+      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
+    }),
+    ocr: new TesseractOcrEngine(),
+    onState: (state) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('overwatch-ocr:state', state); },
+    onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('overwatch-ocr:status', status); }
+  });
+  overwatchOcrService.configure(readOverwatchOcrSettings());
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
   await stageDisplayManager.start();
@@ -1382,6 +1418,7 @@ app.on('second-instance', () => {
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
   valorantOcrService?.shutdown();
+  overwatchOcrService?.shutdown();
   stageDisplayManager?.shutdown();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();

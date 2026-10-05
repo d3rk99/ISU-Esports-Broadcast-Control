@@ -722,3 +722,19 @@ input[type="range"]:focus { border-color: #35353a; }
 .stage-key-panel .heading-actions input:focus { outline: none; border-color: var(--orange); }
 .stage-key-panel code { padding: 1px 5px; color: #9dc7ff; background: #0b0d11; }
 .stage-key-panel.open { border-top-color: #ffce47; }
+
+/* Overwatch scoreboard OCR panel */
+.ow-ocr-panel { margin-top: 16px; }
+.ow-ocr-controls { display: grid; grid-template-columns: 1.4fr 1fr .7fr auto; gap: 12px; align-items: end; }
+.ow-ocr-buttons { display: flex; gap: 8px; }
+.ow-ocr-status { margin: 10px 0; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #aeb9c4; }
+.ow-ocr-status.is-ok { color: #4ad18a; }
+.ow-ocr-status.is-bad { color: #ff7b72; }
+.ow-ocr-tables { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ow-ocr-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ow-ocr-table caption { text-align: left; font-weight: 900; letter-spacing: .14em; color: #f06414; padding-bottom: 6px; }
+.ow-ocr-table th { color: #8d9aa8; font-weight: 900; text-align: right; padding: 4px 6px; border-bottom: 1px solid #343d47; }
+.ow-ocr-table td { text-align: right; padding: 4px 6px; border-bottom: 1px solid #232a32; }
+.ow-ocr-table th:nth-child(-n+2), .ow-ocr-table td:nth-child(-n+2) { text-align: left; }
+.ow-ocr-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1300px) { .ow-ocr-tables, .ow-ocr-controls { grid-template-columns: 1fr; } }

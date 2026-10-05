@@ -1,0 +1,103 @@
+{
+  "default-1080p": {
+    "label": "OW2 spectator scoreboard (Tab) \u00b7 1920x1080",
+    "width": 1920,
+    "height": 1080,
+    "description": "Observer 3 keeps the in-game scoreboard (Tab) open. All regions are on the 1920x1080 grid; other 16:9 sizes are scaled to it. Measured from the ISU spectator screenshot 2026-10-05.",
+    "cellHeight": 16,
+    "teams": [
+      {
+        "id": "home",
+        "label": "Top team (left / blue side of the board)",
+        "rowCenters": [
+          221,
+          287,
+          353,
+          419,
+          485
+        ]
+      },
+      {
+        "id": "away",
+        "label": "Bottom team",
+        "rowCenters": [
+          627,
+          693,
+          759,
+          825,
+          891
+        ]
+      }
+    ],
+    "columns": {
+      "ultimate": {
+        "label": "Ultimate %",
+        "x": 658,
+        "w": 24,
+        "kind": "percent",
+        "allowedChars": "0123456789"
+      },
+      "name": {
+        "label": "Player name",
+        "x": 694,
+        "w": 200,
+        "kind": "text",
+        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-#"
+      },
+      "elims": {
+        "label": "Eliminations",
+        "x": 904,
+        "w": 34,
+        "kind": "count",
+        "allowedChars": "0123456789"
+      },
+      "assists": {
+        "label": "Assists",
+        "x": 954,
+        "w": 34,
+        "kind": "count",
+        "allowedChars": "0123456789"
+      },
+      "deaths": {
+        "label": "Deaths",
+        "x": 1004,
+        "w": 34,
+        "kind": "count",
+        "allowedChars": "0123456789"
+      },
+      "damage": {
+        "label": "Damage",
+        "x": 1066,
+        "w": 72,
+        "kind": "stat",
+        "allowedChars": "0123456789,"
+      },
+      "healing": {
+        "label": "Healing",
+        "x": 1158,
+        "w": 72,
+        "kind": "stat",
+        "allowedChars": "0123456789,"
+      },
+      "mitigation": {
+        "label": "Mitigation",
+        "x": 1250,
+        "w": 72,
+        "kind": "stat",
+        "allowedChars": "0123456789,"
+      }
+    },
+    "ultimateRing": {
+      "cx": 670,
+      "dy": -2,
+      "radius": 16,
+      "note": "ring centre x on the 1080p grid and y relative to the row centre; fills clockwise from 12 o'clock. The ult % sits inside it (x 661-676)."
+    },
+    "preprocess": {
+      "scale": 4,
+      "grayscale": true,
+      "threshold": 120,
+      "invert": true
+    }
+  }
+}

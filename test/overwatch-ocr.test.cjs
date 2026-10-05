@@ -1,0 +1,139 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const zlib = require('node:zlib');
+const { createWorker, OEM, PSM } = require('tesseract.js');
+const eng = require('@tesseract.js-data/eng');
+const { OverwatchOcrService } = require('../electron/overwatch-ocr-service.cjs');
+const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
+const { getProfile, cellRois, parseCell, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('../electron/overwatch-ocr-parse.cjs');
+
+// Fixture: grayscale crop of the real ISU spectator scoreboard (2026-10-05), taken from
+// (640,190) on the 1920x1080 grid. Tiny PNG decoder (8-bit gray, no interlace) so the test
+// needs no extra dependency.
+const FIX = { file: path.join(__dirname, 'fixtures', 'ow-board-table.png'), x: 640, y: 190 };
+function readGrayPng(file) {
+  const buf = fs.readFileSync(file);
+  let at = 8; let width = 0; let height = 0; const idat = [];
+  while (at < buf.length) {
+    const len = buf.readUInt32BE(at); const type = buf.toString('ascii', at + 4, at + 8); const data = buf.subarray(at + 8, at + 8 + len);
+    if (type === 'IHDR') { width = data.readUInt32BE(0); height = data.readUInt32BE(4); assert.equal(data[8], 8); assert.equal(data[9], 0); }
+    if (type === 'IDAT') idat.push(data);
+    at += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat)); const out = Buffer.alloc(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const f = raw[y * (width + 1)]; const row = raw.subarray(y * (width + 1) + 1, (y + 1) * (width + 1));
+    for (let x = 0; x < width; x += 1) {
+      const a = x ? out[y * width + x - 1] : 0; const b = y ? out[(y - 1) * width + x] : 0; const c = x && y ? out[(y - 1) * width + x - 1] : 0;
+      let v = row[x];
+      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) { const p = a + b - c; const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      out[y * width + x] = v & 255;
+    }
+  }
+  return { width, height, data: out };
+}
+
+const img = readGrayPng(FIX.file);
+const sample = (x, y) => { const lx = x - FIX.x; const ly = y - FIX.y; return lx < 0 || ly < 0 || lx >= img.width || ly >= img.height ? 0 : img.data[ly * img.width + lx]; };
+
+// Same preprocessing as the live service: invert (light text on dark), 4x upscale, threshold,
+// white margin. Emits a binary PGM, which tesseract.js reads directly.
+function cellImage(roi, scale = 4, threshold = 120, pad = 20) {
+  const w = roi.w * scale + pad * 2; const h = roi.h * scale + pad * 2;
+  const px = Buffer.alloc(w * h, 255);
+  for (let y = 0; y < roi.h * scale; y += 1) for (let x = 0; x < roi.w * scale; x += 1) {
+    // Bilinear upscale (blocky nearest-neighbour digits made tesseract drop lone 0s and 1s).
+    const fx = roi.x + (x + 0.5) / scale - 0.5; const fy = roi.y + (y + 0.5) / scale - 0.5;
+    const x0 = Math.floor(fx); const y0 = Math.floor(fy); const tx = fx - x0; const ty = fy - y0;
+    const lum = sample(x0, y0) * (1 - tx) * (1 - ty) + sample(x0 + 1, y0) * tx * (1 - ty) + sample(x0, y0 + 1) * (1 - tx) * ty + sample(x0 + 1, y0 + 1) * tx * ty;
+    const v = 255 - lum;
+    px[(y + pad) * w + x + pad] = v < threshold ? 0 : 255;
+  }
+  return Buffer.concat([Buffer.from(`P5\n${w} ${h}\n255\n`), px]);
+}
+
+// What the board actually shows (read by hand from the screenshot).
+const EXPECTED = {
+  home: [[16, 215, 0, 38], [15, 96, 0, 0], [12, 10, 52, 0], [11, 0, 100, 0], [12, 156, 0, 85]],
+  away: [[23, 125, 0, 0], [16, 147, 4, 0], [11, 98, 61, 0], [17, 220, 66, 50], [12, 170, 18, 2]]
+};
+
+test('Overwatch OCR: every number on the real spectator scoreboard reads correctly', { timeout: 180000 }, async () => {
+  const worker = await createWorker(eng.code || 'eng', OEM.LSTM_ONLY, { langPath: eng.langPath, gzip: eng.gzip !== false, cacheMethod: 'none', logger: () => {} });
+  await worker.setParameters({ tessedit_char_whitelist: '0123456789', tessedit_pageseg_mode: PSM.SINGLE_LINE });
+  const wrong = [];
+  try {
+    for (const cell of cellRois(getProfile())) {
+      if (cell.field === 'name') continue;
+      let { data } = await worker.recognize(cellImage(cell.roi));
+      let value = parseCell(cell.field, data.text);
+      if (value === null) {
+        // Same fallback the live service uses: a lone digit is often dropped in line mode.
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_CHAR });
+        for (const scale of [4, 6, 3]) {
+          ({ data } = await worker.recognize(cellImage(cell.roi, scale)));
+          value = parseCell(cell.field, data.text);
+          if (value !== null) break;
+        }
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE });
+      }
+      const row = EXPECTED[cell.side][cell.row];
+      const want = { ultimate: row[0], damage: row[1], healing: row[2], mitigation: row[3], elims: 0, assists: 0, deaths: 0 }[cell.field];
+      if (value !== want) wrong.push(`${cell.side}${cell.row + 1}.${cell.field}: read ${JSON.stringify(data.text.trim())} -> ${value}, want ${want}`);
+    }
+  } finally { await worker.terminate(); }
+  assert.deepEqual(wrong, []);
+});
+
+test('Overwatch OCR: ring fill only reports READY for a full ring', () => {
+  // The printed % is the source of truth (it reads correctly on all 10 players above). The ring
+  // is only a fallback for READY, when the number is replaced by an icon.
+  const full = () => 255; const empty = () => 30;
+  assert.equal(resolveUltimate(null, ringFill(full, 670, 219, 16)), 'READY');
+  assert.equal(resolveUltimate(null, ringFill(empty, 670, 219, 16)), null);
+  const profile = getProfile();
+  for (const team of profile.teams) team.rowCenters.forEach((cy) => {
+    assert.ok(ringFill(sample, profile.ultimateRing.cx, cy + profile.ultimateRing.dy, profile.ultimateRing.radius) < 0.97, 'no player on this board is READY');
+  });
+});
+
+test('Overwatch OCR: parsing, READY and consensus', () => {
+  assert.equal(parseCell('damage', '1,2O5'), 1205);
+  assert.equal(parseCell('elims', 'l2'), 12);
+  assert.equal(parseCell('ultimate', '140'), null);
+  assert.equal(parseCell('name', ' Bengal '), 'Bengal');
+  assert.equal(resolveUltimate(null, 1), 'READY');
+  assert.equal(resolveUltimate(64, 0.64), 64);
+  const board = emptyBoard(); const c = new OverwatchConsensus();
+  const read = (value) => applySweep(board, c, [{ side: 'home', row: 0, field: 'elims', value }]);
+  read(3); assert.equal(board.teams.home.players[0].elims, null, 'one read never shows');
+  read(3); assert.equal(board.teams.home.players[0].elims, 3);
+  read(4); read(4); assert.equal(board.teams.home.players[0].elims, 4);
+  read(1); read(1); read(1); assert.equal(board.teams.home.players[0].elims, 4, 'a drop needs 4 agreeing reads');
+  read(1); assert.equal(board.teams.home.players[0].elims, 1);
+});
+
+test('Overwatch OCR service: two sweeps of the real board fill every player stat', { timeout: 240000 }, async () => {
+  // Fake capture serving the fixture with the live preprocessing (invert, bilinear upscale,
+  // threshold); the real tesseract.js engine and consensus gate do the rest.
+  const capture = {
+    capture: async () => ({ fixture: true }),
+    crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120) }),
+    luminance: (_frame, x, y) => sample(x, y)
+  };
+  const ocr = new TesseractOcrEngine();
+  const states = [];
+  const service = new OverwatchOcrService({ capture, ocr, onState: (s) => states.push(s) });
+  try {
+    await service.sweep();
+    assert.equal(service.board.teams.home.players[0].damage, null, 'one sweep is not enough to show a value');
+    await service.sweep();
+  } finally { await ocr.close(); }
+  const got = (side, row) => { const p = service.board.teams[side].players[row]; return [p.ultimate, p.damage, p.healing, p.mitigation, p.elims, p.assists, p.deaths]; };
+  for (const side of ['home', 'away']) EXPECTED[side].forEach((row, i) => assert.deepEqual(got(side, i), [...row, 0, 0, 0], `${side}${i + 1}`));
+  assert.equal(service.status.state, 'reading');
+  assert.ok(states.length >= 1);
+});

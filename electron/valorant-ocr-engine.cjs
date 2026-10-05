@@ -50,13 +50,13 @@ class TesseractOcrEngine {
     return next;
   }
 
-  async recognizeNow(image, { allowedChars = '0123456789:', kind = 'score', fieldId = 'default' } = {}) {
+  async recognizeNow(image, { allowedChars = '0123456789:', kind = 'score', fieldId = 'default', pageMode = 'line' } = {}) {
     const startedAt = Date.now();
     try {
       const worker = await this.getWorker(fieldId);
       await worker.setParameters({
         tessedit_char_whitelist: allowedChars,
-        tessedit_pageseg_mode: PSM.SINGLE_LINE,
+        tessedit_pageseg_mode: pageMode === 'char' ? PSM.SINGLE_CHAR : PSM.SINGLE_LINE,
         preserve_interword_spaces: '0'
       });
       const result = await worker.recognize(image);
@@ -75,7 +75,8 @@ class TesseractOcrEngine {
 
   async recognize(image, options = {}) {
     const fieldId = options.fieldId || 'default';
-    const key = fieldId.startsWith('observer3-')
+    // Scoreboard grids (VALORANT Observer 3, Overwatch board) share a small worker pool.
+    const key = fieldId.startsWith('observer3-') || fieldId.startsWith('overwatch-')
       ? `grid-worker-${this.observerCursor++ % this.observerConcurrency}`
       : fieldId;
     return this.enqueueWorkerJob(key, () => this.recognizeNow(image, { ...options, fieldId: key }));
