@@ -2072,7 +2072,7 @@ body[data-game="smash"] .paired-key-scene .scoreboard { filter: brightness(0) in
    Same glass panels / team-colour score boxes as the Smash and Rocket League cards. */
 body[data-game="overwatch"] .scoreboard {
   inset: 0; width: 100%; min-height: 0;
-  --ow-logo-track: 84px; --ow-name-track: 270px; --ow-score-track: 76px; --ow-core-track: 300px;
+  --ow-logo-track: 84px; --ow-name-track: 270px; --ow-score-track: 76px; --ow-core-track: 380px;
   filter: none; animation: none;
 }
 body[data-game="overwatch"] .scoreboard::before,
