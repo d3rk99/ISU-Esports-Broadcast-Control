@@ -50,6 +50,23 @@
         <footer class="rl-card-footer" id="rl-card-footer">COLLEGIATE ESPORTS - REGULAR SEASON</footer>
       </section>
 
+      <!-- Overwatch: thin top-centre bar that sits ABOVE the spectator hero rows (y 60-110) and the
+           objective meter. Fed by game.overwatch.live when an OCR lab writes it, else by the manual
+           controller / Companion values (see docs/overwatch-hud.md). -->
+      <section id="ow-scorecard" class="ow-scorecard" data-mode="control" aria-label="Overwatch scorecard" hidden>
+        <div class="ow-panel ow-logo ow-logo--home" id="ow-home-logo">ISU</div>
+        <div class="ow-panel ow-name ow-name--home"><strong id="ow-home-name">IDAHO STATE</strong><span class="ow-side" id="ow-home-side"></span></div>
+        <div class="ow-panel ow-score ow-score--home"><strong id="ow-home-score">0</strong></div>
+        <div class="ow-panel ow-core">
+          <div class="ow-core-top"><span class="ow-series-dots" id="ow-home-series"></span><small id="ow-map-label">MAP 1</small><span class="ow-series-dots" id="ow-away-series"></span></div>
+          <strong id="ow-map-name">BUSAN</strong>
+          <div class="ow-progress"><span class="ow-progress-pips ow-progress-pips--home" id="ow-home-progress"></span><em id="ow-mode-label">CONTROL</em><span class="ow-progress-pips ow-progress-pips--away" id="ow-away-progress"></span></div>
+        </div>
+        <div class="ow-panel ow-score ow-score--away"><strong id="ow-away-score">0</strong></div>
+        <div class="ow-panel ow-name ow-name--away"><strong id="ow-away-name">OPPONENT</strong><span class="ow-side" id="ow-away-side"></span></div>
+        <div class="ow-panel ow-logo ow-logo--away" id="ow-away-logo">OPP</div>
+      </section>
+
       <section id="smash-scorecard" class="smash-scorecard" aria-label="Smash Bros. Ultimate crew battle scorecard" hidden>
         <div class="sm-panel sm-logo sm-logo--home" id="sm-home-logo">ISU</div>
         <div class="sm-panel sm-name sm-name--home"><span id="sm-home-tag">ISU</span><strong id="sm-home-name">IDAHO STATE</strong></div>

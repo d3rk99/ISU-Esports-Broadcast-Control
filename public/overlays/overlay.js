@@ -630,6 +630,87 @@
     setText('#sm-game-label', `GAME ${(game.activeMap || 0) + 1} / BEST OF ${seriesLength}`);
   }
 
+  // ---- Overwatch ---------------------------------------------------------------------------
+  // Big number = maps won (series). The strip under the map name = progress on THIS map, read
+  // the way each mode is scored. Manual today (controller / Companion "current map score" =
+  // team.detailScore); an OCR lab can later write game.overwatch.live and wins over manual.
+  const OW_MODES = {
+    control: { label: 'CONTROL', target: 2, unit: 'pips' },      // best of 3 rounds
+    flashpoint: { label: 'FLASHPOINT', target: 3, unit: 'pips' },// first to 3 points
+    clash: { label: 'CLASH', target: 5, unit: 'pips' },          // first to 5 captures
+    escort: { label: 'ESCORT', unit: 'points' },                 // checkpoints, both teams attack
+    hybrid: { label: 'HYBRID', unit: 'points' },
+    push: { label: 'PUSH', unit: 'meters' }                      // distance pushed
+  };
+  const OW_MAP_MODES = {
+    control: ['Antarctic Peninsula', 'Busan', 'Ilios', 'Lijiang Tower', 'Nepal', 'Oasis', 'Samoa'],
+    flashpoint: ['New Junk City', 'Suravasa', 'Aatlis'],
+    clash: ['Hanaoka', 'Throne of Anubis'],
+    escort: ['Circuit Royal', 'Dorado', 'Havana', 'Junkertown', 'Rialto', 'Route 66', 'Shambali Monastery', 'Watchpoint: Gibraltar'],
+    hybrid: ['Blizzard World', 'Eichenwalde', 'Hollywood', "King's Row", 'Midtown', 'Numbani', 'Paraíso'],
+    push: ['Colosseo', 'Esperança', 'New Queen Street', 'Runasapi']
+  };
+  function overwatchMode(row) {
+    const raw = String(row?.mode || '').toLowerCase().trim();
+    if (OW_MODES[raw]) return raw;
+    for (const [mode, maps] of Object.entries(OW_MAP_MODES)) if (maps.some((m) => m.toLowerCase() === String(row?.map || '').toLowerCase())) return mode;
+    return 'control';
+  }
+
+  function renderOverwatchScorecard(selectedGame, game, teams, activeMap) {
+    const card = $('#ow-scorecard');
+    if (!card) return;
+    card.hidden = selectedGame !== 'overwatch';
+    if (card.hidden) return;
+    const live = game.overwatch?.live || {};
+    const mode = OW_MODES[String(live.mode || '').toLowerCase()] ? String(live.mode).toLowerCase() : overwatchMode(activeMap);
+    const spec = OW_MODES[mode];
+    card.dataset.mode = mode;
+    const seriesLength = Math.max(1, Number(game.seriesLength) || 5);
+    const mapsToWin = Math.ceil(seriesLength / 2);
+    const attacking = live.attacking || game.overwatch?.attacking || '';
+    teams.slice(0, 2).forEach((team, index) => {
+      const side = index === 0 ? 'home' : 'away';
+      setText(`#ow-${side}-name`, team?.name || (index === 0 ? 'HOME' : 'AWAY'));
+      setText(`#ow-${side}-score`, Number(team?.score) || 0);
+      renderLogo(`#ow-${side}-logo`, team);
+      const sideTag = ['control', 'flashpoint', 'clash'].includes(mode) || !attacking ? '' : attacking === side ? 'ATTACK' : 'DEFEND';
+      setText(`#ow-${side}-side`, sideTag);
+      $(`.ow-name--${side}`)?.classList.toggle('is-attacking', sideTag === 'ATTACK');
+      const dots = $(`#ow-${side}-series`);
+      if (dots) {
+        dots.replaceChildren();
+        for (let i = 0; i < mapsToWin; i += 1) {
+          const dot = document.createElement('i');
+          if (i < (Number(team?.score) || 0)) dot.className = 'is-won';
+          dots.append(dot);
+        }
+      }
+      const liveValue = Number(live[`${side}Progress`]);
+      const value = Math.max(0, Number.isFinite(liveValue) ? liveValue : Number(team?.detailScore) || 0);
+      const progress = $(`#ow-${side}-progress`);
+      if (progress) {
+        progress.replaceChildren();
+        if (spec.unit === 'pips') {
+          for (let i = 0; i < spec.target; i += 1) {
+            const pip = document.createElement('i');
+            // Home fills from the centre outward like the away side.
+            const lit = index === 0 ? i >= spec.target - value : i < value;
+            if (lit) pip.className = 'on';
+            progress.append(pip);
+          }
+        } else {
+          const b = document.createElement('b');
+          b.textContent = spec.unit === 'meters' ? `${value}m` : String(value);
+          progress.append(b);
+        }
+      }
+    });
+    setText('#ow-map-label', `MAP ${(game.activeMap || 0) + 1} · FIRST TO ${mapsToWin}`);
+    setText('#ow-map-name', (live.map || activeMap?.map || 'MAP TBD').toUpperCase());
+    setText('#ow-mode-label', spec.label);
+  }
+
   function renderScoreboard(state) {
     const root = $('[data-overlay="scoreboard"]');
     if (!root) return;
@@ -664,6 +745,7 @@
     renderRocketLeagueStatCard(game, selectedGame, state.activeRoster);
     renderValorantHud(selectedGame, game, teams, activeMap);
     renderSmashScorecard(selectedGame, game, teams);
+    renderOverwatchScorecard(selectedGame, game, teams, activeMap);
   }
 
   function renderValorantVeto(game) {
