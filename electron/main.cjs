@@ -1137,6 +1137,7 @@ function registerIpc() {
     return { settings: saved, status: overwatchOcrService.configure(saved) };
   });
   ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
+  ipcMain.handle('overwatch-ocr:debug-capture', () => overwatchOcrService.debugCapture());
   ipcMain.handle('overwatch-ocr:test-read', async () => { await overwatchOcrService.sweep(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
     const parent = BrowserWindow.fromWebContents(event.sender);

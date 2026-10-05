@@ -149,6 +149,33 @@ class OverwatchOcrService {
     return value;
   }
 
+  // Debug capture: the full frame plus every cell's raw crop, the processed (binarized) image
+  // the OCR sees, the glyph count and what was read, so a misread can be traced to its cause.
+  async debugCapture() {
+    if (!this.capture) throw new Error('Capture service is unavailable');
+    const frame = await this.capture.capture(this.settings.windowName);
+    const profile = getProfile(this.settings.profileId);
+    this.checkFrame(frame, profile);
+    const lum = typeof this.capture.luminance === 'function' ? (x, y) => this.capture.luminance(frame, x, y) : null;
+    const cells = [];
+    for (const cell of cellRois(profile)) {
+      const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars });
+      const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
+      cells.push({
+        side: cell.side, row: cell.row, field: cell.field, roi: cell.roi,
+        rawDataUrl: crop.rawDataUrl || '', processedDataUrl: crop.processedDataUrl || '',
+        text: String(result.text || '').trim(), confidence: Math.round((result.confidence || 0) * 100),
+        glyphs: cell.field === 'name' || !lum ? null : glyphCount(lum, cell.roi),
+        accepted: await this.readCell(frame, profile, cell)
+      });
+    }
+    return {
+      capturedAt: this.now(), sourceName: frame.sourceName || '', backend: frame.backend || '',
+      width: frame.width, height: frame.height, sourceWidth: frame.sourceWidth || frame.width, sourceHeight: frame.sourceHeight || frame.height,
+      frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', cells
+    };
+  }
+
   snapshot() { return { ...this.board, status: this.getStatus() }; }
 
   async shutdown() { this.stop(); }

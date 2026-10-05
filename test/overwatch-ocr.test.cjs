@@ -193,3 +193,23 @@ test('Overwatch OCR service: refuses a frame that is not on the 1080p grid', asy
   const service = new OverwatchOcrService({ capture: { capture: async () => ({ width: 1280, height: 1024 }), crop: () => ({}) }, ocr: { recognize: async () => ({ text: '', confidence: 0 }) } });
   await assert.rejects(service.sweep(), /1280x1024/);
 });
+
+test('Overwatch OCR: debug capture returns every cell with its crop, raw text, digit count and verdict', { timeout: 120000 }, async () => {
+  const capture = {
+    capture: async () => ({ width: 1920, height: 1080, sourceWidth: 2560, sourceHeight: 1440, sourceName: 'Overwatch', backend: 'fixture', image: { toDataURL: () => 'data:image/png;base64,AA==' } }),
+    crop: (_f, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120), rawDataUrl: 'data:raw', processedDataUrl: 'data:proc' }),
+    luminance: (_f, x, y) => sample(x, y)
+  };
+  const ocr = new TesseractOcrEngine();
+  const service = new OverwatchOcrService({ capture, ocr });
+  let debug;
+  try { debug = await service.debugCapture(); } finally { await ocr.close(); }
+  assert.equal(debug.cells.length, 80);
+  assert.equal(debug.frameDataUrl, 'data:image/png;base64,AA==');
+  const dmg = debug.cells.find((c) => c.side === 'home' && c.row === 0 && c.field === 'damage');
+  assert.deepEqual([dmg.glyphs, dmg.accepted, dmg.rawDataUrl, dmg.processedDataUrl], [3, 215, 'data:raw', 'data:proc']);
+  const { renderOverwatchDebugCapture } = await import('../src/overwatch-ocr-panel.js');
+  const html = renderOverwatchDebugCapture(debug);
+  assert.equal((html.match(/class="ow-dbg-cell /g) || []).length, 80);
+  assert.match(html, /2560×1440 → 1920×1080/);
+});

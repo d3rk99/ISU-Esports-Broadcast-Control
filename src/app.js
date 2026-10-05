@@ -2622,6 +2622,18 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  if (button.dataset.action === 'ow-ocr-debug') {
+    toast('Capturing the Overwatch window…');
+    try { overwatchOcr = { ...overwatchOcr, debug: await window.isuDesktop?.debugCaptureOverwatchOcr() }; toast('Debug capture ready'); }
+    catch (error) { toast(`Debug capture failed: ${String(error?.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`); }
+    render();
+    return;
+  }
+  if (button.dataset.action === 'ow-ocr-debug-close') {
+    overwatchOcr = { ...overwatchOcr, debug: null };
+    render();
+    return;
+  }
   if (button.dataset.action === 'ow-ocr-clear') {
     overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.clearOverwatchOcr());
     publishOverwatchOcr(); render();

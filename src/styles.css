@@ -738,3 +738,16 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-ocr-table th:nth-child(-n+2), .ow-ocr-table td:nth-child(-n+2) { text-align: left; }
 .ow-ocr-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 1300px) { .ow-ocr-tables, .ow-ocr-controls { grid-template-columns: 1fr; } }
+/* Overwatch OCR debug capture */
+.ow-dbg { margin-top: 14px; border-top: 1px solid #343d47; padding-top: 10px; }
+.ow-dbg-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; }
+.ow-dbg-frame > img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ow-dbg-box { position: absolute; border: 1px solid #4ad18a; box-sizing: border-box; }
+.ow-dbg-box.bad { border-color: #ff5a4f; }
+.ow-dbg-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 10px; max-height: 520px; overflow: auto; }
+.ow-dbg-cell { display: grid; gap: 4px; padding: 6px; background: #11161c; border: 1px solid #2c3540; border-left: 3px solid #4ad18a; font-size: 11px; }
+.ow-dbg-cell.bad { border-left-color: #ff5a4f; }
+.ow-dbg-cell span { font-weight: 900; letter-spacing: .08em; color: #aeb9c4; }
+.ow-dbg-cell img { width: 100%; image-rendering: pixelated; background: #000; }
+.ow-dbg-cell img.proc { background: #fff; }
+.ow-dbg-cell small { color: #cfd8e1; word-break: break-all; }

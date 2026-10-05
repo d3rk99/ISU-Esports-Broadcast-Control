@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   configureOverwatchOcr: (settings) => ipcRenderer.invoke('overwatch-ocr:configure', settings),
   clearOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:clear'),
   testOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:test-read'),
+  debugCaptureOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:debug-capture'),
   onOverwatchOcrState: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('overwatch-ocr:state', listener);
