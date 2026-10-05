@@ -1,0 +1,372 @@
+{
+ "source": "Overwatch Wiki, File:<Hero> Hero.png (in-game hero portrait art, Category:Hero icons), downloaded 2026-10-05",
+ "portraits": [
+  {
+   "hero": "Ana",
+   "file": "ana.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Ana_Hero.png"
+  },
+  {
+   "hero": "Anran",
+   "file": "anran.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Anran_Hero.png"
+  },
+  {
+   "hero": "Ashe",
+   "file": "ashe.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Ashe_Hero.png"
+  },
+  {
+   "hero": "Baptiste",
+   "file": "baptiste.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Baptiste_Hero.png"
+  },
+  {
+   "hero": "Bastion",
+   "file": "bastion.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Bastion_Hero.png"
+  },
+  {
+   "hero": "Brigitte",
+   "file": "brigitte.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Brigitte_Hero.png"
+  },
+  {
+   "hero": "Cassidy",
+   "file": "cassidy.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Cassidy_Hero.png"
+  },
+  {
+   "hero": "D.Va",
+   "file": "d-va.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:D.Va_Hero.png"
+  },
+  {
+   "hero": "Domina",
+   "file": "domina.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Domina_Hero.png"
+  },
+  {
+   "hero": "Doomfist",
+   "file": "doomfist.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Doomfist_Hero.png"
+  },
+  {
+   "hero": "Echo",
+   "file": "echo.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Echo_Hero.png"
+  },
+  {
+   "hero": "Emre",
+   "file": "emre.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Emre_Hero.png"
+  },
+  {
+   "hero": "Freja",
+   "file": "freja.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Freja_Hero.png"
+  },
+  {
+   "hero": "Genji",
+   "file": "genji.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Genji_Hero.png"
+  },
+  {
+   "hero": "Hanzo",
+   "file": "hanzo.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Hanzo_Hero.png"
+  },
+  {
+   "hero": "Hazard",
+   "file": "hazard.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Hazard_Hero.png"
+  },
+  {
+   "hero": "Illari",
+   "file": "illari.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Illari_Hero.png"
+  },
+  {
+   "hero": "Jetpack Cat",
+   "file": "jetpack-cat.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Jetpack_Cat_Hero.png"
+  },
+  {
+   "hero": "Junker Queen",
+   "file": "junker-queen.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Junker_Queen_Hero.png"
+  },
+  {
+   "hero": "Junkrat",
+   "file": "junkrat.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Junkrat_Hero.png"
+  },
+  {
+   "hero": "Juno",
+   "file": "juno.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Juno_Hero.png"
+  },
+  {
+   "hero": "Kiriko",
+   "file": "kiriko.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Kiriko_Hero.png"
+  },
+  {
+   "hero": "Lifeweaver",
+   "file": "lifeweaver.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Lifeweaver_Hero.png"
+  },
+  {
+   "hero": "Lúcio",
+   "file": "lucio.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:L%C3%BAcio_Hero.png"
+  },
+  {
+   "hero": "Mauga",
+   "file": "mauga.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Mauga_Hero.png"
+  },
+  {
+   "hero": "Mei",
+   "file": "mei.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Mei_Hero.png"
+  },
+  {
+   "hero": "Mercy",
+   "file": "mercy.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Mercy_Hero.png"
+  },
+  {
+   "hero": "Mizuki",
+   "file": "mizuki.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Mizuki_Hero.png"
+  },
+  {
+   "hero": "Moira",
+   "file": "moira.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Moira_Hero.png"
+  },
+  {
+   "hero": "Orisa",
+   "file": "orisa.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Orisa_Hero.png"
+  },
+  {
+   "hero": "Pharah",
+   "file": "pharah.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Pharah_Hero.png"
+  },
+  {
+   "hero": "Ramattra",
+   "file": "ramattra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Ramattra_Hero.png"
+  },
+  {
+   "hero": "Reaper",
+   "file": "reaper.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Reaper_Hero.png"
+  },
+  {
+   "hero": "Reinhardt",
+   "file": "reinhardt.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Reinhardt_Hero.png"
+  },
+  {
+   "hero": "Roadhog",
+   "file": "roadhog.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Roadhog_Hero.png"
+  },
+  {
+   "hero": "Shion",
+   "file": "shion.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Shion_Hero.png"
+  },
+  {
+   "hero": "Sigma",
+   "file": "sigma.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Sigma_Hero.png"
+  },
+  {
+   "hero": "Sierra",
+   "file": "sierra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Sierra_Hero.png"
+  },
+  {
+   "hero": "Sojourn",
+   "file": "sojourn.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Sojourn_Hero.png"
+  },
+  {
+   "hero": "Soldier: 76",
+   "file": "soldier-76.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Soldier_76_Hero.png"
+  },
+  {
+   "hero": "Symmetra",
+   "file": "symmetra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Symmetra_Hero.png"
+  },
+  {
+   "hero": "Torbjörn",
+   "file": "torbjorn.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Torbj%C3%B6rn_Hero.png"
+  },
+  {
+   "hero": "Tracer",
+   "file": "tracer.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Tracer_Hero.png"
+  },
+  {
+   "hero": "Venture",
+   "file": "venture.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Venture_Hero.png"
+  },
+  {
+   "hero": "Vendetta",
+   "file": "vendetta.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Vendetta_Hero.png"
+  },
+  {
+   "hero": "Widowmaker",
+   "file": "widowmaker.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Widowmaker_Hero.png"
+  },
+  {
+   "hero": "Winston",
+   "file": "winston.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Winston_Hero.png"
+  },
+  {
+   "hero": "Wrecking Ball",
+   "file": "wrecking-ball.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Wrecking_Ball_Hero.png"
+  },
+  {
+   "hero": "Wuyang",
+   "file": "wuyang.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Wuyang_Hero.png"
+  },
+  {
+   "hero": "Zarya",
+   "file": "zarya.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Zarya_Hero.png"
+  },
+  {
+   "hero": "Zenyatta",
+   "file": "zenyatta.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File:Zenyatta_Hero.png"
+  },
+  {
+   "hero": "Sombra",
+   "file": "sombra.webp",
+   "width": 256,
+   "height": 256,
+   "source": "https://overwatch.fandom.com/wiki/File%3ASombra_Hero.webp"
+  }
+ ],
+ "missing": [
+  "D.Mon"
+ ]
+}
