@@ -3,7 +3,7 @@ import type ModuleInstance from './main.js'
 type Team = 'home' | 'away'
 type Operation = 'increment' | 'decrement'
 type ProgramOutput = 'scoreboard' | 'roster' | 'map-pool' | 'clean'
-type StageMode = 'gameplay' | 'wall' | 'graphic' | 'individual' | 'hold' | 'blackout'
+type StageMode = 'gameplay' | 'wall' | 'graphic' | 'individual' | 'playercard' | 'hold' | 'blackout'
 type StageUpdateTarget = 'outdated' | 'all' | 'station'
 
 export type ActionsSchema = {
@@ -55,6 +55,7 @@ const STAGE_MODE_CHOICES = [
 	{ id: 'wall', label: 'Wall / Span' },
 	{ id: 'graphic', label: 'Mirror Graphic' },
 	{ id: 'individual', label: 'Individual' },
+	{ id: 'playercard', label: 'Player Card (NDI)' },
 	{ id: 'hold', label: 'Hold Graphic' },
 	{ id: 'blackout', label: 'Blackout' },
 ]

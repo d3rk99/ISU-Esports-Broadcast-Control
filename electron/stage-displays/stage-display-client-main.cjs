@@ -9,6 +9,7 @@ const path = require('node:path');
 const WebSocket = require('ws');
 
 const { CLIENT_VERSION } = require('./client-version.cjs');
+const { NdiCardReceiver } = require('./ndi-receiver.cjs');
 const { createUpdaterScript } = require('./client-updater.cjs');
 const { ClockSync } = require('./clock-sync.cjs');
 let clientWindow = null;
@@ -648,11 +649,31 @@ function localExecuteAt(executeAt) {
   return local === null ? null : local;
 }
 
+// Player card mode: this station shows the controller's NDI source "ISU Player Card NN".
+// Frames are received here (main process, off the renderer) and handed to the page as
+// transferable buffers; latest frame wins.
+let ndiFrameBusy = false;
+const ndiReceiver = new NdiCardReceiver({
+  onFrame: (frame) => {
+    if (!clientWindow || clientWindow.isDestroyed() || ndiFrameBusy) return;
+    ndiFrameBusy = true;
+    clientWindow.webContents.send('stage-client:ndi-frame', { width: frame.width, height: frame.height, stride: frame.stride, data: frame.data });
+    setImmediate(() => { ndiFrameBusy = false; });
+  },
+  onStatus: (status) => { clientWindow?.webContents.send('stage-client:ndi-status', status); }
+});
+
+function controllerHost() {
+  try { return new URL(config.managerWs || config.controller).hostname; } catch { return ''; }
+}
+
 function setMode(mode = 'hold', details = {}) {
-  const allowed = new Set(['gameplay', 'wall', 'graphic', 'individual', 'blackout', 'hold']);
+  const allowed = new Set(['gameplay', 'wall', 'graphic', 'individual', 'playercard', 'blackout', 'hold']);
   const nextMode = allowed.has(String(mode)) ? String(mode) : 'hold';
   currentMode = nextMode;
   currentPreset = details.preset || '';
+  if (nextMode === 'playercard') ndiReceiver.start({ station: config.stationId, controllerHost: controllerHost() }).catch(() => {});
+  else ndiReceiver.stop();
   clientWindow?.webContents.send('stage-client:mode', {
     mode: nextMode,
     playId: details.playId || '',

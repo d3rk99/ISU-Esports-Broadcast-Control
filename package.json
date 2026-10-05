@@ -11,7 +11,7 @@
     "build": "vite build",
     "test:ui": "electron scripts/verify-dom-patch.cjs",
     "test:rl-cars": "node --test test/rl-loadout.test.js test/rocket-league-camera.test.cjs && electron scripts/verify-rl-car-lab.cjs",
-    "check": "node --check src/app.js && node --check src/game-config.js && node --check src/companion-actions.js && node --check src/store.js && node --check src/valorant-ocr-profiles.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/companion-api-service.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/game-bridge.cjs && node --check electron/bridge-link.cjs && node --check electron/overlay-events.cjs && node --check electron/valorant-ocr-profiles.cjs && node --check electron/valorant-ocr-state.cjs && node --check electron/valorant-timer-state.cjs && node --check electron/valorant-ocr-engine.cjs && node --check electron/valorant-capture.cjs && node --check electron/valorant-native-capture.cjs && node --check electron/valorant-ocr-service.cjs && node --check electron/valorant-observer-consensus.cjs && node --check electron/overwatch-ocr-parse.cjs && node --check electron/overwatch-ocr-service.cjs && node --check src/overwatch-ocr-panel.js && node --check electron/stage-displays/stage-display-manager.cjs && node --check electron/stage-displays/clock-sync.cjs && node --check electron/stage-displays/client/stage-client.js && node --check electron/stage-displays/stage-display-client-main.cjs && node --check electron/stage-displays/stage-display-client-preload.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs && node --check scripts/verify-packaged-ocr.cjs && node --check scripts/verify-packaged-native-capture.cjs",
+    "check": "node --check src/app.js && node --check src/game-config.js && node --check src/companion-actions.js && node --check src/store.js && node --check src/valorant-ocr-profiles.js && node --check public/overlays/overlay.js && node --check vite.config.js && node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/companion-api-service.cjs && node --check electron/rocket-league-service.cjs && node --check electron/rocket-league-bridge.cjs && node --check electron/game-bridge.cjs && node --check electron/bridge-link.cjs && node --check electron/overlay-events.cjs && node --check electron/valorant-ocr-profiles.cjs && node --check electron/valorant-ocr-state.cjs && node --check electron/valorant-timer-state.cjs && node --check electron/valorant-ocr-engine.cjs && node --check electron/valorant-capture.cjs && node --check electron/valorant-native-capture.cjs && node --check electron/valorant-ocr-service.cjs && node --check electron/valorant-observer-consensus.cjs && node --check electron/overwatch-ocr-parse.cjs && node --check electron/overwatch-ocr-service.cjs && node --check src/overwatch-ocr-panel.js && node --check electron/stage-displays/stage-display-manager.cjs && node --check electron/stage-displays/clock-sync.cjs && node --check electron/stage-displays/client/stage-client.js && node --check electron/stage-displays/stage-display-client-main.cjs && node --check electron/stage-displays/stage-display-client-preload.cjs && node --check electron/bridge-main.cjs && node --check electron/bridge-preload.cjs && node --check scripts/verify-packaged-ocr.cjs && node --check scripts/verify-packaged-native-capture.cjs && node --check electron/ndi-player-cards.cjs && node --check electron/stage-displays/ndi-receiver.cjs && node --check public/overlays/player-card.js",
     "test": "node --test test/companion-actions.test.js test/companion-api-service.test.cjs test/overlay-layout.test.js test/game-bridge.test.cjs test/bridge-link.test.cjs test/overlay-events.test.cjs test/rocket-league-service.test.cjs test/store.test.js test/rl-car-compose.test.js test/stage-version.test.cjs test/stage-security-sync.test.cjs test/valorant-capture.test.cjs test/valorant-native-capture.test.cjs test/valorant-ocr-engine.test.cjs test/valorant-ocr-state.test.cjs test/valorant-ocr-service.test.cjs test/valorant-observer-consensus.test.cjs test/overwatch-ocr.test.cjs",
     "package": "npm run build && electron-builder --win nsis portable && electron-builder --config electron-builder.bridge.json --win portable",
     "package:dir": "npm run build && electron-builder --dir",
@@ -20,7 +20,8 @@
     "package:stage-client": "electron-builder --config electron-builder.stage-client.json --win portable",
     "verify:bridge-ocr": "set ELECTRON_RUN_AS_NODE=1&& \"release\\bridge\\win-unpacked\\ISU Esports Game Bridge.exe\" scripts\\verify-packaged-ocr.cjs release\\bridge\\win-unpacked\\resources\\app.asar.unpacked\\node_modules",
     "verify:bridge-capture": "set ELECTRON_RUN_AS_NODE=1&& \"release\\bridge\\win-unpacked\\ISU Esports Game Bridge.exe\" scripts\\verify-packaged-native-capture.cjs release\\bridge\\win-unpacked\\resources\\app.asar.unpacked\\node_modules",
-    "package:companion": "cd companion-module && corepack yarn package"
+    "package:companion": "cd companion-module && corepack yarn package",
+    "ndi:install": "npm install --no-save @stagetimerio/grandiose@^0.2.0 --foreground-scripts && npx --yes @electron/rebuild -f -o @stagetimerio/grandiose"
   },
   "build": {
     "appId": "edu.isu.esports.broadcastcontrol",
@@ -34,7 +35,8 @@
       "assests/rocket-league-items.csv",
       "stage-assets/**/*",
       "stage-display-client.config.example.json",
-      "package.json"
+      "package.json",
+      "node_modules/@stagetimerio/grandiose/dist/**/*"
     ],
     "asarUnpack": [
       "node_modules/bmp-js/**/*",
@@ -51,7 +53,8 @@
       "node_modules/wasm-feature-detect/**/*",
       "node_modules/webidl-conversions/**/*",
       "node_modules/whatwg-url/**/*",
-      "node_modules/zlibjs/**/*"
+      "node_modules/zlibjs/**/*",
+      "node_modules/@stagetimerio/grandiose/dist/**/*"
     ],
     "win": {
       "icon": "build/icon.svg",
@@ -94,5 +97,8 @@
     "electron-builder": "^26.0.12",
     "vite": "^8.2.2",
     "wait-on": "^8.0.4"
+  },
+  "optionalDependencies": {
+    "@stagetimerio/grandiose": "^0.2.0"
   }
 }

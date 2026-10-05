@@ -38,6 +38,7 @@ const STAGE_MODE_CHOICES = [
 	{ id: 'wall', label: 'Wall / Span' },
 	{ id: 'graphic', label: 'Mirror Graphic' },
 	{ id: 'individual', label: 'Individual' },
+	{ id: 'playercard', label: 'Player Card (NDI)' },
 	{ id: 'hold', label: 'Hold Graphic' },
 	{ id: 'blackout', label: 'Blackout' },
 	{ id: 'offline', label: 'Offline' },

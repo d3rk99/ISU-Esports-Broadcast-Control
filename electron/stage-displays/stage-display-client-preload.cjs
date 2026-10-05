@@ -28,6 +28,16 @@ contextBridge.exposeInMainWorld('stageClient', {
     ipcRenderer.on('stage-client:mode', listener);
     return () => ipcRenderer.removeListener('stage-client:mode', listener);
   },
+  onNdiFrame: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('stage-client:ndi-frame', listener);
+    return () => ipcRenderer.removeListener('stage-client:ndi-frame', listener);
+  },
+  onNdiStatus: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('stage-client:ndi-status', listener);
+    return () => ipcRenderer.removeListener('stage-client:ndi-status', listener);
+  },
   onPrepare: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('stage-client:prepare', listener);

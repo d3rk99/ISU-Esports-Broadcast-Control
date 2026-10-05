@@ -751,3 +751,14 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-dbg-cell img { width: 100%; image-rendering: pixelated; background: #000; }
 .ow-dbg-cell img.proc { background: #fff; }
 .ow-dbg-cell small { color: #cfd8e1; word-break: break-all; }
+/* NDI player cards panel (Stage page) */
+.ndi-card-panel { margin-bottom: 16px; }
+.ndi-card-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.ndi-rows { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
+.ndi-row { display: grid; grid-template-columns: auto auto 1fr; gap: 2px 8px; align-items: center; padding: 8px 10px; background: #11161c; border: 1px solid #2c3540; font-size: 12px; cursor: pointer; }
+.ndi-row b { font-size: 16px; }
+.ndi-row span { color: #8d9aa8; }
+.ndi-row small { grid-column: 1 / -1; color: #aeb9c4; }
+.ndi-row.on { border-color: #f47920; }
+.ndi-row.bad small { color: #ff7b72; }
+@media (max-width: 1300px) { .ndi-rows { grid-template-columns: repeat(2, 1fr); } }

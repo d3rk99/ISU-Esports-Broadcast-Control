@@ -65,6 +65,40 @@ let companionSettings = {
 };
 let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
 let stageDisplayStatus = { enabled: false, port: 3178, onlineCount: 0, stations: [] };
+let ndiCardStatus = { enabled: false, stations: [], outputs: [], error: '' };
+window.isuDesktop?.getNdiCardStatus?.().then((status) => { ndiCardStatus = status || ndiCardStatus; }).catch(() => {});
+setInterval(() => {
+  if (state.activeView !== 'stage' || !window.isuDesktop?.getNdiCardStatus) return;
+  window.isuDesktop.getNdiCardStatus().then((status) => { ndiCardStatus = status || ndiCardStatus; render(); }).catch(() => {});
+}, 2000);
+
+// Stations that have a roster player assigned (STATION column) in the selected game.
+function assignedPlayerStations() {
+  const game = current();
+  const all = [...(game.rosters?.[state.activeRoster] || []), ...(game.awayRosters?.[state.activeRoster] || [])];
+  return [...new Set(all.map((p) => Math.round(Number(p?.stageStation) || 0)).filter((n) => n >= 1 && n <= 10))].sort((a, b) => a - b);
+}
+
+function renderNdiCardPanel() {
+  const st = ndiCardStatus || {};
+  const assigned = assignedPlayerStations();
+  const outputs = new Map((st.outputs || []).map((o) => [o.station, o]));
+  const rows = Array.from({ length: 10 }, (_v, i) => {
+    const n = i + 1; const o = outputs.get(n);
+    const on = (st.stations || []).includes(n);
+    const label = !on ? 'off' : o?.error ? `error: ${o.error}` : o ? `${o.frames} frames · ${o.connections} viewer${o.connections === 1 ? '' : 's'}` : 'starting';
+    return `<label class="ndi-row ${on ? 'on' : ''} ${o?.error ? 'bad' : ''}"><input type="checkbox" data-ndi-station="${n}" ${on ? 'checked' : ''}><b>${String(n).padStart(2, '0')}</b><span>${assigned.includes(n) ? 'player assigned' : 'no player'}</span><small>${escapeHtml(label)}</small></label>`;
+  }).join('');
+  return `<article class="panel ndi-card-panel" data-key="ndi-card-panel">
+    <div class="panel-title"><span class="section-number">NDI</span><div><h2>NDI player cards</h2><p>One 1920×1080 NDI source per station, <b>ISU Player Card 01-10</b>: headshot + name from the roster (STATION column), hero art, and last-map stats from the Overwatch OCR. Set a station to <b>Player Card</b> to show it.</p></div></div>
+    <div class="ndi-card-controls">
+      <label class="rl-enable-toggle"><input type="checkbox" data-ndi-enabled ${st.enabled ? 'checked' : ''}><i></i><span><b>SEND NDI PLAYER CARDS</b><small>${st.ndiVersion ? escapeHtml(st.ndiVersion) : 'NDI 6 runtime'}</small></span></label>
+      <button data-action="ndi-use-assigned">USE STATIONS WITH PLAYERS (${assigned.length})</button>
+    </div>
+    ${st.error ? `<p class="ow-ocr-status is-bad">${escapeHtml(st.error)}</p>` : ''}
+    <div class="ndi-rows">${rows}</div>
+  </article>`;
+}
 let stagePresets = [];
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
 const ROCKET_LEAGUE_EVENT_BADGE_MS = 5500;
@@ -260,6 +294,7 @@ function stageModeLabel(mode = '') {
     wall: 'Wall / Span',
     graphic: 'Mirror Graphic',
     individual: 'Individual',
+    playercard: 'Player Card (NDI)',
     blackout: 'Blackout',
     hold: 'Hold Graphic',
     offline: 'Offline'
@@ -271,6 +306,7 @@ function renderStageModeButtons(scope, station = '') {
     ['gameplay', 'Gameplay'],
     ['wall', 'Wall'],
     ['individual', 'Individual'],
+    ['playercard', 'Player Card'],
     ['blackout', 'Blackout']
   ];
   return modes.map(([mode, label]) => `<button data-action="${scope === 'global' ? 'stage-global-mode' : 'stage-station-mode'}" data-stage-mode="${mode}" ${station ? `data-station="${station}"` : ''}>${label}</button>`).join('');
@@ -418,6 +454,7 @@ function renderStageDisplays() {
       <div class="section-heading"><div><span class="section-number">01</span><div><h2>Stage display clients</h2><p>${Number(stageDisplayStatus.onlineCount || 0)} of 10 stations online &middot; WebSocket port ${Number(stageDisplayStatus.port || 3178)}</p></div></div>
         <div class="heading-actions"><button class="secondary-button" data-action="stage-clear-previews">CLEAR PREVIEWS</button><button class="secondary-button" data-action="refresh-stage-displays">REFRESH</button></div>
       </div>
+      ${renderNdiCardPanel()}
       ${warnings.length ? `<article class="panel stage-warning-panel"><div class="panel-title compact"><div><h2>Stage warnings</h2><p>${warnings.map(escapeHtml).join('<br>')}</p></div></div></article>` : ''}
       <article class="panel stage-update-panel">
         <div class="panel-title compact">
@@ -2616,6 +2653,12 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  if (button.dataset.action === 'ndi-use-assigned') {
+    ndiCardStatus = (await window.isuDesktop?.configureNdiCards({ enabled: true, stations: assignedPlayerStations() })) || ndiCardStatus;
+    toast(`NDI player cards on for stations ${assignedPlayerStations().join(', ') || '(none assigned)'}`);
+    render();
+    return;
+  }
   if (button.dataset.action === 'ow-ocr-test') {
     try { overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.testOverwatchOcr()); publishOverwatchOcr(); toast('Read the scoreboard once'); }
     catch (error) { toast(`Test read failed: ${error.message || error}`); }
@@ -2948,7 +2991,7 @@ root.addEventListener('click', async (event) => {
     'next-match': () => {
       const nextIndex = (game.activeMap + 1) % visibleMapRows(game, config).length;
       commit(() => {
-        advanceGameMatch(game, state.selectedGame);
+        advanceGameMatch(game, state.selectedGame, state.activeRoster);
         if (state.selectedGame === 'valorant') resetValorantRoundHistory();
       }, `Advanced to ${state.selectedGame === 'rocketleague' || state.selectedGame === 'smash' ? 'game' : 'map'} ${nextIndex + 1}`);
     },
@@ -3097,6 +3140,16 @@ root.addEventListener('change', async (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
+    render();
+    return;
+  }
+  if (target.dataset.ndiEnabled !== undefined || target.dataset.ndiStation) {
+    const stations = new Set(ndiCardStatus.stations || []);
+    if (target.dataset.ndiStation) { const n = Number(target.dataset.ndiStation); if (target.checked) stations.add(n); else stations.delete(n); }
+    const enabled = target.dataset.ndiEnabled !== undefined ? target.checked : ndiCardStatus.enabled;
+    const list = [...stations].length ? [...stations] : assignedPlayerStations();
+    ndiCardStatus = (await window.isuDesktop?.configureNdiCards({ enabled, stations: list })) || ndiCardStatus;
+    toast(enabled ? `NDI player cards: ${list.length} station(s)` : 'NDI player cards off');
     render();
     return;
   }

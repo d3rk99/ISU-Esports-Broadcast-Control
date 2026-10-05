@@ -13,6 +13,7 @@ const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
+const { NdiPlayerCards } = require('./ndi-player-cards.cjs');
 const { StageDisplayManager } = require('./stage-displays/stage-display-manager.cjs');
 
 const isDev = !app.isPackaged;
@@ -29,6 +30,7 @@ let overlayServer;
 let rocketLeagueService;
 let valorantOcrService;
 let overwatchOcrService;
+let ndiPlayerCards;
 let companionApiService;
 let stageDisplayManager;
 let companionRequestId = 0;
@@ -1137,6 +1139,13 @@ function registerIpc() {
     return { settings: saved, status: overwatchOcrService.configure(saved) };
   });
   ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
+  // NDI player cards: settings persist in userData; outputs are (re)built on change.
+  ipcMain.handle('ndi-cards:status', () => ndiPlayerCards.status());
+  ipcMain.handle('ndi-cards:configure', async (_event, settings = {}) => {
+    const saved = { enabled: Boolean(settings.enabled), stations: Array.isArray(settings.stations) ? settings.stations : [] };
+    fs.writeFileSync(path.join(app.getPath('userData'), 'ndi-player-cards.json'), JSON.stringify(saved, null, 2), 'utf8');
+    return ndiPlayerCards.configure(saved);
+  });
   ipcMain.handle('overwatch-ocr:debug-capture', () => overwatchOcrService.debugCapture());
   ipcMain.handle('overwatch-ocr:test-read', async () => { await overwatchOcrService.sweep(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
@@ -1395,11 +1404,16 @@ app.whenReady().then(async () => {
     onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('overwatch-ocr:status', status); }
   });
   overwatchOcrService.configure(readOverwatchOcrSettings());
+  ndiPlayerCards = new NdiPlayerCards({ BrowserWindow, baseUrl: `http://${OVERLAY_HOST}:${OVERLAY_PORT}`, log: (m) => console.log(m) });
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
   await stageDisplayManager.start();
   try {
     await startOverlayServer();
+    try {
+      const savedNdi = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'ndi-player-cards.json'), 'utf8'));
+      if (savedNdi?.enabled) await ndiPlayerCards.configure(savedNdi);
+    } catch {}
   } catch (error) {
     dialog.showErrorBox('Overlay server could not start', `Port ${OVERLAY_PORT} is unavailable. Close any other copy of ISU Esports Broadcast Control and reopen the app.\n\n${error.message}`);
   }
@@ -1420,6 +1434,7 @@ app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
   valorantOcrService?.shutdown();
   overwatchOcrService?.shutdown();
+  ndiPlayerCards?.shutdown();
   stageDisplayManager?.shutdown();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();

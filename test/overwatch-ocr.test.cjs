@@ -256,3 +256,25 @@ test('Overwatch OCR service: READY disc wins over a misread number (Hanzo read a
   assert.equal(service.board.teams.away.players[0].ultimate, 'READY');
   assert.equal(service.board.teams.home.players[0].ultimate, 97, 'a normal ring keeps its number');
 });
+
+test('Overwatch: NEXT MATCH saves each stationed player\'s OCR stats as "last map" for the player cards', async () => {
+  const { saveOverwatchLastMapStats } = await import('../src/companion-actions.js');
+  const game = {
+    activeMap: 0, mapRows: [{ map: 'Busan' }],
+    rosters: { varsity: [{ handle: 'Bengal', stageStation: 3 }, { handle: 'NoStation' }] },
+    awayRosters: { varsity: [{ handle: 'BRONCO1', stageStation: 7 }] },
+    overwatchOcr: { live: { teams: { home: { players: [{ name: 'BENGAL', elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }] }, away: { players: [{ name: 'BRONCO1', elims: 3, assists: 1, deaths: 9, damage: 2100, healing: 0, mitigation: 0 }] } } } }
+  };
+  assert.equal(saveOverwatchLastMapStats(game), 2);
+  assert.deepEqual(game.overwatchLastMapStats[3], { handle: 'Bengal', map: 'Busan', stats: { elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }, savedAt: game.overwatchLastMapStats[3].savedAt });
+  assert.equal(game.overwatchLastMapStats[7].stats.deaths, 9);
+});
+
+test('NDI player cards: missing NDI runtime is reported, not thrown', async () => {
+  const { NdiPlayerCards } = require('../electron/ndi-player-cards.cjs');
+  const cards = new NdiPlayerCards({ BrowserWindow: class {}, baseUrl: 'http://127.0.0.1:1', loadNdiImpl: () => ({ ndi: null, error: 'NDI runtime not available (test)' }) });
+  const status = await cards.configure({ enabled: true, stations: [1, 2, 11] });
+  assert.deepEqual(status.stations, [1, 2]);
+  assert.match(status.error, /not available/);
+  assert.equal((await cards.configure({ enabled: false })).stations.length, 0);
+});

@@ -1,4 +1,6 @@
 const video = document.querySelector('#gameplay');
+const ndiCanvas = document.querySelector('#ndi-card');
+const ndiContext = ndiCanvas?.getContext('2d', { alpha: false });
 const presetShell = document.querySelector('#preset-shell');
 const presetFrame = document.querySelector('#preset-frame');
 const preloadFrame = document.querySelector('#preload-frame');
@@ -211,11 +213,43 @@ function preparePreset(details = {}) {
   preloadFrame.src = info.url;
 }
 
+// NDI player card: BGRA rows from the receiver -> RGBA ImageData on the canvas. Only the newest
+// frame is drawn per animation frame.
+let ndiPending = null;
+function drawNdiFrame() {
+  const frame = ndiPending; ndiPending = null;
+  if (!frame || !ndiContext || currentMode !== 'playercard') return;
+  const { width, height, stride } = frame;
+  const src = new Uint8Array(frame.data.buffer || frame.data, frame.data.byteOffset || 0, frame.data.byteLength || frame.data.length);
+  if (ndiCanvas.width !== width || ndiCanvas.height !== height) { ndiCanvas.width = width; ndiCanvas.height = height; }
+  const image = ndiContext.createImageData(width, height);
+  const out = image.data;
+  for (let y = 0; y < height; y += 1) {
+    let s = y * stride; let o = y * width * 4;
+    for (let x = 0; x < width; x += 1, s += 4, o += 4) { out[o] = src[s + 2]; out[o + 1] = src[s + 1]; out[o + 2] = src[s]; out[o + 3] = 255; }
+  }
+  ndiContext.putImageData(image, 0, 0);
+  document.body.classList.add('ndi-live');
+}
+window.stageClient?.onNdiFrame?.((frame) => { const first = !ndiPending; ndiPending = frame; if (first) requestAnimationFrame(drawNdiFrame); });
+window.stageClient?.onNdiStatus?.((status) => {
+  if (currentMode !== 'playercard') return;
+  if (status.state === 'error') { document.body.classList.remove('ndi-live'); setSceneText('hold', {}); subhead.textContent = status.error; reportStatus(status.error); }
+  else if (status.state === 'receiving') reportStatus('');
+});
+
 async function applyMode(mode = 'hold', details = {}) {
   currentMode = mode;
   document.body.className = `mode-${mode}`;
   try {
-    if (mode === 'gameplay') {
+    if (mode !== 'playercard') document.body.classList.remove('ndi-live');
+    if (mode === 'playercard') {
+      // Frames arrive over NDI (main process); show the hold scene until the first one lands.
+      clearPresetFrame();
+      stopGameplayStream();
+      setSceneText('hold', details);
+      subhead.textContent = 'Connecting to player card…';
+    } else if (mode === 'gameplay') {
       clearPresetFrame();
       await startGameplayMirror();
     } else {

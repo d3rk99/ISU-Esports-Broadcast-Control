@@ -107,7 +107,32 @@ function saveActiveMapResult(game, gameKey) {
   game.teams.forEach((team, index) => { team.score = visibleMapRows(game).filter((mapRow) => mapRow.winner === index).length; });
 }
 
-export function advanceGameMatch(game, gameKey) {
+// Overwatch: keep each stationed player's scoreboard-OCR stats from the map that just ended,
+// keyed by stage station, so the station player cards can show "last map" during the next one.
+export function saveOverwatchLastMapStats(game, rosterKey = 'varsity') {
+  const live = game.overwatchOcr?.live?.teams;
+  if (!live) return 0;
+  const map = game.mapRows?.[game.activeMap]?.map || '';
+  const saved = { ...(game.overwatchLastMapStats || {}) };
+  let count = 0;
+  for (const [side, roster] of [['home', game.rosters?.[rosterKey] || []], ['away', game.awayRosters?.[rosterKey] || []]]) {
+    const rows = live[side]?.players || [];
+    for (const player of roster) {
+      const station = Math.round(Number(player?.stageStation) || 0);
+      if (station < 1 || station > 10 || !player?.handle) continue;
+      const row = rows.find((r) => String(r?.name || '').toUpperCase() === String(player.handle).toUpperCase());
+      if (!row) continue;
+      const { elims, assists, deaths, damage, healing, mitigation } = row;
+      saved[station] = { handle: player.handle, map, stats: { elims, assists, deaths, damage, healing, mitigation }, savedAt: Date.now() };
+      count += 1;
+    }
+  }
+  game.overwatchLastMapStats = saved;
+  return count;
+}
+
+export function advanceGameMatch(game, gameKey, rosterKey = 'varsity') {
+  if (gameKey === 'overwatch') saveOverwatchLastMapStats(game, rosterKey);
   const length = visibleMapRows(game).length;
   const nextIndex = (game.activeMap + 1) % length;
   saveActiveMapResult(game, gameKey);
@@ -166,7 +191,7 @@ export function applyCompanionAction(state, request = {}) {
       const index = teamIndex(request.team);
       game.teams[index].detailScore = wholeNumber(request.value, 'value');
     },
-    'match.next': () => advanceGameMatch(game, gameKey),
+    'match.next': () => advanceGameMatch(game, gameKey, state.activeRoster || 'varsity'),
     'scores.reset': () => resetAllScores(game, gameKey),
     'match.live.toggle': () => { game.match.live = !game.match.live; },
     'match.live.set': () => {
