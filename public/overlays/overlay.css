@@ -2150,3 +2150,9 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-name--away { animation: sm-out-right 520ms 1020ms cubic-bezier(.2,.82,.18,1) both; --sm-from: calc((var(--ow-name-track) + var(--ow-score-track)) * -1); }
 .ow-name > * { animation: sm-fade 320ms 1380ms both; }
 .ow-logo { z-index: 1; animation: sm-logo-in 420ms 1420ms both; }
+/* The OW spectator HUD draws its own timer/objective line right under the top edge in the
+   centre. Keep the centre box short (map + mode only) so that line stays visible below it.
+   The series score already lives in the big team-coloured score boxes. */
+.ow-core { align-self: start; height: 42px; justify-content: center; gap: 1px; }
+.ow-core .ow-core-top { display: none; }
+.ow-core strong { font-size: 17px; }
