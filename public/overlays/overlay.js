@@ -654,7 +654,7 @@
     const raw = String(row?.mode || '').toLowerCase().trim();
     if (OW_MODES[raw]) return raw;
     for (const [mode, maps] of Object.entries(OW_MAP_MODES)) if (maps.some((m) => m.toLowerCase() === String(row?.map || '').toLowerCase())) return mode;
-    return 'control';
+    return ''; // no map/mode picked yet: show no mode instead of guessing CONTROL
   }
 
   function renderOverwatchScorecard(selectedGame, game, teams, activeMap) {
@@ -664,7 +664,7 @@
     if (card.hidden) return;
     const live = game.overwatch?.live || {};
     const mode = OW_MODES[String(live.mode || '').toLowerCase()] ? String(live.mode).toLowerCase() : overwatchMode(activeMap);
-    const spec = OW_MODES[mode];
+    const spec = OW_MODES[mode] || { label: '', target: 0, unit: 'pips' };
     card.dataset.mode = mode;
     const seriesLength = Math.max(1, Number(game.seriesLength) || 5);
     const mapsToWin = Math.ceil(seriesLength / 2);
