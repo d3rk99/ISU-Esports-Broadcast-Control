@@ -129,7 +129,7 @@ class OverwatchOcrService {
 
   async readCell(frame, profile, cell) {
     const kind = cell.field === 'name' ? 'text' : 'score';
-    const base = { ...profile.preprocess, allowedChars: cell.column.allowedChars };
+    const base = { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}) };
     // Digit count straight from the pixels: 0 = empty cell (never read a number into it),
     // otherwise the OCR text must have exactly that many digits.
     const glyphs = kind === 'score' && typeof this.capture.luminance === 'function'
@@ -159,7 +159,7 @@ class OverwatchOcrService {
     const lum = typeof this.capture.luminance === 'function' ? (x, y) => this.capture.luminance(frame, x, y) : null;
     const cells = [];
     for (const cell of cellRois(profile)) {
-      const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars });
+      const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}) });
       const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
       cells.push({
         side: cell.side, row: cell.row, field: cell.field, roi: cell.roi,

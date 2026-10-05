@@ -17,11 +17,12 @@ function getProfile(id = 'default-1080p') {
 // Every cell to read: { side, row, field, roi:{x,y,w,h}, column }.
 function cellRois(profile = getProfile()) {
   const cells = [];
-  const half = Math.round(profile.cellHeight / 2);
   for (const team of profile.teams) {
     team.rowCenters.forEach((cy, row) => {
       for (const [field, column] of Object.entries(profile.columns)) {
-        cells.push({ side: team.id, row, field, column, roi: { x: column.x, y: cy - half, w: column.w, h: profile.cellHeight } });
+        // Names are taller (caps + slant) than the stat digits.
+        const h = field === 'name' && profile.nameCellHeight ? profile.nameCellHeight : profile.cellHeight;
+        cells.push({ side: team.id, row, field, column, roi: { x: column.x, y: cy - Math.round(h / 2), w: column.w, h } });
       }
     });
   }

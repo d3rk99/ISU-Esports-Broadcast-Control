@@ -72,6 +72,23 @@ function preprocessNativeImage(nativeImageApi, image, options = {}) {
     bitmap[offset + 2] = value;
     bitmap[offset + 3] = 255;
   }
+  // Optional horizontal shear to undo italic text (Overwatch names use BigNoodleTooOblique,
+  // slanted ~0.21). Rows above the middle shift left and rows below shift right; the result is
+  // upright, which tesseract reads far better. Background fill = white.
+  const shear = Number(options.shear) || 0;
+  if (shear) {
+    const { width, height } = outputSize;
+    const out = Buffer.alloc(bitmap.length, 255);
+    for (let y = 0; y < height; y += 1) {
+      const shift = Math.round(shear * (y - height / 2));
+      for (let x = 0; x < width; x += 1) {
+        const sx = x - shift;
+        if (sx < 0 || sx >= width) continue;
+        bitmap.copy(out, (y * width + x) * 4, (y * width + sx) * 4, (y * width + sx) * 4 + 4);
+      }
+    }
+    return nativeImageApi.createFromBitmap(out, outputSize);
+  }
   return nativeImageApi.createFromBitmap(bitmap, outputSize);
 }
 

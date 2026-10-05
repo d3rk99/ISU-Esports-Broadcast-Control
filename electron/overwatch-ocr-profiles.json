@@ -39,10 +39,12 @@
       },
       "name": {
         "label": "Player name",
-        "x": 694,
-        "w": 200,
+        "x": 690,
+        "w": 208,
         "kind": "text",
-        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _.-#"
+        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _",
+        "shear": 0.21,
+        "note": "names are italic (BigNoodleTooOblique); shear straightens them before OCR"
       },
       "elims": {
         "label": "Eliminations",
@@ -98,6 +100,7 @@
       "grayscale": true,
       "threshold": 120,
       "invert": true
-    }
+    },
+    "nameCellHeight": 24
   }
 }

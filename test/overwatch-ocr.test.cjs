@@ -41,9 +41,16 @@ const sample = (x, y) => { const lx = x - FIX.x; const ly = y - FIX.y; return lx
 
 // Same preprocessing as the live service: invert (light text on dark), 4x upscale, threshold,
 // white margin. Emits a binary PGM, which tesseract.js reads directly.
-function cellImage(roi, scale = 4, threshold = 120, pad = 20) {
+function cellImage(roi, scale = 4, threshold = 120, pad = 20, shear = 0) {
   const w = roi.w * scale + pad * 2; const h = roi.h * scale + pad * 2;
   const px = Buffer.alloc(w * h, 255);
+  if (shear) {
+    // Same as preprocessNativeImage: binarize at scale, then shift each row to undo the slant.
+    const inner = cellImage(roi, scale, threshold, 0).subarray(-(roi.w * scale * roi.h * scale));
+    const W = roi.w * scale; const H = roi.h * scale;
+    for (let y = 0; y < H; y += 1) { const shift = Math.round(shear * (y - H / 2)); for (let x = 0; x < W; x += 1) { const sx = x - shift; if (sx >= 0 && sx < W) px[(y + pad) * w + x + pad] = inner[y * W + sx]; } }
+    return Buffer.concat([Buffer.from(`P5\n${w} ${h}\n255\n`), px]);
+  }
   for (let y = 0; y < roi.h * scale; y += 1) for (let x = 0; x < roi.w * scale; x += 1) {
     // Bilinear upscale (blocky nearest-neighbour digits made tesseract drop lone 0s and 1s).
     const fx = roi.x + (x + 0.5) / scale - 0.5; const fy = roi.y + (y + 0.5) / scale - 0.5;
@@ -121,7 +128,7 @@ test('Overwatch OCR service: two sweeps of the real board fill every player stat
   // threshold); the real tesseract.js engine and consensus gate do the rest.
   const capture = {
     capture: async () => ({ fixture: true, width: 1920, height: 1080 }),
-    crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120) }),
+    crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120, 20, pre.shear || 0) }),
     luminance: (_frame, x, y) => sample(x, y)
   };
   const ocr = new TesseractOcrEngine();
@@ -134,6 +141,11 @@ test('Overwatch OCR service: two sweeps of the real board fill every player stat
   } finally { await ocr.close(); }
   const got = (side, row) => { const p = service.board.teams[side].players[row]; return [p.ultimate, p.damage, p.healing, p.mitigation, p.elims, p.assists, p.deaths]; };
   for (const side of ['home', 'away']) EXPECTED[side].forEach((row, i) => assert.deepEqual(got(side, i), [...row, 0, 0, 0], `${side}${i + 1}`));
+  // Names are italic; with the shear (deskew) every one reads exactly. Names need 3 agreeing
+  // reads, so a third sweep shows them.
+  await (async () => { const o2 = new TesseractOcrEngine(); service.ocr = o2; try { await service.sweep(); } finally { await o2.close(); } })();
+  const names = ['home', 'away'].flatMap((side) => service.board.teams[side].players.map((p) => p.name));
+  assert.deepEqual(names, ['DAMAGE 1', 'DAMAGE 2', 'SUPPORT 1', 'SUPPORT 2', 'TANK 1', 'DAMAGE 3', 'DAMAGE 4', 'SUPPORT 3', 'SUPPORT 4', 'TANK 2']);
   assert.equal(service.status.state, 'reading');
   assert.ok(states.length >= 1);
 });
