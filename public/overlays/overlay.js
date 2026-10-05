@@ -657,6 +657,71 @@
     return ''; // no map/mode picked yet: show no mode instead of guessing CONTROL
   }
 
+  // ---- Overwatch player stat cards (from the scoreboard OCR lab) -----------------------------
+  // Bottom-left (home) and bottom-right (away), like VALORANT's. Data: game.overwatchOcr.live
+  // (OCR) + roster (hero art behind the card). Shown only when the controller's
+  // "Player stat cards" toggle is on AND the OCR has data, so it never shows an empty grid.
+  function owCompact(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '–';
+    return n >= 10000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString('en-US');
+  }
+
+  function owUltRing(ultimate) {
+    const ready = ultimate === 'READY';
+    const pct = ready ? 100 : Number.isFinite(Number(ultimate)) ? Math.max(0, Math.min(100, Number(ultimate))) : null;
+    const wrap = document.createElement('div');
+    wrap.className = `ow-ult${ready ? ' is-ready' : ''}${pct === null ? ' is-unknown' : ''}`;
+    const radius = 20; const circumference = 2 * Math.PI * radius;
+    const svg = svgEl('svg', { viewBox: '0 0 48 48', 'aria-hidden': 'true' });
+    svg.append(svgEl('circle', { class: 'track', cx: 24, cy: 24, r: radius }));
+    svg.append(svgEl('circle', { class: 'fill', cx: 24, cy: 24, r: radius, 'stroke-dasharray': `${(((pct || 0) / 100) * circumference).toFixed(2)} ${circumference.toFixed(2)}` }));
+    wrap.append(svg);
+    if (ready) {
+      const icon = svgEl('svg', { class: 'ready-icon', viewBox: '0 0 24 24', 'aria-label': 'Ultimate ready' });
+      icon.append(svgEl('path', { d: 'M4.5 12.5l4.6 4.6L19.5 6.7', fill: 'none' }));
+      wrap.append(icon);
+    } else {
+      const label = document.createElement('b');
+      label.textContent = pct === null ? '-' : `${pct}`;
+      wrap.append(label);
+    }
+    return wrap;
+  }
+
+  function renderOverwatchPlayerCards(selectedGame, game) {
+    const live = game.overwatchOcr?.live;
+    const hasData = ['home', 'away'].some((side) => (live?.teams?.[side]?.players || []).some((p) => p && (p.name || Number.isFinite(Number(p.damage)))));
+    const show = selectedGame === 'overwatch' && Boolean(game.overwatchShowStatCards) && hasData;
+    for (const side of ['home', 'away']) {
+      const container = $(`#ow-${side}-players`);
+      if (!container) continue;
+      container.hidden = !show;
+      if (!show) { container.replaceChildren(); continue; }
+      const roster = side === 'home' ? (game.rosters?.[game.activeRosterKey || 'varsity'] || game.rosters?.varsity || []) : (game.awayRosters?.[game.activeRosterKey || 'varsity'] || game.awayRosters?.varsity || []);
+      const players = live.teams?.[side]?.players || [];
+      container.replaceChildren(...Array.from({ length: 5 }, (_v, index) => {
+        const p = players[index] || {};
+        const rosterEntry = roster.find((r) => r?.handle && p.name && r.handle.toUpperCase() === String(p.name).toUpperCase()) || null;
+        const heroArt = safeImageUrl(rosterEntry?.character ? game.characterArt?.[rosterEntry.character]?.url : '', '');
+        const card = document.createElement('article');
+        card.className = `ow-player-card ow-player-card--${side}`;
+        if (heroArt) { card.style.setProperty('--ow-hero-art', `url("${heroArt}")`); card.classList.add('has-hero'); }
+        const name = document.createElement('strong');
+        name.textContent = rosterEntry?.handle || p.name || `PLAYER ${index + 1}`;
+        const pair = (tag, label, value) => { const el = document.createElement(tag); const i = document.createElement('i'); i.textContent = label; const b = document.createElement('b'); b.textContent = value; el.append(i, b); return el; };
+        const ead = document.createElement('span');
+        ead.className = 'ow-ead';
+        ['elims', 'assists', 'deaths'].forEach((k, i) => { const [label, value] = [['E', 'A', 'D'][i], Number.isFinite(Number(p[k])) ? String(Number(p[k])) : '–']; const el = pair('span', label, value); ead.append(...el.childNodes); });
+        const numbers = document.createElement('div');
+        numbers.className = 'ow-numbers';
+        numbers.append(...[['DMG', p.damage], ['HEAL', p.healing], ['MIT', p.mitigation]].map(([label, v]) => pair('span', label, owCompact(v))));
+        card.append(owUltRing(p.ultimate), name, ead, numbers);
+        return card;
+      }));
+    }
+  }
+
   function renderOverwatchScorecard(selectedGame, game, teams, activeMap) {
     const card = $('#ow-scorecard');
     if (!card) return;
@@ -746,6 +811,7 @@
     renderValorantHud(selectedGame, game, teams, activeMap);
     renderSmashScorecard(selectedGame, game, teams);
     renderOverwatchScorecard(selectedGame, game, teams, activeMap);
+    renderOverwatchPlayerCards(selectedGame, game);
   }
 
   function renderValorantVeto(game) {

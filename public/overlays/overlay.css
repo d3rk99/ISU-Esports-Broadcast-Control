@@ -2156,3 +2156,59 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-core { align-self: start; height: 42px; justify-content: center; gap: 1px; }
 .ow-core .ow-core-top { display: none; }
 .ow-core strong { font-size: 17px; }
+
+/* ---- Overwatch player stat cards (scoreboard OCR) ------------------------------------------
+   VALORANT card language (team edge, angled corner, ult ring) with OW stats: E / A / D on the
+   second line, damage / healing / mitigation on the third. The hero portrait (from the roster)
+   fades in behind the card. Bottom corners stay clear of the OW spectator HUD centre. */
+.ow-players { position: absolute; bottom: 46px; z-index: 6; display: grid; gap: 7px; width: 300px; animation: ow-cards-in 520ms cubic-bezier(.2,.82,.18,1) both; }
+.ow-players[hidden] { display: none; }
+.ow-players--home { left: 18px; }
+.ow-players--away { right: 18px; }
+.ow-player-card {
+  position: relative; display: grid; grid-template-columns: 50px minmax(0, 1fr); grid-template-rows: 22px 18px 18px;
+  column-gap: 10px; align-items: center; height: 72px; padding: 6px 12px 6px 9px; overflow: hidden; color: #fff;
+  background: linear-gradient(110deg, rgba(255,255,255,.08), transparent 34%), linear-gradient(90deg, color-mix(in srgb, var(--home-color) 22%, rgba(5,10,16,.9)), rgba(5,10,16,.76));
+  border: 1px solid color-mix(in srgb, var(--home-color) 68%, rgba(255,255,255,.16)); border-left: 5px solid var(--home-color);
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+  box-shadow: 0 10px 16px rgba(0,0,0,.34); --ow-side: var(--home-color);
+}
+.ow-player-card--away {
+  grid-template-columns: minmax(0, 1fr) 50px; padding: 6px 9px 6px 12px; text-align: right;
+  background: linear-gradient(250deg, rgba(255,255,255,.08), transparent 34%), linear-gradient(270deg, color-mix(in srgb, var(--away-color) 22%, rgba(5,10,16,.9)), rgba(5,10,16,.76));
+  border-color: color-mix(in srgb, var(--away-color) 68%, rgba(255,255,255,.16)); border-right: 5px solid var(--away-color); border-left-width: 1px;
+  clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px); --ow-side: var(--away-color);
+}
+.ow-player-card.has-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background: var(--ow-hero-art) right 10% / auto 170% no-repeat; opacity: .28;
+  mask-image: linear-gradient(90deg, transparent 30%, #000 85%);
+}
+.ow-player-card--away.has-hero::before { background-position: left 10% center; mask-image: linear-gradient(270deg, transparent 30%, #000 85%); }
+.ow-player-card > * { position: relative; z-index: 1; min-width: 0; }
+.ow-player-card .ow-ult { grid-column: 1; grid-row: 1 / span 3; }
+.ow-player-card--away .ow-ult { grid-column: 2; }
+.ow-player-card strong, .ow-ead, .ow-numbers { grid-column: 2; }
+.ow-player-card--away strong, .ow-player-card--away .ow-ead, .ow-player-card--away .ow-numbers { grid-column: 1; }
+.ow-player-card strong { overflow: hidden; font-size: 18px; font-weight: 1000; font-style: italic; letter-spacing: .03em; text-overflow: ellipsis; white-space: nowrap; text-transform: uppercase; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+.ow-ead { display: flex; gap: 6px; align-items: baseline; font-variant-numeric: tabular-nums; }
+.ow-player-card--away .ow-ead { justify-content: flex-end; }
+.ow-ead i, .ow-numbers i { color: #8d9aa8; font-size: 10px; font-style: normal; font-weight: 1000; letter-spacing: .12em; }
+.ow-ead b { margin-right: 6px; font-size: 16px; font-weight: 1000; }
+.ow-numbers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-variant-numeric: tabular-nums; }
+.ow-numbers span { display: flex; gap: 4px; align-items: baseline; }
+.ow-player-card--away .ow-numbers span { justify-content: flex-end; }
+.ow-numbers b { color: #ffd37a; font-size: 14px; font-weight: 1000; }
+.ow-ult { position: relative; width: 48px; height: 48px; }
+.ow-ult svg { display: block; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.ow-ult .track { fill: rgba(0,0,0,.35); stroke: rgba(255,255,255,.14); stroke-width: 5; }
+.ow-ult .fill { fill: none; stroke: var(--ow-side); stroke-width: 5; transition: stroke-dasharray 300ms ease; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--ow-side) 70%, transparent)); }
+.ow-ult b { position: absolute; inset: 0; display: grid; place-items: center; font-family: Consolas, monospace; font-size: 14px; font-weight: 1000; }
+.ow-ult.is-unknown .fill { display: none; }
+.ow-ult.is-unknown b { color: #6e7883; }
+.ow-ult.is-ready .track { fill: var(--ow-side); stroke: var(--ow-side); }
+.ow-ult.is-ready { animation: ow-ult-ready 1.6s ease-in-out infinite; }
+.ow-ult .ready-icon { position: absolute; inset: 10px; width: 28px; height: 28px; transform: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes ow-ult-ready { 50% { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--ow-side) 95%, transparent)); } }
+@keyframes ow-cards-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+body:not([data-game="overwatch"]) .ow-players { display: none; }

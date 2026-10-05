@@ -725,7 +725,7 @@ input[type="range"]:focus { border-color: #35353a; }
 
 /* Overwatch scoreboard OCR panel */
 .ow-ocr-panel { margin-top: 16px; }
-.ow-ocr-controls { display: grid; grid-template-columns: 1.4fr 1fr .7fr .9fr auto; gap: 12px; align-items: end; }
+.ow-ocr-controls { display: grid; grid-template-columns: 1.4fr 1.4fr 1fr .7fr .9fr auto; gap: 12px; align-items: end; }
 .ow-ocr-buttons { display: flex; gap: 8px; }
 .ow-ocr-status { margin: 10px 0; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #aeb9c4; }
 .ow-ocr-status.is-ok { color: #4ad18a; }

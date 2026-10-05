@@ -561,7 +561,7 @@ function renderControl(config) {
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
       ${state.selectedGame === 'valorant' ? renderValorantOcrPanel(game) : ''}
-      ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams) : ''}
+      ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams, game) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
           <div class="panel-title"><span class="section-number">02</span><div><h2>Match details</h2><p>Information shared across graphics</p></div></div>
@@ -3097,6 +3097,11 @@ root.addEventListener('change', async (event) => {
     }, 'Rocket League settings saved');
     if (prop === 'updateIntervalMs') window.isuDesktop?.setRocketLeagueUpdateInterval(state.games.rocketleague.rocketLeague.updateIntervalMs);
     else if (['enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken'].includes(prop)) syncRocketLeagueConnection();
+    render();
+    return;
+  }
+  if (target.dataset.owStatCards !== undefined) {
+    commit(() => { state.games.overwatch.overwatchShowStatCards = target.checked; }, target.checked ? 'Overwatch stat cards on' : 'Overwatch stat cards off');
     render();
     return;
   }

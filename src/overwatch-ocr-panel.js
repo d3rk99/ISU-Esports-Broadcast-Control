@@ -36,7 +36,7 @@ export function renderOverwatchDebugCapture(debug) {
   </div>`;
 }
 
-export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = []) {
+export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], game = {}) {
   const s = ocr.settings || {};
   const status = ocr.status || {};
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' || status.state === 'no-board' ? 'bad' : 'idle';
@@ -53,6 +53,7 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = []) {
     <div class="panel-title"><span class="section-number">OCR</span><div><h2>Overwatch scoreboard OCR</h2><p>Observer 3 keeps the Tab scoreboard open; stats are read from it. Map score stays manual (Companion).</p></div></div>
     <div class="ow-ocr-controls">
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-ocr="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>READ SCOREBOARD</b><small>Off by default; turn on when Observer 3 is on the board</small></span></label>
+      <label class="rl-enable-toggle"><input type="checkbox" data-ow-stat-cards ${game.overwatchShowStatCards ? 'checked' : ''}><i></i><span><b>PLAYER STAT CARDS (EXPERIMENTAL)</b><small>Bottom-left / bottom-right cards on the scoreboard overlay</small></span></label>
       <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-ow-ocr="windowName" value="${esc(s.windowName || 'Overwatch')}"></label>
       <label class="field"><span>READ EVERY (MS)</span><input type="number" min="200" max="5000" step="50" data-ow-ocr="intervalMs" value="${Number(s.intervalMs) || 500}"></label>
       <label class="field"><span>CPU CORES (OCR WORKERS)</span><input type="number" min="1" max="16" step="1" data-ow-ocr="workers" value="${Number(s.workers) || 4}"><small>More = faster reads; default is half your cores</small></label>
