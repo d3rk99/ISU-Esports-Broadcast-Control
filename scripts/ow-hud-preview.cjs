@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2).filter((a) => !a.endsWith('.cjs') && a !== '.' && !a.startsWith('--'));
 const [outFile, background = ''] = args;
-const p = (name, ultimate, e, a, d, dmg, heal, mit) => ({ name, ultimate, elims: e, assists: a, deaths: d, damage: dmg, healing: heal, mitigation: mit });
+const p = (name, ultimate, e, a, d, dmg, heal, mit, hero = '') => ({ name, hero, ultimate, elims: e, assists: a, deaths: d, damage: dmg, healing: heal, mitigation: mit });
 const game = {
   teams: [
     { name: 'IDAHO STATE', shortName: 'ISU', color: '#f47920', score: 1, detailScore: 1 },
@@ -18,12 +18,12 @@ const game = {
   match: { event: 'COLLEGIATE ESPORTS', round: 'REGULAR SEASON', format: 'First to 3' }, seriesLength: 5, activeMap: 1,
   mapRows: [{ map: 'Busan', mode: 'Control' }, { map: "King's Row", mode: 'Hybrid' }],
   overwatchShowStatCards: true,
-  characterArt: { Hanzo: { url: '/assets/overwatch/heroes/hanzo.webp' }, Ana: { url: '/assets/overwatch/heroes/ana.webp' }, Reinhardt: { url: '/assets/overwatch/heroes/reinhardt.webp' } },
+  characterArt: { Tracer: { url: '/assets/overwatch/heroes/tracer.webp' }, Reaper: { url: '/assets/overwatch/heroes/reaper.webp' }, Hanzo: { url: '/assets/overwatch/heroes/hanzo.webp' }, Ana: { url: '/assets/overwatch/heroes/ana.webp' }, Reinhardt: { url: '/assets/overwatch/heroes/reinhardt.webp' } },
   rosters: { varsity: [{ handle: 'BENGAL', character: 'Hanzo' }, { handle: 'ROARANGE', character: 'Ana' }, { handle: 'TANKY', character: 'Reinhardt' }] },
   awayRosters: { varsity: [] },
   overwatchOcr: { live: { teams: {
-    home: { players: [p('BENGAL', 'READY', 12, 4, 3, 8421, 0, 1210), p('ROARANGE', 64, 2, 15, 1, 1840, 9734, 0), p('TANKY', 38, 6, 7, 4, 5122, 0, 14210), p('SPARKY', 12, 9, 3, 5, 7301, 220, 0), p('NOVA', 87, 1, 18, 2, 990, 11402, 340)] },
-    away: { players: [p('BRONCO1', 55, 7, 2, 6, 6120, 0, 0), p('BRONCO2', 'READY', 5, 9, 4, 3011, 8120, 0), p('BRONCO3', 22, 3, 5, 7, 4420, 0, 9870), p('BRONCO4', 71, 8, 1, 6, 7012, 0, 0), p('BRONCO5', 4, 0, 14, 3, 640, 10221, 0)] }
+    home: { players: [p('BENGAL', 'READY', 12, 4, 3, 8421, 0, 1210), p('ROARANGE', 64, 2, 15, 1, 1840, 9734, 0), p('TANKY', 38, 6, 7, 4, 5122, 0, 14210), p('SPARKY', 12, 9, 3, 5, 7301, 220, 0, 'Tracer'), p('NOVA', 87, 1, 18, 2, 990, 11402, 340)] },
+    away: { players: [p('BRONCO1', 55, 7, 2, 6, 6120, 0, 0, 'Reaper'), p('BRONCO2', 'READY', 5, 9, 4, 3011, 8120, 0), p('BRONCO3', 22, 3, 5, 7, 4420, 0, 9870), p('BRONCO4', 71, 8, 1, 6, 7012, 0, 0), p('BRONCO5', 4, 0, 14, 3, 640, 10221, 0)] }
   } } }
 };
 const state = { selectedGame: 'overwatch', activeRoster: 'varsity', games: { overwatch: game } };

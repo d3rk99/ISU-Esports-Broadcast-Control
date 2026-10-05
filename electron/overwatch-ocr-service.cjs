@@ -8,6 +8,7 @@
 // state.games.overwatch.overwatchOcr.live; overlays read it from there. Manual (Companion)
 // scores keep working; OCR only fills the player stats.
 const os = require('node:os');
+const { HeroMatcher } = require('./overwatch-hero-match.cjs');
 const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
 
 // Default OCR workers: half the CPU cores, 2..8 (each Tesseract worker is one thread).
@@ -36,6 +37,21 @@ class OverwatchOcrService {
     this.status = { state: 'disabled', message: 'Overwatch OCR is off', sweepMs: 0, sweeps: 0 };
     this.timer = null;
     this.running = false;
+    // Hero recognition from the portrait column; templates load once. If they are missing the
+    // board still reads, just without heroes.
+    try { this.heroMatcher = new HeroMatcher(); } catch (error) { this.heroMatcher = null; this.heroError = error.message; }
+  }
+
+  // One hero read per row (needs capture.rgb). null = not confident, never a guess.
+  readHeroes(frame, profile) {
+    if (!this.heroMatcher || typeof this.capture.rgb !== 'function') return [];
+    const rgbAt = (x, y) => this.capture.rgb(frame, x, y);
+    const reads = [];
+    for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
+      const m = this.heroMatcher.match(rgbAt, cy);
+      reads.push({ side: team.id, row, field: 'hero', value: m.hero, match: m });
+    });
+    return reads;
   }
 
   configure(next = {}) {
@@ -113,6 +129,9 @@ class OverwatchOcrService {
           read.value = resolveUltimate(null, ringFill(lum, ring.cx, cy + ring.dy, ring.radius));
         });
       }
+      // Heroes change rarely (spawn room / death): match the portraits ~once a second (65 ms
+      // for all ten), not every sweep.
+      if (!this.lastHeroAt || this.now() - this.lastHeroAt >= 900) { reads.push(...this.readHeroes(frame, profile)); this.lastHeroAt = this.now(); }
       const changed = applySweep(this.board, this.consensus, reads, this.now());
       const seen = reads.filter((r) => r.value !== null).length;
       this.setStatus(seen ? 'reading' : 'no-board', seen ? `Reading ${seen}/${reads.length} cells` : 'Window found but no scoreboard visible (is Tab open on this spectator?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
@@ -173,7 +192,9 @@ class OverwatchOcrService {
           ? 'READY' : await this.readCell(frame, profile, cell)
       });
     }
+    const heroes = this.readHeroes(frame, profile).map((r) => ({ side: r.side, row: r.row, hero: r.value, candidate: r.match.candidate, score: r.match.score, runnerUp: r.match.runnerUp }));
     return {
+      heroes,
       capturedAt: this.now(), sourceName: frame.sourceName || '', backend: frame.backend || '',
       width: frame.width, height: frame.height, sourceWidth: frame.sourceWidth || frame.width, sourceHeight: frame.sourceHeight || frame.height,
       frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', cells

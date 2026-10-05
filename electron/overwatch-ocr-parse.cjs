@@ -8,7 +8,7 @@
 
 const PROFILES = require('./overwatch-ocr-profiles.json');
 const STAT_FIELDS = ['elims', 'assists', 'deaths', 'damage', 'healing', 'mitigation'];
-const ALL_FIELDS = ['name', 'ultimate', ...STAT_FIELDS];
+const ALL_FIELDS = ['name', 'hero', 'ultimate', ...STAT_FIELDS];
 
 function getProfile(id = 'default-1080p') {
   return PROFILES[id] || PROFILES['default-1080p'];
@@ -136,7 +136,7 @@ class OverwatchConsensus {
 
   suspicious(field, current, next) {
     if (current === null || current === undefined || typeof current !== 'number' || typeof next !== 'number') return false;
-    if (field === 'ultimate') return false; // ult goes up and resets to 0 after use
+    if (field === 'ultimate' || field === 'hero') return false; // ult resets; hero swaps are normal
     if (next < current) return true;
     const step = ['elims', 'assists', 'deaths'].includes(field) ? 5 : 3000;
     return next - current > step;
@@ -158,7 +158,7 @@ class OverwatchConsensus {
 }
 
 function emptyPlayer(side, row) {
-  return { side, slot: row + 1, name: '', ultimate: null, elims: null, assists: null, deaths: null, damage: null, healing: null, mitigation: null, updatedAt: 0 };
+  return { side, slot: row + 1, name: '', hero: null, ultimate: null, elims: null, assists: null, deaths: null, damage: null, healing: null, mitigation: null, updatedAt: 0 };
 }
 
 function emptyBoard() {

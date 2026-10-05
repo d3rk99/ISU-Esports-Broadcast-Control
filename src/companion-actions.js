@@ -122,8 +122,8 @@ export function saveOverwatchLastMapStats(game, rosterKey = 'varsity') {
       if (station < 1 || station > 10 || !player?.handle) continue;
       const row = rows.find((r) => String(r?.name || '').toUpperCase() === String(player.handle).toUpperCase());
       if (!row) continue;
-      const { elims, assists, deaths, damage, healing, mitigation } = row;
-      saved[station] = { handle: player.handle, map, stats: { elims, assists, deaths, damage, healing, mitigation }, savedAt: Date.now() };
+      const { elims, assists, deaths, damage, healing, mitigation, hero } = row;
+      saved[station] = { handle: player.handle, map, hero: hero || '', stats: { elims, assists, deaths, damage, healing, mitigation }, savedAt: Date.now() };
       count += 1;
     }
   }

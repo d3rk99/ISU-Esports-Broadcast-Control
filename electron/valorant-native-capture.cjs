@@ -1,4 +1,4 @@
-const { captureSizeCheck, frameLuminance, preprocessNativeImage, redPixelRatio } = require('./valorant-capture.cjs');
+const { captureSizeCheck, frameLuminance, frameRgb, preprocessNativeImage, redPixelRatio } = require('./valorant-capture.cjs');
 
 const NATIVE_BACKEND = 'windows-graphics-capture';
 const FALLBACK_BACKEND = 'electron-desktop-capturer';
@@ -196,6 +196,8 @@ class NativeValorantWindowCapture {
 
   luminance(frame, x, y) { return frameLuminance(frame, x, y); }
 
+  rgb(frame, x, y) { return frameRgb(frame, x, y); }
+
   snapshot(frame, fields) {
     const crops = {};
     for (const [id, field] of Object.entries(fields)) crops[id] = this.crop(frame, field.roi, field.preprocess);
@@ -270,6 +272,8 @@ class HybridValorantWindowCapture {
   }
 
   luminance(frame, x, y) { return frameLuminance(frame, x, y); }
+
+  rgb(frame, x, y) { return frameRgb(frame, x, y); }
 
   snapshot(frame, fields) {
     return (frame.backend === NATIVE_BACKEND ? this.nativeCapture : this.fallbackCapture).snapshot(frame, fields);

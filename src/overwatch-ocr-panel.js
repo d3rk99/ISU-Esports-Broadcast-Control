@@ -3,7 +3,7 @@
 // and merges OCR snapshots into state.games.overwatch.overwatchOcr.live for the overlays.
 
 export const OW_OCR_STATS = [
-  ['ultimate', 'ULT'], ['elims', 'E'], ['assists', 'A'], ['deaths', 'D'],
+  ['hero', 'HERO'], ['ultimate', 'ULT'], ['elims', 'E'], ['assists', 'A'], ['deaths', 'D'],
   ['damage', 'DMG'], ['healing', 'HEAL'], ['mitigation', 'MIT']
 ];
 
@@ -32,6 +32,7 @@ export function renderOverwatchDebugCapture(debug) {
   return `<div class="ow-dbg">
     <p class="ow-ocr-status">DEBUG CAPTURE · ${age}s old · ${esc(debug.sourceName || 'window')} · ${debug.sourceWidth}×${debug.sourceHeight} → ${debug.width}×${debug.height} · ${esc(debug.backend || '')}</p>
     ${debug.frameDataUrl ? `<div class="ow-dbg-frame"><img src="${esc(debug.frameDataUrl)}" alt="Captured Overwatch frame">${boxes}</div>` : ''}
+    ${debug.heroes?.length ? `<p class="ow-ocr-status">HEROES · ${debug.heroes.map((h) => `${h.side === 'home' ? 'TOP' : 'BOT'} ${h.row + 1}: ${esc(h.hero || `? (${h.candidate} ${h.score})`)}`).join(' · ')}</p>` : ''}
     <div class="ow-dbg-cells">${debug.cells.map(cell).join('')}</div>
   </div>`;
 }
@@ -54,6 +55,7 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
     <div class="ow-ocr-controls">
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-ocr="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>READ SCOREBOARD</b><small>Off by default; turn on when Observer 3 is on the board</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-stat-cards ${game.overwatchShowStatCards ? 'checked' : ''}><i></i><span><b>PLAYER STAT CARDS (EXPERIMENTAL)</b><small>Bottom-left / bottom-right cards on the scoreboard overlay</small></span></label>
+      <label class="rl-enable-toggle"><input type="checkbox" data-ow-hero-autofill ${game.overwatchHeroAutofill === false ? '' : 'checked'}><i></i><span><b>AUTO-FILL ROSTER HEROES</b><small>Recognised heroes update the roster's Hero (matched by gamertag)</small></span></label>
       <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-ow-ocr="windowName" value="${esc(s.windowName || 'Overwatch')}"></label>
       <label class="field"><span>READ EVERY (MS)</span><input type="number" min="200" max="5000" step="50" data-ow-ocr="intervalMs" value="${Number(s.intervalMs) || 500}"></label>
       <label class="field"><span>CPU CORES (OCR WORKERS)</span><input type="number" min="1" max="16" step="1" data-ow-ocr="workers" value="${Number(s.workers) || 4}"><small>More = faster reads; default is half your cores</small></label>
@@ -68,6 +70,23 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
 // Merge a snapshot from the service into the controller state (only what overlays need).
 export function mergeOverwatchOcrSnapshot(ocr, snapshot) {
   if (!snapshot?.teams) return ocr;
-  const strip = (players = []) => players.map(({ side, slot, name, ultimate, elims, assists, deaths, damage, healing, mitigation }) => ({ side, slot, name, ultimate, elims, assists, deaths, damage, healing, mitigation }));
+  const strip = (players = []) => players.map(({ side, slot, name, hero, ultimate, elims, assists, deaths, damage, healing, mitigation }) => ({ side, slot, name, hero, ultimate, elims, assists, deaths, damage, healing, mitigation }));
   return { ...ocr, live: { teams: { home: { players: strip(snapshot.teams.home?.players) }, away: { players: strip(snapshot.teams.away?.players) } }, updatedAt: snapshot.updatedAt || Date.now() }, status: snapshot.status || ocr.status };
+}
+
+// Roster auto-fill: for every OCR player whose name matches a roster gamertag on that side, set
+// the roster's hero to the OCR hero. Only writes when the value actually differs; returns the
+// list of changes so the caller can commit + toast once. Gamertags match case-insensitively.
+export function syncRosterHeroes(game, rosterKey = 'varsity') {
+  const live = game?.overwatchOcr?.live?.teams;
+  if (!live) return [];
+  const changes = [];
+  for (const [side, roster] of [['home', game.rosters?.[rosterKey] || []], ['away', game.awayRosters?.[rosterKey] || []]]) {
+    for (const row of live[side]?.players || []) {
+      if (!row?.hero || !row?.name) continue;
+      const player = roster.find((p) => p?.handle && p.handle.toUpperCase() === String(row.name).toUpperCase());
+      if (player && player.character !== row.hero) { changes.push({ side, handle: player.handle, from: player.character || '', to: row.hero }); player.character = row.hero; }
+    }
+  }
+  return changes;
 }

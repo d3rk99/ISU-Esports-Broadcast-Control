@@ -95,6 +95,15 @@ function preprocessNativeImage(nativeImageApi, image, options = {}) {
 // Luminance (0-255) of one pixel on the normalized frame. The BGRA bitmap is cached on the
 // frame so many lookups per sweep (e.g. Overwatch ult rings) cost one copy.
 const frameBitmaps = new WeakMap();
+// RGB of one pixel on the normalized frame (same cached bitmap as frameLuminance).
+function frameRgb(frame, x, y) {
+  frameLuminance(frame, 0, 0); // fills the cache
+  const cached = frameBitmaps.get(frame);
+  if (x < 0 || y < 0 || x >= cached.width || y >= cached.height) return [0, 0, 0];
+  const o = (y * cached.width + x) * 4;
+  return [cached.bitmap[o + 2], cached.bitmap[o + 1], cached.bitmap[o]];
+}
+
 function frameLuminance(frame, x, y) {
   let cached = frameBitmaps.get(frame);
   if (!cached) {
@@ -211,6 +220,8 @@ class ValorantWindowCapture {
 
   luminance(frame, x, y) { return frameLuminance(frame, x, y); }
 
+  rgb(frame, x, y) { return frameRgb(frame, x, y); }
+
   snapshot(frame, fields) {
     const crops = {};
     for (const [id, field] of Object.entries(fields)) crops[id] = this.crop(frame, field.roi, field.preprocess);
@@ -234,4 +245,4 @@ class ValorantWindowCapture {
   async close() {}
 }
 
-module.exports = { ValorantWindowCapture, captureSizeCheck, frameLuminance, otsuThreshold, preprocessNativeImage, redPixelRatio };
+module.exports = { ValorantWindowCapture, captureSizeCheck, frameLuminance, frameRgb, otsuThreshold, preprocessNativeImage, redPixelRatio };

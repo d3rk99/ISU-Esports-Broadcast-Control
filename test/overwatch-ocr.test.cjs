@@ -263,10 +263,10 @@ test('Overwatch: NEXT MATCH saves each stationed player\'s OCR stats as "last ma
     activeMap: 0, mapRows: [{ map: 'Busan' }],
     rosters: { varsity: [{ handle: 'Bengal', stageStation: 3 }, { handle: 'NoStation' }] },
     awayRosters: { varsity: [{ handle: 'BRONCO1', stageStation: 7 }] },
-    overwatchOcr: { live: { teams: { home: { players: [{ name: 'BENGAL', elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }] }, away: { players: [{ name: 'BRONCO1', elims: 3, assists: 1, deaths: 9, damage: 2100, healing: 0, mitigation: 0 }] } } } }
+    overwatchOcr: { live: { teams: { home: { players: [{ name: 'BENGAL', hero: 'Hanzo', elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }] }, away: { players: [{ name: 'BRONCO1', elims: 3, assists: 1, deaths: 9, damage: 2100, healing: 0, mitigation: 0 }] } } } }
   };
   assert.equal(saveOverwatchLastMapStats(game), 2);
-  assert.deepEqual(game.overwatchLastMapStats[3], { handle: 'Bengal', map: 'Busan', stats: { elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }, savedAt: game.overwatchLastMapStats[3].savedAt });
+  assert.deepEqual(game.overwatchLastMapStats[3], { handle: 'Bengal', map: 'Busan', hero: 'Hanzo', stats: { elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }, savedAt: game.overwatchLastMapStats[3].savedAt });
   assert.equal(game.overwatchLastMapStats[7].stats.deaths, 9);
 });
 
@@ -277,4 +277,84 @@ test('NDI player cards: missing NDI runtime is reported, not thrown', async () =
   assert.deepEqual(status.stations, [1, 2]);
   assert.match(status.error, /not available/);
   assert.equal((await cards.configure({ enabled: false })).stations.length, 0);
+});
+
+// 20 real scoreboard rows (two boards, Derk 2026-10-05): a 70x60 strip per row, columns
+// 580-649 of the 1080p grid, row centre at 30. RGB PNG read with the same tiny decoder.
+function readRgbPng(file) {
+  const buf = fs.readFileSync(file);
+  let at = 8; let width = 0; let height = 0; const idat = [];
+  while (at < buf.length) {
+    const len = buf.readUInt32BE(at); const type = buf.toString('ascii', at + 4, at + 8); const data = buf.subarray(at + 8, at + 8 + len);
+    if (type === 'IHDR') { width = data.readUInt32BE(0); height = data.readUInt32BE(4); assert.equal(data[9], 2, 'RGB png'); }
+    if (type === 'IDAT') idat.push(data);
+    at += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat)); const bpp = 3; const row = width * bpp; const out = Buffer.alloc(row * height);
+  for (let y = 0; y < height; y += 1) {
+    const f = raw[y * (row + 1)];
+    for (let x = 0; x < row; x += 1) {
+      const a = x >= bpp ? out[y * row + x - bpp] : 0; const b = y ? out[(y - 1) * row + x] : 0; const c = x >= bpp && y ? out[(y - 1) * row + x - bpp] : 0;
+      let v = raw[y * (row + 1) + 1 + x];
+      if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1;
+      else if (f === 4) { const p = a + b - c; const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+      out[y * row + x] = v & 255;
+    }
+  }
+  return { width, height, data: out };
+}
+
+test('Overwatch hero recognition: 20/20 real scoreboard portraits match the right hero', () => {
+  const { HeroMatcher } = require('../electron/overwatch-hero-match.cjs');
+  const strip = readRgbPng(path.join(__dirname, 'fixtures', 'ow-hero-portraits.png'));
+  const truth = ['Torbjörn', 'Genji', 'Mercy', 'Baptiste', 'Zarya', 'Tracer', 'Reaper', 'Lúcio', 'Brigitte', 'Roadhog',
+    'Reaper', 'Junkrat', 'Sombra', 'Ramattra', 'Tracer', 'Hanzo', 'Mauga', 'Sombra', 'Moira', 'Lúcio'];
+  const matcher = new HeroMatcher();
+  const wrong = [];
+  truth.forEach((hero, i) => {
+    // map the 1080p grid (x 580.., row centre) onto strip row i
+    const rgbAt = (x, y) => { const sx = x - 580; const sy = y - 500 + i * 60 + 30; const o = (sy * strip.width + sx) * 3; return [strip.data[o], strip.data[o + 1], strip.data[o + 2]]; };
+    const r = matcher.match(rgbAt, 500);
+    if (r.hero !== hero) wrong.push(`row ${i + 1}: ${r.candidate} ${r.score} (gap ${r.gap}), want ${hero}`);
+  });
+  assert.deepEqual(wrong, []);
+});
+
+test('Overwatch hero recognition: a blank / non-portrait window is "unknown", not a guess', () => {
+  const { HeroMatcher } = require('../electron/overwatch-hero-match.cjs');
+  const matcher = new HeroMatcher();
+  let seed = 7; const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed & 255; };
+  assert.equal(matcher.match(() => [20, 30, 45], 500).hero, null);
+  assert.equal(matcher.match(() => [noise(), noise(), noise()], 500).hero, null);
+});
+
+test('Overwatch OCR service: heroes come through the sweep + consensus, and fill the roster by gamertag', async () => {
+  const strip = readRgbPng(path.join(__dirname, 'fixtures', 'ow-hero-portraits.png'));
+  const profile = getProfile();
+  // Board 1 rows of the strip mapped back onto their real row centres.
+  const rows = profile.teams.flatMap((t) => t.rowCenters);
+  const rgb = (_f, x, y) => {
+    const r = rows.findIndex((cy) => Math.abs(y - cy) <= 30);
+    if (r < 0 || x < 580 || x >= 650) return [0, 0, 0];
+    const o = ((r * 60 + 30 + y - rows[r]) * strip.width + x - 580) * 3; return [strip.data[o], strip.data[o + 1], strip.data[o + 2]];
+  };
+  const ocr = { recognize: async () => ({ text: '', confidence: 0 }) };
+  let clock = 1000;
+  const service = new OverwatchOcrService({ capture: { capture: async () => ({ width: 1920, height: 1080 }), crop: () => ({ image: Buffer.alloc(0) }), rgb }, ocr, now: () => (clock += 1000) });
+  await service.sweep();
+  assert.equal(service.board.teams.home.players[0].hero, null, 'one read is not enough');
+  await service.sweep();
+  const heroes = ['home', 'away'].flatMap((s) => service.board.teams[s].players.map((p) => p.hero));
+  assert.deepEqual(heroes, ['Torbjörn', 'Genji', 'Mercy', 'Baptiste', 'Zarya', 'Tracer', 'Reaper', 'Lúcio', 'Brigitte', 'Roadhog']);
+
+  const { syncRosterHeroes } = await import('../src/overwatch-ocr-panel.js');
+  const game = {
+    rosters: { varsity: [{ handle: 'Bengal', character: 'Ana' }, { handle: 'Other', character: 'Mei' }] },
+    awayRosters: { varsity: [{ handle: 'bronco1', character: '' }] },
+    overwatchOcr: { live: { teams: { home: { players: [{ name: 'BENGAL', hero: 'Torbjörn' }] }, away: { players: [{ name: 'BRONCO1', hero: 'Tracer' }, { name: 'NOBODY', hero: 'Genji' }] } } } }
+  };
+  const changes = syncRosterHeroes(game);
+  assert.deepEqual(changes.map((c) => `${c.handle}:${c.to}`), ['Bengal:Torbjörn', 'bronco1:Tracer']);
+  assert.equal(game.rosters.varsity[1].character, 'Mei', 'players the OCR does not see keep their hero');
+  assert.deepEqual(syncRosterHeroes(game), [], 'no changes the second time');
 });

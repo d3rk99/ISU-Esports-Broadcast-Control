@@ -48,6 +48,15 @@
     return { stats: null, label: 'LAST MAP', map: '' };
   }
 
+  // Hero shown on the card: what the scoreboard OCR sees this player on right now, else the
+  // hero from their last map, else the roster's hero.
+  function heroFor(found) {
+    const { game, side, player } = found;
+    const handle = String(player?.handle || '').toUpperCase();
+    const live = (game.overwatchOcr?.live?.teams?.[side]?.players || []).find((p) => handle && String(p?.name || '').toUpperCase() === handle);
+    return live?.hero || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
+  }
+
   function render(state) {
     const found = findPlayer(state);
     const card = $('pc');
@@ -67,12 +76,13 @@
     setText('pc-handle', handle);
     setText('pc-name', player?.name && player.name !== handle ? player.name : '');
     setText('pc-role', (player?.role || 'PLAYER').toUpperCase());
-    setText('pc-hero-name', player?.character ? player.character.toUpperCase() : '');
+    const hero = player ? heroFor(found) : '';
+    setText('pc-hero-name', hero ? hero.toUpperCase() : '');
     setText('pc-initials', handle.slice(0, 2).toUpperCase());
     const portrait = safeUrl(player?.playerImage);
     $('pc-portrait').classList.toggle('has-image', Boolean(portrait));
     $('pc-portrait').style.backgroundImage = portrait ? `url("${portrait}")` : '';
-    const heroUrl = safeUrl(player?.character ? game.characterArt?.[player.character]?.url : '');
+    const heroUrl = safeUrl(hero ? game.characterArt?.[hero]?.url : '');
     $('pc-hero').style.backgroundImage = heroUrl ? `url("${heroUrl}")` : '';
     const { stats, label, map } = statsFor(found);
     card.classList.toggle('no-stats', !stats);

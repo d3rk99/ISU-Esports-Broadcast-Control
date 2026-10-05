@@ -7,7 +7,7 @@ import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
-import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel } from './overwatch-ocr-panel.js';
+import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterHeroes } from './overwatch-ocr-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
@@ -2295,7 +2295,17 @@ function publishOverwatchOcr() {
   overwatchOcrRenderTimer = window.setTimeout(() => { overwatchOcrRenderTimer = null; render(); }, 250);
 }
 window.isuDesktop?.getOverwatchOcrSettings?.().then((info) => { overwatchOcr = { ...overwatchOcr, ...info }; publishOverwatchOcr(); }).catch(() => {});
-window.isuDesktop?.onOverwatchOcrState?.((snapshot) => { overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, snapshot); publishOverwatchOcr(); });
+window.isuDesktop?.onOverwatchOcrState?.((snapshot) => {
+  overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, snapshot);
+  publishOverwatchOcr();
+  const game = state.games.overwatch;
+  if (game && game.overwatchHeroAutofill !== false) {
+    const preview = syncRosterHeroes(deepClone(game), state.activeRoster);
+    if (preview.length) {
+      commit(() => { syncRosterHeroes(state.games.overwatch, state.activeRoster); }, `Hero: ${preview.map((c) => `${c.handle} → ${c.to}`).join(', ')}`);
+    }
+  }
+});
 window.isuDesktop?.onOverwatchOcrStatus?.((status) => { overwatchOcr = { ...overwatchOcr, status }; publishOverwatchOcr(); });
 
 window.isuDesktop?.onValorantOcrState((snapshot) => {
@@ -3150,6 +3160,11 @@ root.addEventListener('change', async (event) => {
     const list = [...stations].length ? [...stations] : assignedPlayerStations();
     ndiCardStatus = (await window.isuDesktop?.configureNdiCards({ enabled, stations: list })) || ndiCardStatus;
     toast(enabled ? `NDI player cards: ${list.length} station(s)` : 'NDI player cards off');
+    render();
+    return;
+  }
+  if (target.dataset.owHeroAutofill !== undefined) {
+    commit(() => { state.games.overwatch.overwatchHeroAutofill = target.checked; }, target.checked ? 'Roster heroes auto-fill on' : 'Roster heroes auto-fill off');
     render();
     return;
   }
