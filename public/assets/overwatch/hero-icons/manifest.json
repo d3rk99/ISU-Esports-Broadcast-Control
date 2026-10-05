@@ -1,0 +1,376 @@
+{
+ "source": "Overwatch Wiki (overwatch.fandom.com) File:Icon-<Hero>.png, downloaded 2026-10-05",
+ "icons": [
+  {
+   "hero": "Ana",
+   "file": "ana.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/3d/Icon-Ana.png"
+  },
+  {
+   "hero": "Anran",
+   "file": "anran.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/07/Icon-Anran.png"
+  },
+  {
+   "hero": "Ashe",
+   "file": "ashe.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/b/be/Icon-Ashe.png"
+  },
+  {
+   "hero": "Baptiste",
+   "file": "baptiste.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/fb/Icon-Baptiste.png"
+  },
+  {
+   "hero": "Bastion",
+   "file": "bastion.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/51/Icon-Bastion.png"
+  },
+  {
+   "hero": "Brigitte",
+   "file": "brigitte.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a6/Icon-Brigitte.png"
+  },
+  {
+   "hero": "Cassidy",
+   "file": "cassidy.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/05/Icon-Cassidy.png"
+  },
+  {
+   "hero": "D.Mon",
+   "file": "d-mon.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1d/Icon-D.Mon.png"
+  },
+  {
+   "hero": "D.Va",
+   "file": "d-va.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/19/Icon-D.Va.png"
+  },
+  {
+   "hero": "Domina",
+   "file": "domina.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/76/Icon-Domina.png"
+  },
+  {
+   "hero": "Doomfist",
+   "file": "doomfist.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a1/Icon-Doomfist.png"
+  },
+  {
+   "hero": "Echo",
+   "file": "echo.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/d/d6/Icon-Echo.png"
+  },
+  {
+   "hero": "Emre",
+   "file": "emre.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/34/Icon-Emre.png"
+  },
+  {
+   "hero": "Freja",
+   "file": "freja.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/04/Icon-Freja.png"
+  },
+  {
+   "hero": "Genji",
+   "file": "genji.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/1c/Icon-Genji.png"
+  },
+  {
+   "hero": "Hanzo",
+   "file": "hanzo.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/71/Icon-Hanzo.png"
+  },
+  {
+   "hero": "Hazard",
+   "file": "hazard.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/54/Icon-Hazard.png"
+  },
+  {
+   "hero": "Illari",
+   "file": "illari.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/86/Icon-Illari.png"
+  },
+  {
+   "hero": "Jetpack Cat",
+   "file": "jetpack-cat.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/12/Icon-Jetpack_Cat.png"
+  },
+  {
+   "hero": "Junker Queen",
+   "file": "junker-queen.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/2/2b/Icon-Junker_Queen.png"
+  },
+  {
+   "hero": "Junkrat",
+   "file": "junkrat.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/99/Icon-Junkrat.png"
+  },
+  {
+   "hero": "Juno",
+   "file": "juno.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/c7/Icon-Juno.png"
+  },
+  {
+   "hero": "Kiriko",
+   "file": "kiriko.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/ca/Icon-kiriko.png"
+  },
+  {
+   "hero": "Lifeweaver",
+   "file": "lifeweaver.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/86/Icon-Lifeweaver.png"
+  },
+  {
+   "hero": "Lúcio",
+   "file": "lucio.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/51/Icon-L%C3%BAcio.png"
+  },
+  {
+   "hero": "Mauga",
+   "file": "mauga.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/39/Icon-Mauga.png"
+  },
+  {
+   "hero": "Mei",
+   "file": "mei.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/9/99/Icon-Mei.png"
+  },
+  {
+   "hero": "Mercy",
+   "file": "mercy.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/03/Icon-Mercy.png"
+  },
+  {
+   "hero": "Mizuki",
+   "file": "mizuki.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/36/Icon-Mizuki.png"
+  },
+  {
+   "hero": "Moira",
+   "file": "moira.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/55/Icon-Moira.png"
+  },
+  {
+   "hero": "Orisa",
+   "file": "orisa.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/11/Icon-Orisa.png"
+  },
+  {
+   "hero": "Pharah",
+   "file": "pharah.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/2/29/Icon-Pharah.png"
+  },
+  {
+   "hero": "Ramattra",
+   "file": "ramattra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/6/6f/Icon-Ramattra.png"
+  },
+  {
+   "hero": "Reaper",
+   "file": "reaper.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a9/Icon-Reaper.png"
+  },
+  {
+   "hero": "Reinhardt",
+   "file": "reinhardt.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/8/83/Icon-Reinhardt.png"
+  },
+  {
+   "hero": "Roadhog",
+   "file": "roadhog.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/1/16/Icon-Roadhog.png"
+  },
+  {
+   "hero": "Shion",
+   "file": "shion.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/74/Icon-Shion.png"
+  },
+  {
+   "hero": "Sigma",
+   "file": "sigma.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e0/Icon-Sigma.png"
+  },
+  {
+   "hero": "Sierra",
+   "file": "sierra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/3/32/Icon-Sierra.png"
+  },
+  {
+   "hero": "Sojourn",
+   "file": "sojourn.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/e/e0/Icon-Sojourn.png"
+  },
+  {
+   "hero": "Soldier: 76",
+   "file": "soldier-76.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/2/2b/Icon-Soldier_76.png"
+  },
+  {
+   "hero": "Sombra",
+   "file": "sombra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/70/Icon-Sombra.png"
+  },
+  {
+   "hero": "Symmetra",
+   "file": "symmetra.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/0/06/Icon-Symmetra.png"
+  },
+  {
+   "hero": "Torbjörn",
+   "file": "torbjorn.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/ca/Icon-Torbj%C3%B6rn.png"
+  },
+  {
+   "hero": "Tracer",
+   "file": "tracer.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/2/29/Icon-Tracer.png"
+  },
+  {
+   "hero": "Venture",
+   "file": "venture.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/a/a0/Icon-Venture.png"
+  },
+  {
+   "hero": "Vendetta",
+   "file": "vendetta.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/d/dd/Icon-Vendetta.png"
+  },
+  {
+   "hero": "Widowmaker",
+   "file": "widowmaker.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/5/54/Icon-Widowmaker.png"
+  },
+  {
+   "hero": "Winston",
+   "file": "winston.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f8/Icon-Winston.png"
+  },
+  {
+   "hero": "Wrecking Ball",
+   "file": "wrecking-ball.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/c/ca/Icon-Wrecking_Ball.png"
+  },
+  {
+   "hero": "Wuyang",
+   "file": "wuyang.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/6/6c/Icon-Wuyang.png"
+  },
+  {
+   "hero": "Zarya",
+   "file": "zarya.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/7/75/Icon-Zarya.png"
+  },
+  {
+   "hero": "Zenyatta",
+   "file": "zenyatta.png",
+   "width": 256,
+   "height": 256,
+   "source": "https://static.wikia.nocookie.net/overwatch_gamepedia/images/f/f7/Icon-Zenyatta.png"
+  }
+ ]
+}
