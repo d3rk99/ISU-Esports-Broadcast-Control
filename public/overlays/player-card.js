@@ -21,6 +21,18 @@
     return Number.isFinite(n) ? n.toLocaleString('en-US') : '–';
   }
 
+
+  // Same gamertag matching as the controller's roster sync (src/overwatch-ocr-panel.js):
+  // folded (case, accents, O->0, I/L->1, S->5, B->8, spaces/_-.#) then >= 90% similarity.
+  function owFoldTag(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/O/g, '0').replace(/[IL|]/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/[\s_.\-#]/g, ''); }
+  function owTagSimilarity(a, b) {
+    const x = owFoldTag(a); const y = owFoldTag(b); if (!x || !y) return 0; if (x === y) return 1;
+    const prev = Array.from({ length: y.length + 1 }, (_v, i) => i);
+    for (let i = 1; i <= x.length; i += 1) { let diag = prev[0]; prev[0] = i; for (let j = 1; j <= y.length; j += 1) { const up = prev[j]; prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (x[i - 1] === y[j - 1] ? 0 : 1)); diag = up; } }
+    return 1 - prev[y.length] / Math.max(x.length, y.length);
+  }
+  function owBestByTag(list, tag, key) { let best = null; let score = 0.9; for (const item of list || []) { const s = owTagSimilarity(item?.[key], tag); if (s >= score) { best = item; score = s; } } return best; }
+
   function findPlayer(state) {
     const gameKey = state?.selectedGame;
     const game = state?.games?.[gameKey];
@@ -43,7 +55,7 @@
     if (saved?.stats) return { stats: saved.stats, label: 'LAST MAP', map: saved.map || '' };
     const live = game.overwatchOcr?.live?.teams?.[side]?.players || [];
     const handle = String(player?.handle || '').toUpperCase();
-    const row = handle ? live.find((p) => String(p?.name || '').toUpperCase() === handle) : null;
+    const row = handle ? owBestByTag(live, player.handle, 'name') : null;
     if (row) return { stats: row, label: 'THIS MAP · LIVE', map: '' };
     return { stats: null, label: 'LAST MAP', map: '' };
   }
@@ -53,7 +65,7 @@
   function heroFor(found) {
     const { game, side, player } = found;
     const handle = String(player?.handle || '').toUpperCase();
-    const live = (game.overwatchOcr?.live?.teams?.[side]?.players || []).find((p) => handle && String(p?.name || '').toUpperCase() === handle);
+    const live = handle ? owBestByTag(game.overwatchOcr?.live?.teams?.[side]?.players, player.handle, 'name') : null;
     return live?.hero || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
   }
 

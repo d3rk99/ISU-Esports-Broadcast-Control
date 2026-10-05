@@ -693,6 +693,17 @@
   // only runs when the toggle (or data presence) actually changes, never on a stats update.
   // in:  slot 1 of both teams first, then slot 2, ... (100 ms apart), each from its own edge.
   // out: the reverse order, then the containers hide.
+
+  // Same gamertag matching as the controller's roster sync (src/overwatch-ocr-panel.js):
+  // folded (case, accents, O->0, I/L->1, S->5, B->8, spaces/_-.#) then >= 90% similarity.
+  function owFoldTag(v) { return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/O/g, '0').replace(/[IL|]/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/[\s_.\-#]/g, ''); }
+  function owTagSimilarity(a, b) {
+    const x = owFoldTag(a); const y = owFoldTag(b); if (!x || !y) return 0; if (x === y) return 1;
+    const prev = Array.from({ length: y.length + 1 }, (_v, i) => i);
+    for (let i = 1; i <= x.length; i += 1) { let diag = prev[0]; prev[0] = i; for (let j = 1; j <= y.length; j += 1) { const up = prev[j]; prev[j] = Math.min(prev[j] + 1, prev[j - 1] + 1, diag + (x[i - 1] === y[j - 1] ? 0 : 1)); diag = up; } }
+    return 1 - prev[y.length] / Math.max(x.length, y.length);
+  }
+  function owBestByTag(list, tag, key) { let best = null; let score = 0.9; for (const item of list || []) { const s = owTagSimilarity(item?.[key], tag); if (s >= score) { best = item; score = s; } } return best; }
   const OW_CARD_STEP_MS = 110;
   const OW_CARD_MS = 480;
   function buildOwCard(side, index) {
@@ -738,7 +749,7 @@
         const players = live.teams?.[side]?.players || [];
         [...container.children].forEach((card, index) => {
           const p = players[index] || {};
-          const rosterEntry = roster.find((r) => r?.handle && p.name && r.handle.toUpperCase() === String(p.name).toUpperCase()) || null;
+          const rosterEntry = p.name ? owBestByTag(roster, p.name, 'handle') : null;
           fillOwCard(card, p, rosterEntry, game, index);
         });
       }

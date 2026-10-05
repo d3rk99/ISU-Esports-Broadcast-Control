@@ -7,7 +7,7 @@ import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
-import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterHeroes } from './overwatch-ocr-panel.js';
+import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
@@ -2300,9 +2300,10 @@ window.isuDesktop?.onOverwatchOcrState?.((snapshot) => {
   publishOverwatchOcr();
   const game = state.games.overwatch;
   if (game && game.overwatchHeroAutofill !== false) {
-    const preview = syncRosterHeroes(deepClone(game), state.activeRoster);
+    const preview = syncRosterFromOcr(deepClone(game), state.activeRoster);
     if (preview.length) {
-      commit(() => { syncRosterHeroes(state.games.overwatch, state.activeRoster); }, `Hero: ${preview.map((c) => `${c.handle} → ${c.to}`).join(', ')}`);
+      const label = (c) => c.field === 'handle' ? `added ${c.to}` : c.field === 'role' ? `${c.handle} role → ${c.to}` : `${c.handle} → ${c.to}`;
+      commit(() => { syncRosterFromOcr(state.games.overwatch, state.activeRoster); }, `Roster: ${preview.map(label).join(', ')}`);
     }
   }
 });

@@ -358,3 +358,51 @@ test('Overwatch OCR service: heroes come through the sweep + consensus, and fill
   assert.equal(game.rosters.varsity[1].character, 'Mei', 'players the OCR does not see keep their hero');
   assert.deepEqual(syncRosterHeroes(game), [], 'no changes the second time');
 });
+
+test('Roster sync: gamertags match at >= 90% similarity (OCR slips), not below', async () => {
+  const { tagSimilarity, foldTag, NAME_MATCH } = await import('../src/overwatch-ocr-panel.js');
+  assert.equal(NAME_MATCH, 0.9);
+  assert.equal(foldTag('Bengal_One'), foldTag('BENGAL ONE'));
+  assert.equal(tagSimilarity('ROARANGE', 'R0ARANGE'), 1, 'O/0 is the same to the matcher');
+  assert.equal(tagSimilarity('Lucky7', 'LUCKY7'), 1, 'case does not matter');
+  assert.ok(tagSimilarity('BENGALWARRIOR', 'BENGALWARRI0R') >= 0.9);
+  assert.ok(tagSimilarity('THUNDERSTRIKE', 'THUNDERSTRIKF') >= 0.9, 'one wrong letter in 13');
+  assert.ok(tagSimilarity('ACE', 'ICE') < 0.9, 'short tags need to be exact-ish');
+  assert.ok(tagSimilarity('BRONCO1', 'BRONCO2') < 0.9, 'teammates with numbered tags stay apart');
+});
+
+test('Roster sync: matched players follow hero + role, unmatched board players fill empty slots, others untouched', async () => {
+  const { syncRosterFromOcr } = await import('../src/overwatch-ocr-panel.js');
+  const empty = () => ({ handle: '', name: '', role: 'Tank', character: '' });
+  const game = {
+    rosters: { varsity: [
+      { handle: 'ThunderStrike', name: 'Sam', role: 'Tank', character: 'Reinhardt' },
+      { handle: 'Benchwarmer', name: 'Pat', role: 'Support', character: 'Ana' },
+      empty(), empty(), empty()
+    ] },
+    awayRosters: { varsity: [empty(), empty(), empty(), empty(), empty()] },
+    overwatchOcr: { live: { teams: {
+      home: { players: [{ name: 'THUNDERSTRIKF', hero: 'Tracer' }, { name: 'NEWGUY', hero: 'Mercy' }, { name: 'ROOKIE', hero: 'Zarya' }, { name: '', hero: 'Genji' }] },
+      away: { players: [{ name: 'BRONCO1', hero: 'Reaper' }, { name: 'BRONCO2', hero: 'Lúcio' }] }
+    } } }
+  };
+  const changes = syncRosterFromOcr(game);
+  const home = game.rosters.varsity; const away = game.awayRosters.varsity;
+  assert.deepEqual([home[0].handle, home[0].character, home[0].role], ['ThunderStrike', 'Tracer', 'Damage'], 'fuzzy match keeps the preset tag, takes hero + role');
+  assert.deepEqual([home[1].handle, home[1].character], ['Benchwarmer', 'Ana'], 'a roster player the board does not show is untouched');
+  assert.deepEqual(home.slice(2).map((p) => [p.handle, p.character, p.role]), [['NEWGUY', 'Mercy', 'Support'], ['ROOKIE', 'Zarya', 'Tank'], ['', '', 'Tank']]);
+  assert.deepEqual(away.slice(0, 2).map((p) => [p.handle, p.character, p.role, p.autoAdded]), [['BRONCO1', 'Reaper', 'Damage', true], ['BRONCO2', 'Lúcio', 'Support', true]]);
+  assert.ok(changes.length > 0);
+  // Second pass: everything already matches -> nothing to change, no duplicate rows.
+  assert.deepEqual(syncRosterFromOcr(game), []);
+  // A hero swap mid-map: only that player's hero + role change.
+  game.overwatchOcr.live.teams.home.players[0].hero = 'Ana';
+  assert.deepEqual(syncRosterFromOcr(game).map((c) => `${c.handle}:${c.field}:${c.to}`), ['ThunderStrike:character:Ana', 'ThunderStrike:role:Support']);
+});
+
+test('Overwatch hero roles cover every hero in the controller list', async () => {
+  const { OVERWATCH_HERO_ROLES } = await import('../src/overwatch-hero-roles.js');
+  const { GAME_CONFIGS } = await import('../src/game-config.js');
+  for (const hero of GAME_CONFIGS.overwatch.characters) assert.ok(['Tank', 'Damage', 'Support'].includes(OVERWATCH_HERO_ROLES[hero]), hero);
+  for (const role of ['Tank', 'Damage', 'Support']) assert.ok(GAME_CONFIGS.overwatch.roles.includes(role));
+});

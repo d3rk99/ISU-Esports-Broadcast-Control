@@ -1,4 +1,5 @@
 import { GAME_CONFIGS, rocketLeagueArenaName } from './game-config.js';
+import { tagSimilarity, NAME_MATCH } from './overwatch-ocr-panel.js';
 
 function actionError(message, statusCode = 400) {
   const error = new Error(message);
@@ -120,7 +121,8 @@ export function saveOverwatchLastMapStats(game, rosterKey = 'varsity') {
     for (const player of roster) {
       const station = Math.round(Number(player?.stageStation) || 0);
       if (station < 1 || station > 10 || !player?.handle) continue;
-      const row = rows.find((r) => String(r?.name || '').toUpperCase() === String(player.handle).toUpperCase());
+      let row = null; let best = NAME_MATCH;
+      for (const r of rows) { const sc = tagSimilarity(player.handle, r?.name); if (sc >= best) { row = r; best = sc; } }
       if (!row) continue;
       const { elims, assists, deaths, damage, healing, mitigation, hero } = row;
       saved[station] = { handle: player.handle, map, hero: hero || '', stats: { elims, assists, deaths, damage, healing, mitigation }, savedAt: Date.now() };
