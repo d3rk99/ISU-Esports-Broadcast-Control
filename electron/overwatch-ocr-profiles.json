@@ -93,7 +93,8 @@
       "cx": 670,
       "dy": -2,
       "radius": 16,
-      "note": "ring centre x on the 1080p grid and y relative to the row centre; fills clockwise from 12 o'clock. The ult % sits inside it (x 661-676)."
+      "note": "ring centre x on the 1080p grid and y relative to the row centre; fills clockwise from 12 o'clock. The ult % sits inside it (x 661-676).",
+      "readyRadius": 12
     },
     "preprocess": {
       "scale": 4,

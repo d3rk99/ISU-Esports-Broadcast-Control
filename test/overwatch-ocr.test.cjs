@@ -7,7 +7,7 @@ const { createWorker, OEM, PSM } = require('tesseract.js');
 const eng = require('@tesseract.js-data/eng');
 const { OverwatchOcrService } = require('../electron/overwatch-ocr-service.cjs');
 const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
-const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('../electron/overwatch-ocr-parse.cjs');
+const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, discFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('../electron/overwatch-ocr-parse.cjs');
 
 // Fixture: grayscale crop of the real ISU spectator scoreboard (2026-10-05), taken from
 // (640,190) on the 1920x1080 grid. Tiny PNG decoder (8-bit gray, no interlace) so the test
@@ -224,4 +224,35 @@ test('Overwatch OCR: debug capture returns every cell with its crop, raw text, d
   const html = renderOverwatchDebugCapture(debug);
   assert.equal((html.match(/class="ow-dbg-cell /g) || []).length, 80);
   assert.match(html, /2560×1440 → 1920×1080/);
+});
+
+// From Derk's 2026-10-05 capture (1440p, scaled to the 1080p grid): Hanzo's ult was READY
+// (solid disc + check mark, OCR misread it as 97) and a charging ring on the same board.
+// 60x60 patches centred on the ring.
+test('Overwatch OCR: READY check-mark disc is recognised, a charging ring is not', () => {
+  const at = (file) => { const p = readGrayPng(path.join(__dirname, 'fixtures', file)); return (x, y) => (x < 0 || y < 0 || x >= p.width || y >= p.height ? 0 : p.data[y * p.width + x]); };
+  const ready = at('ow-ult-ready.png'); const charging = at('ow-ult-charging.png');
+  assert.ok(discFill(ready, 30, 30) > 0.7, `ready disc fill ${discFill(ready, 30, 30).toFixed(2)}`);
+  assert.ok(discFill(charging, 30, 30) < 0.35, `charging fill ${discFill(charging, 30, 30).toFixed(2)}`);
+  assert.equal(isReadyDisc(ready, 30, 30), true);
+  assert.equal(isReadyDisc(charging, 30, 30), false);
+  // Every charging ring on the first real board stays "not ready".
+  const ring = getProfile().ultimateRing;
+  for (const team of getProfile().teams) for (const cy of team.rowCenters) assert.equal(isReadyDisc(sample, ring.cx, cy + ring.dy), false);
+});
+
+test('Overwatch OCR service: READY disc wins over a misread number (Hanzo read as 97)', async () => {
+  const profile = getProfile(); const ring = profile.ultimateRing;
+  const readyPatch = readGrayPng(path.join(__dirname, 'fixtures', 'ow-ult-ready.png'));
+  const hanzoCy = profile.teams[1].rowCenters[0] + ring.dy; // bottom team, row 1
+  const lum = (x, y) => {
+    const dx = x - ring.cx + 30; const dy = y - hanzoCy + 30;
+    if (dx >= 0 && dy >= 0 && dx < 60 && dy < 60) return readyPatch.data[dy * 60 + dx];
+    return sample(x, y);
+  };
+  const ocr = { recognize: async (_img, o) => ({ text: o.fieldId.endsWith('-ultimate') ? '97' : '0', confidence: 0.9 }) };
+  const service = new OverwatchOcrService({ capture: { capture: async () => ({ width: 1920, height: 1080 }), crop: () => ({ image: Buffer.alloc(0) }), luminance: (_f, x, y) => lum(x, y) }, ocr });
+  await service.sweep(); await service.sweep();
+  assert.equal(service.board.teams.away.players[0].ultimate, 'READY');
+  assert.equal(service.board.teams.home.players[0].ultimate, 97, 'a normal ring keeps its number');
 });

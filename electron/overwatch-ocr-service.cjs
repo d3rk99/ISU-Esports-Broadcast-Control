@@ -8,7 +8,7 @@
 // state.games.overwatch.overwatchOcr.live; overlays read it from there. Manual (Companion)
 // scores keep working; OCR only fills the player stats.
 const os = require('node:os');
-const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
+const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
 
 // Default OCR workers: half the CPU cores, 2..8 (each Tesseract worker is one thread).
 const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
@@ -101,13 +101,16 @@ class OverwatchOcrService {
         }
       };
       await Promise.all(Array.from({ length: Math.min(this.settings.workers, cells.length) }, lane));
-      // READY: no number in the middle and a full ring.
+      // READY: the ring turns into a solid disc with a check mark (no number). The disc check
+      // wins over any digits OCR may "see" in the check mark.
       if (typeof this.capture.luminance === 'function') {
         const ring = profile.ultimateRing;
+        const lum = (x, y) => this.capture.luminance(frame, x, y);
         for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
           const read = reads.find((r) => r.side === team.id && r.row === row && r.field === 'ultimate');
+          if (isReadyDisc(lum, ring.cx, cy + ring.dy, ring.readyRadius || 12)) { read.value = 'READY'; return; }
           if (read.value !== null) return;
-          read.value = resolveUltimate(null, ringFill((x, y) => this.capture.luminance(frame, x, y), ring.cx, cy + ring.dy, ring.radius));
+          read.value = resolveUltimate(null, ringFill(lum, ring.cx, cy + ring.dy, ring.radius));
         });
       }
       const changed = applySweep(this.board, this.consensus, reads, this.now());
@@ -166,7 +169,8 @@ class OverwatchOcrService {
         rawDataUrl: crop.rawDataUrl || '', processedDataUrl: crop.processedDataUrl || '',
         text: String(result.text || '').trim(), confidence: Math.round((result.confidence || 0) * 100),
         glyphs: cell.field === 'name' || !lum ? null : glyphCount(lum, cell.roi),
-        accepted: await this.readCell(frame, profile, cell)
+        accepted: cell.field === 'ultimate' && lum && isReadyDisc(lum, profile.ultimateRing.cx, cell.roi.y + Math.round(cell.roi.h / 2) + profile.ultimateRing.dy, profile.ultimateRing.readyRadius || 12)
+          ? 'READY' : await this.readCell(frame, profile, cell)
       });
     }
     return {

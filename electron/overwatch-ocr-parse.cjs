@@ -100,6 +100,23 @@ function plausibleRead(field, value, glyphs) {
   return String(value).length === glyphs ? value : null;
 }
 
+// READY: when the ult is charged the ring becomes a solid bright disc with a dark check mark
+// cut out of it (no number). Fraction of bright pixels inside `radius` of the ring centre:
+// READY ~0.8 on the ISU capture, a charging ring with its number ~0.1-0.25.
+const READY_DISC_FILL = 0.6;
+function discFill(sample, cx, cy, radius = 12, { bright = 150 } = {}) {
+  let total = 0; let lit = 0;
+  for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y += 1) {
+    for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x += 1) {
+      if ((x - cx) ** 2 + (y - cy) ** 2 > radius * radius) continue;
+      total += 1;
+      if (sample(x, y) > bright) lit += 1;
+    }
+  }
+  return total ? lit / total : 0;
+}
+function isReadyDisc(sample, cx, cy, radius = 12) { return discFill(sample, cx, cy, radius) >= READY_DISC_FILL; }
+
 // Combine the printed % with the ring. A full ring with no readable number = READY.
 function resolveUltimate(printed, ring) {
   if (Number.isFinite(printed)) return printed;
@@ -173,4 +190,4 @@ function applySweep(board, consensus, reads, now = Date.now()) {
   return changed;
 }
 
-module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, parseCell, cleanDigits, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
+module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, parseCell, cleanDigits, glyphCount, plausibleRead, ringFill, discFill, isReadyDisc, READY_DISC_FILL, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
