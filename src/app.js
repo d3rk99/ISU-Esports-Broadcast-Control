@@ -2688,6 +2688,13 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  if (button.dataset.action === 'ow-ocr-use-name') {
+    overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.setOverwatchOcrName({ side: button.dataset.side, row: Number(button.dataset.row), name: button.dataset.name }));
+    publishOverwatchOcr();
+    toast(`Name set to ${button.dataset.name} (stays until cleared)`);
+    render();
+    return;
+  }
   if (button.dataset.action === 'ow-ocr-clear') {
     overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.clearOverwatchOcr());
     publishOverwatchOcr(); render();
@@ -3171,6 +3178,16 @@ root.addEventListener('change', async (event) => {
   }
   if (target.dataset.owStatCards !== undefined) {
     commit(() => { state.games.overwatch.overwatchShowStatCards = target.checked; }, target.checked ? 'Overwatch stat cards on' : 'Overwatch stat cards off');
+    render();
+    return;
+  }
+  if (target.dataset.owNameSide) {
+    const details = { side: target.dataset.owNameSide, row: Number(target.dataset.owNameRow), name: target.value };
+    try {
+      overwatchOcr = mergeOverwatchOcrSnapshot(overwatchOcr, await window.isuDesktop?.setOverwatchOcrName(details));
+      publishOverwatchOcr();
+      toast(details.name.trim() ? `Name set to ${details.name.trim()} (stays until cleared)` : 'Name cleared, OCR reads it again');
+    } catch (error) { toast(`Could not set name: ${String(error?.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`); }
     render();
     return;
   }

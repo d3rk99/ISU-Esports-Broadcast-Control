@@ -406,3 +406,24 @@ test('Overwatch hero roles cover every hero in the controller list', async () =>
   for (const hero of GAME_CONFIGS.overwatch.characters) assert.ok(['Tank', 'Damage', 'Support'].includes(OVERWATCH_HERO_ROLES[hero]), hero);
   for (const role of ['Tank', 'Damage', 'Support']) assert.ok(GAME_CONFIGS.overwatch.roles.includes(role));
 });
+
+test('Overwatch OCR: a hand-set player name sticks over OCR until cleared', async () => {
+  // OCR keeps "reading" a wrong name for row 1; numbers still flow normally.
+  const ocr = { recognize: async (_img, o) => o.fieldId.endsWith('-name') ? { text: 'HANZ0X', confidence: 0.9 } : { text: '0', confidence: 0.9 } };
+  const capture = { capture: async () => ({ width: 1920, height: 1080 }), crop: () => ({ image: Buffer.alloc(0) }) };
+  const states = [];
+  const service = new OverwatchOcrService({ capture, ocr, onState: (s) => states.push(s) });
+  service.setPlayerName({ side: 'away', row: 0, name: '  Hanzo ' });
+  assert.equal(service.board.teams.away.players[0].name, 'Hanzo');
+  assert.equal(service.board.teams.away.players[0].nameManual, true);
+  for (let i = 0; i < 4; i += 1) await service.sweep();
+  assert.equal(service.board.teams.away.players[0].name, 'Hanzo', 'OCR never overwrites a hand-set name');
+  assert.equal(service.board.teams.home.players[0].name, 'HANZ0X', 'other rows still read');
+  assert.equal(service.board.teams.away.players[0].elims, 0, 'stats on the hand-named row still read');
+  service.setPlayerName({ side: 'away', row: 0, name: '' });
+  assert.equal(service.board.teams.away.players[0].nameManual, false);
+  for (let i = 0; i < 3; i += 1) await service.sweep();
+  assert.equal(service.board.teams.away.players[0].name, 'HANZ0X', 'cleared -> OCR takes over again');
+  assert.throws(() => service.setPlayerName({ side: 'middle', row: 0, name: 'x' }), /home or away/);
+  assert.ok(states.length >= 2);
+});

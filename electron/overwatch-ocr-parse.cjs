@@ -158,7 +158,7 @@ class OverwatchConsensus {
 }
 
 function emptyPlayer(side, row) {
-  return { side, slot: row + 1, name: '', hero: null, ultimate: null, elims: null, assists: null, deaths: null, damage: null, healing: null, mitigation: null, updatedAt: 0 };
+  return { side, slot: row + 1, name: '', nameManual: false, hero: null, ultimate: null, elims: null, assists: null, deaths: null, damage: null, healing: null, mitigation: null, updatedAt: 0 };
 }
 
 function emptyBoard() {

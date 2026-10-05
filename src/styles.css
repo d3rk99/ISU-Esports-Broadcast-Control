@@ -762,3 +762,7 @@ input[type="range"]:focus { border-color: #35353a; }
 .ndi-row.on { border-color: #f47920; }
 .ndi-row.bad small { color: #ff7b72; }
 @media (max-width: 1300px) { .ndi-rows { grid-template-columns: repeat(2, 1fr); } }
+.ow-ocr-name-input { width: 100%; min-width: 90px; padding: 3px 6px; font: inherit; font-size: 12px; background: transparent; border: 1px solid transparent; color: inherit; }
+.ow-ocr-name-input:hover, .ow-ocr-name-input:focus { border-color: #46515c; background: #0d1217; }
+.ow-ocr-name-input.is-manual { color: #ffd37a; border-color: #6b5320; }
+.ow-dbg-cell button { justify-self: start; padding: 3px 8px; font-size: 11px; }

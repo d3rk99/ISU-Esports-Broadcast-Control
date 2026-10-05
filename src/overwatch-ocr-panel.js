@@ -28,6 +28,7 @@ export function renderOverwatchDebugCapture(debug) {
       <span>${esc(c.side === 'home' ? 'TOP' : 'BOT')} ${c.row + 1} · ${FIELD_LABEL[c.field]}</span>
       ${c.rawDataUrl ? `<img src="${esc(c.rawDataUrl)}" alt="">` : ''}${c.processedDataUrl ? `<img class="proc" src="${esc(c.processedDataUrl)}" alt="">` : ''}
       <small>read “${esc(c.text)}” ${c.confidence}%${c.glyphs === null ? '' : ` · ${c.glyphs} digit${c.glyphs === 1 ? '' : 's'} seen`} → <b>${esc(c.accepted === null ? 'rejected' : c.accepted)}</b></small>
+      ${c.field === 'name' && c.accepted === null && String(c.text || '').trim() ? `<button data-action="ow-ocr-use-name" data-side="${c.side}" data-row="${c.row}" data-name="${esc(String(c.text).trim().toUpperCase())}">USE “${esc(String(c.text).trim().toUpperCase())}”</button>` : ''}
     </div>`;
   const age = Math.max(0, Math.round((Date.now() - Number(debug.capturedAt || Date.now())) / 1000));
   return `<div class="ow-dbg">
@@ -46,7 +47,9 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
     const players = ocr.live?.teams?.[side]?.players || [];
     const rows = Array.from({ length: 5 }, (_v, i) => {
       const p = players[i] || {};
-      return `<tr><td>${i + 1}</td><td class="ow-ocr-name">${esc(p.name || '')}</td>${OW_OCR_STATS.map(([k]) => `<td>${esc(show(p[k]))}</td>`).join('')}</tr>`;
+      // Name is editable: type to override a misread / unread name (sticks until cleared).
+      const name = `<input class="ow-ocr-name-input ${p.nameManual ? 'is-manual' : ''}" data-ow-name-side="${side}" data-ow-name-row="${i}" data-key="ow-name-${side}-${i}" value="${esc(p.name || '')}" placeholder="set name" maxlength="24" title="${p.nameManual ? 'Set by hand. Clear it to go back to OCR.' : 'Read by OCR. Type to set it by hand.'}">`;
+      return `<tr><td>${i + 1}</td><td class="ow-ocr-name">${name}</td>${OW_OCR_STATS.map(([k]) => `<td>${esc(show(p[k]))}</td>`).join('')}</tr>`;
     }).join('');
     return `<table class="ow-ocr-table"><caption>${esc(teams[t]?.shortName || side.toUpperCase())} · ${t === 0 ? 'top' : 'bottom'} of the board</caption>
       <thead><tr><th>#</th><th>PLAYER</th>${OW_OCR_STATS.map(([, l]) => `<th>${l}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -71,7 +74,7 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
 // Merge a snapshot from the service into the controller state (only what overlays need).
 export function mergeOverwatchOcrSnapshot(ocr, snapshot) {
   if (!snapshot?.teams) return ocr;
-  const strip = (players = []) => players.map(({ side, slot, name, hero, ultimate, elims, assists, deaths, damage, healing, mitigation }) => ({ side, slot, name, hero, ultimate, elims, assists, deaths, damage, healing, mitigation }));
+  const strip = (players = []) => players.map(({ side, slot, name, nameManual, hero, ultimate, elims, assists, deaths, damage, healing, mitigation }) => ({ side, slot, name, nameManual: Boolean(nameManual), hero, ultimate, elims, assists, deaths, damage, healing, mitigation }));
   return { ...ocr, live: { teams: { home: { players: strip(snapshot.teams.home?.players) }, away: { players: strip(snapshot.teams.away?.players) } }, updatedAt: snapshot.updatedAt || Date.now() }, status: snapshot.status || ocr.status };
 }
 

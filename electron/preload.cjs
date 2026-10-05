@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   getOverwatchOcrSettings: () => ipcRenderer.invoke('overwatch-ocr:get-settings'),
   configureOverwatchOcr: (settings) => ipcRenderer.invoke('overwatch-ocr:configure', settings),
   clearOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:clear'),
+  setOverwatchOcrName: (details) => ipcRenderer.invoke('overwatch-ocr:set-name', details),
   testOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:test-read'),
   debugCaptureOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:debug-capture'),
   getNdiCardStatus: () => ipcRenderer.invoke('ndi-cards:status'),

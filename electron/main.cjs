@@ -1139,6 +1139,7 @@ function registerIpc() {
     return { settings: saved, status: overwatchOcrService.configure(saved) };
   });
   ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
+  ipcMain.handle('overwatch-ocr:set-name', (_event, details = {}) => overwatchOcrService.setPlayerName(details));
   // NDI player cards: settings persist in userData; outputs are (re)built on change.
   ipcMain.handle('ndi-cards:status', () => ndiPlayerCards.status());
   ipcMain.handle('ndi-cards:configure', async (_event, settings = {}) => {

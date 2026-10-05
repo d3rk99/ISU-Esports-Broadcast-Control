@@ -92,7 +92,27 @@ class OverwatchOcrService {
   clear() {
     this.board = emptyBoard();
     this.consensus.reset();
+    this.nameOverrides = new Map();
     this.onState(this.snapshot());
+  }
+
+  // Operator-set player name for one board slot (side 'home'|'away', row 0-4). Wins over OCR
+  // until cleared (empty name) or the board is cleared; OCR keeps reading every other field.
+  setPlayerName({ side, row, name } = {}) {
+    if (!['home', 'away'].includes(side)) throw new Error('side must be home or away');
+    const r = Math.round(Number(row));
+    if (!(r >= 0 && r <= 4)) throw new Error('row must be 0-4');
+    const clean = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 24);
+    this.nameOverrides = this.nameOverrides || new Map();
+    const key = `${side}:${r}`;
+    const player = this.board.teams[side].players[r];
+    if (clean) { this.nameOverrides.set(key, clean); player.name = clean; }
+    else { this.nameOverrides.delete(key); player.name = ''; }
+    player.nameManual = Boolean(clean);
+    player.updatedAt = this.now();
+    this.board.updatedAt = this.now();
+    this.onState(this.snapshot());
+    return this.snapshot();
   }
 
   // One full read of the board. Cells are read one after another on the OCR engine's own
@@ -132,7 +152,10 @@ class OverwatchOcrService {
       // Heroes change rarely (spawn room / death): match the portraits ~once a second (65 ms
       // for all ten), not every sweep.
       if (!this.lastHeroAt || this.now() - this.lastHeroAt >= 900) { reads.push(...this.readHeroes(frame, profile)); this.lastHeroAt = this.now(); }
-      const changed = applySweep(this.board, this.consensus, reads, this.now());
+      // Manually named slots: drop the OCR name read so it can never overwrite the operator.
+      const overrides = this.nameOverrides || new Map();
+      const filtered = overrides.size ? reads.filter((r) => !(r.field === 'name' && overrides.has(`${r.side}:${r.row}`))) : reads;
+      const changed = applySweep(this.board, this.consensus, filtered, this.now());
       const seen = reads.filter((r) => r.value !== null).length;
       this.setStatus(seen ? 'reading' : 'no-board', seen ? `Reading ${seen}/${reads.length} cells` : 'Window found but no scoreboard visible (is Tab open on this spectator?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
       if (changed) this.onState(this.snapshot());
