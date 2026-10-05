@@ -7,7 +7,7 @@ const { createWorker, OEM, PSM } = require('tesseract.js');
 const eng = require('@tesseract.js-data/eng');
 const { OverwatchOcrService } = require('../electron/overwatch-ocr-service.cjs');
 const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
-const { getProfile, cellRois, parseCell, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('../electron/overwatch-ocr-parse.cjs');
+const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('../electron/overwatch-ocr-parse.cjs');
 
 // Fixture: grayscale crop of the real ISU spectator scoreboard (2026-10-05), taken from
 // (640,190) on the 1920x1080 grid. Tiny PNG decoder (8-bit gray, no interlace) so the test
@@ -120,7 +120,7 @@ test('Overwatch OCR service: two sweeps of the real board fill every player stat
   // Fake capture serving the fixture with the live preprocessing (invert, bilinear upscale,
   // threshold); the real tesseract.js engine and consensus gate do the rest.
   const capture = {
-    capture: async () => ({ fixture: true }),
+    capture: async () => ({ fixture: true, width: 1920, height: 1080 }),
     crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120) }),
     luminance: (_frame, x, y) => sample(x, y)
   };
@@ -136,4 +136,60 @@ test('Overwatch OCR service: two sweeps of the real board fill every player stat
   for (const side of ['home', 'away']) EXPECTED[side].forEach((row, i) => assert.deepEqual(got(side, i), [...row, 0, 0, 0], `${side}${i + 1}`));
   assert.equal(service.status.state, 'reading');
   assert.ok(states.length >= 1);
+});
+
+// An all-zero board, like the start of a map (what produced random 20 / 139 / 421 values):
+// every stat cell blanked to background, then a single '0' glyph copied from a real 0 cell.
+function zeroBoardSampler() {
+  const profile = getProfile();
+  const zeroSrc = { x: 915, y: 214 }; // home1 elims: the real "0" glyph spans x 916-923, y 216-226
+  const glyph = []; for (let dy = 0; dy < 14; dy += 1) for (let dx = 0; dx < 10; dx += 1) glyph.push(sample(zeroSrc.x + dx, zeroSrc.y + dy));
+  const override = new Map();
+  for (const cell of cellRois(profile)) {
+    if (cell.field === 'name') continue;
+    const { x, y, w, h } = cell.roi;
+    for (let yy = y - 2; yy < y + h + 2; yy += 1) for (let xx = x; xx < x + w; xx += 1) override.set(yy * 4000 + xx, 20);
+    const gx = x + Math.round(w / 2) - 5; const gy = y + Math.round(h / 2) - 7;
+    for (let dy = 0; dy < 14; dy += 1) for (let dx = 0; dx < 10; dx += 1) override.set((gy + dy) * 4000 + gx + dx, glyph[dy * 10 + dx]);
+  }
+  return (x, y) => (override.has(y * 4000 + x) ? override.get(y * 4000 + x) : sample(x, y));
+}
+
+test('Overwatch OCR: digit-count check rejects reads that do not match the picture', () => {
+  assert.equal(plausibleRead('damage', 139, 1), null, '3 digits read from a single glyph');
+  assert.equal(plausibleRead('damage', 0, 1), 0);
+  assert.equal(plausibleRead('ultimate', 20, 1), null);
+  assert.equal(plausibleRead('name', 'Bengal', NaN), 'Bengal');
+  const zero = zeroBoardSampler();
+  for (const cell of cellRois(getProfile())) if (cell.field !== 'name') assert.equal(glyphCount(zero, cell.roi), 1, `${cell.side}${cell.row + 1}.${cell.field}`);
+});
+
+test('Overwatch OCR service: an all-zero board stays all zeros (no random values), in parallel', { timeout: 240000 }, async () => {
+  const zero = zeroBoardSampler();
+  const zeroImage = (roi, scale = 4, threshold = 120, pad = 20) => {
+    const w = roi.w * scale + pad * 2; const h = roi.h * scale + pad * 2; const px = Buffer.alloc(w * h, 255);
+    for (let y = 0; y < roi.h * scale; y += 1) for (let x = 0; x < roi.w * scale; x += 1) {
+      const fx = roi.x + (x + 0.5) / scale - 0.5; const fy = roi.y + (y + 0.5) / scale - 0.5; const x0 = Math.floor(fx); const y0 = Math.floor(fy); const tx = fx - x0; const ty = fy - y0;
+      const lum = zero(x0, y0) * (1 - tx) * (1 - ty) + zero(x0 + 1, y0) * tx * (1 - ty) + zero(x0, y0 + 1) * (1 - tx) * ty + zero(x0 + 1, y0 + 1) * tx * ty;
+      px[(y + pad) * w + x + pad] = 255 - lum < threshold ? 0 : 255;
+    }
+    return Buffer.concat([Buffer.from(`P5\n${w} ${h}\n255\n`), px]);
+  };
+  const capture = { capture: async () => ({ width: 1920, height: 1080 }), crop: (_f, roi, pre = {}) => ({ image: zeroImage(roi, pre.scale || 4, pre.threshold || 120) }), luminance: (_f, x, y) => zero(x, y) };
+  const ocr = new TesseractOcrEngine();
+  const service = new OverwatchOcrService({ capture, ocr });
+  service.configure({ workers: 4 });
+  const seen = new Set();
+  try {
+    for (let i = 0; i < 3; i += 1) {
+      await service.sweep();
+      for (const side of ['home', 'away']) for (const p of service.board.teams[side].players) for (const k of ['ultimate', 'elims', 'assists', 'deaths', 'damage', 'healing', 'mitigation']) if (p[k] !== null) seen.add(p[k]);
+    }
+  } finally { service.stop(); await ocr.close(); }
+  assert.deepEqual([...seen], [0], `values shown on an all-zero board: ${[...seen].join(', ')}`);
+});
+
+test('Overwatch OCR service: refuses a frame that is not on the 1080p grid', async () => {
+  const service = new OverwatchOcrService({ capture: { capture: async () => ({ width: 1280, height: 1024 }), crop: () => ({}) }, ocr: { recognize: async () => ({ text: '', confidence: 0 }) } });
+  await assert.rejects(service.sweep(), /1280x1024/);
 });

@@ -7,16 +7,23 @@
 // there is one capture stack to maintain. The controller writes the result into
 // state.games.overwatch.overwatchOcr.live; overlays read it from there. Manual (Companion)
 // scores keep working; OCR only fills the player stats.
-const { getProfile, cellRois, parseCell, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
+const os = require('node:os');
+const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
 
-const DEFAULTS = { enabled: false, windowName: 'Overwatch', profileId: 'default-1080p', intervalMs: 500 };
+// Default OCR workers: half the CPU cores, 2..8 (each Tesseract worker is one thread).
+const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
+const DEFAULTS = { enabled: false, windowName: 'Overwatch', profileId: 'default-1080p', intervalMs: 500, workers: DEFAULT_WORKERS };
+// Minimum Tesseract confidence for a stat. 0.3 let noise through (random 20 / 139 / 421 on an
+// all-zero board); digit reads on this board come back at 0.8-0.96.
+const MIN_CONFIDENCE = { score: 0.75, text: 0.6 };
 
 function normalizeSettings(s = {}) {
   return {
     enabled: Boolean(s.enabled),
     windowName: String(s.windowName || DEFAULTS.windowName).slice(0, 120),
     profileId: String(s.profileId || DEFAULTS.profileId),
-    intervalMs: Math.max(200, Math.min(5000, Math.round(Number(s.intervalMs) || DEFAULTS.intervalMs)))
+    intervalMs: Math.max(200, Math.min(5000, Math.round(Number(s.intervalMs) || DEFAULTS.intervalMs))),
+    workers: Math.max(1, Math.min(16, Math.round(Number(s.workers) || DEFAULTS.workers)))
   };
 }
 
@@ -81,10 +88,19 @@ class OverwatchOcrService {
     try {
       const frame = await this.capture.capture(this.settings.windowName);
       const profile = getProfile(this.settings.profileId);
-      const reads = [];
-      for (const cell of cellRois(profile)) {
-        reads.push({ side: cell.side, row: cell.row, field: cell.field, value: await this.readCell(frame, profile, cell) });
-      }
+      this.checkFrame(frame, profile);
+      const cells = cellRois(profile);
+      // Read cells in parallel across the OCR engine's worker pool (one CPU core per worker).
+      this.ocr.observerConcurrency = this.settings.workers;
+      const reads = new Array(cells.length);
+      let next = 0;
+      const lane = async () => {
+        while (next < cells.length) {
+          const i = next++; const cell = cells[i];
+          reads[i] = { side: cell.side, row: cell.row, field: cell.field, value: await this.readCell(frame, profile, cell) };
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(this.settings.workers, cells.length) }, lane));
       // READY: no number in the middle and a full ring.
       if (typeof this.capture.luminance === 'function') {
         const ring = profile.ultimateRing;
@@ -102,17 +118,32 @@ class OverwatchOcrService {
     } finally { this.running = false; }
   }
 
+  // The profile is on the 1920x1080 grid; the capture must hand us a frame on that grid
+  // (capture normalizes any 16:9 source). Anything else would put every box on the wrong pixels.
+  checkFrame(frame, profile) {
+    const w = Number(frame?.width); const h = Number(frame?.height);
+    if ((w || h) && (w !== profile.width || h !== profile.height)) {
+      throw new Error(`Captured frame is ${w}x${h} but the OCR boxes are for ${profile.width}x${profile.height}; use a 16:9 window`);
+    }
+  }
+
   async readCell(frame, profile, cell) {
     const kind = cell.field === 'name' ? 'text' : 'score';
     const base = { ...profile.preprocess, allowedChars: cell.column.allowedChars };
+    // Digit count straight from the pixels: 0 = empty cell (never read a number into it),
+    // otherwise the OCR text must have exactly that many digits.
+    const glyphs = kind === 'score' && typeof this.capture.luminance === 'function'
+      ? glyphCount((x, y) => this.capture.luminance(frame, x, y), cell.roi) : NaN;
+    if (glyphs === 0) return null;
     const attempt = async (preprocess, mode) => {
       const crop = this.capture.crop(frame, cell.roi, preprocess);
       const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind, fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}`, pageMode: mode });
-      return result.confidence >= 0.3 ? parseCell(cell.field, result.text) : null;
+      if (result.confidence < MIN_CONFIDENCE[kind]) return null;
+      return plausibleRead(cell.field, parseCell(cell.field, result.text), glyphs);
     };
     let value = await attempt(base);
     // Lone digits get dropped in line mode; retry as a single character at a couple of scales.
-    if (value === null && kind === 'score') {
+    if (value === null && kind === 'score' && glyphs === 1) {
       for (const scale of [4, 6]) { value = await attempt({ ...base, scale }, 'char'); if (value !== null) break; }
     }
     return value;
@@ -123,4 +154,4 @@ class OverwatchOcrService {
   async shutdown() { this.stop(); }
 }
 
-module.exports = { OverwatchOcrService, normalizeSettings, DEFAULTS };
+module.exports = { OverwatchOcrService, normalizeSettings, DEFAULTS, MIN_CONFIDENCE };

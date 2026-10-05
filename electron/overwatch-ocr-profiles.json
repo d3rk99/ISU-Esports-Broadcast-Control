@@ -32,8 +32,8 @@
     "columns": {
       "ultimate": {
         "label": "Ultimate %",
-        "x": 658,
-        "w": 24,
+        "x": 659,
+        "w": 20,
         "kind": "percent",
         "allowedChars": "0123456789"
       },
@@ -42,7 +42,7 @@
         "x": 694,
         "w": 200,
         "kind": "text",
-        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.-#"
+        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _.-#"
       },
       "elims": {
         "label": "Eliminations",

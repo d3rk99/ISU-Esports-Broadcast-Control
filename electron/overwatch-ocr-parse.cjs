@@ -66,6 +66,39 @@ function ringFill(sample, cx, cy, radius, { lit = 150, steps = 180 } = {}) {
   return run / steps;
 }
 
+// How many digit glyphs are really printed in a cell, measured straight from the pixels:
+// runs of bright columns inside the ROI that reach the upper part of the text band (so the
+// low comma in "1,535" and the ult ring's edges don't count). Used to reject OCR reads whose
+// digit count doesn't match the picture, e.g. "139" read from a lone "0", or a number read
+// from an empty cell. `sample(x, y)` returns luminance 0..255 on the 1080p grid.
+function glyphCount(sample, roi, { bright = 120, digitWidth = 8.3 } = {}) {
+  // Digits in this font are ~8 px wide with ~1 px gaps and often touch (100, 220), so count
+  // by the width of each tall run rather than by gaps alone.
+  const cy = roi.y + Math.round(roi.h / 2);
+  let count = 0; let start = -1; let tall = false;
+  for (let x = roi.x; x <= roi.x + roi.w + 1; x += 1) {
+    let any = false; let top = false;
+    if (x <= roi.x + roi.w) {
+      for (let y = cy - 6; y <= cy + 5; y += 1) {
+        if (sample(x, y) > bright) { any = true; if (y <= cy - 2) top = true; }
+      }
+    }
+    if (any) { if (start < 0) start = x; tall = tall || top; }
+    else if (start >= 0) {
+      if (tall) count += Math.max(1, Math.round((x - start) / digitWidth));
+      start = -1; tall = false;
+    }
+  }
+  return count;
+}
+
+// A numeric read is only believable when its digit count matches the glyphs in the picture.
+function plausibleRead(field, value, glyphs) {
+  if (field === 'name' || value === null || value === 'READY') return value;
+  if (!Number.isFinite(glyphs)) return value;
+  return String(value).length === glyphs ? value : null;
+}
+
 // Combine the printed % with the ring. A full ring with no readable number = READY.
 function resolveUltimate(printed, ring) {
   if (Number.isFinite(printed)) return printed;
@@ -78,8 +111,8 @@ function resolveUltimate(printed, ring) {
 // Suspicious = a stat going DOWN (elims/assists/deaths/damage/healing/mitigation only grow
 // during a map) or jumping implausibly (> 5 E/A/D, > 3000 dmg/heal/mit between sweeps).
 class OverwatchConsensus {
-  constructor({ first = 2, change = 2, correction = 4 } = {}) {
-    Object.assign(this, { first, change, correction });
+  constructor({ first = 2, change = 2, correction = 4, nameReads = 3 } = {}) {
+    Object.assign(this, { first, change, correction, nameReads });
     this.cells = new Map();
   }
 
@@ -97,7 +130,9 @@ class OverwatchConsensus {
     if (!cell || cell.candidate !== next) { cell = { candidate: next, streak: 0 }; this.cells.set(key, cell); }
     cell.streak += 1;
     if (current === next) return { accept: true, value: current };
-    const needed = current === null || current === undefined ? this.first : this.suspicious(field, current, next) ? this.correction : this.change;
+    // Names are the noisiest field: always need nameReads matching reads.
+    const needed = field === 'name' ? this.nameReads
+      : current === null || current === undefined ? this.first : this.suspicious(field, current, next) ? this.correction : this.change;
     return cell.streak >= needed ? { accept: true, value: next } : { accept: false, value: current };
   }
 
@@ -137,4 +172,4 @@ function applySweep(board, consensus, reads, now = Date.now()) {
   return changed;
 }
 
-module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, parseCell, cleanDigits, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
+module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, parseCell, cleanDigits, glyphCount, plausibleRead, ringFill, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
