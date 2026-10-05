@@ -2161,7 +2161,16 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
    VALORANT card language (team edge, angled corner, ult ring) with OW stats: E / A / D on the
    second line, damage / healing / mitigation on the third. The hero portrait (from the roster)
    fades in behind the card. Bottom corners stay clear of the OW spectator HUD centre. */
-.ow-players { position: absolute; bottom: 46px; z-index: 6; display: grid; gap: 7px; width: 300px; animation: ow-cards-in 520ms cubic-bezier(.2,.82,.18,1) both; }
+.ow-players { position: absolute; bottom: 46px; z-index: 6; display: grid; gap: 7px; width: 300px; }
+/* Slide in from each screen edge, slot 1 of both teams first, then slot 2 ... (delays set per
+   card from JS); out is the reverse order. The off-screen offset clears the 18px margin. */
+.ow-players--home { --ow-off: calc(-100% - 40px); }
+.ow-players--away { --ow-off: calc(100% + 40px); }
+.ow-players .ow-player-card { transform: translateX(var(--ow-off)); opacity: 0; }
+.ow-players.is-in .ow-player-card { animation: ow-card-in 480ms cubic-bezier(.2,.82,.18,1) var(--ow-in-delay, 0ms) both; }
+.ow-players.is-out .ow-player-card { animation: ow-card-out 380ms cubic-bezier(.6,0,.8,.2) var(--ow-out-delay, 0ms) both; }
+@keyframes ow-card-in { from { transform: translateX(var(--ow-off)); opacity: 0; } 30% { opacity: 1; } to { transform: translateX(0); opacity: 1; } }
+@keyframes ow-card-out { from { transform: translateX(0); opacity: 1; } 75% { opacity: 1; } to { transform: translateX(var(--ow-off)); opacity: 0; } }
 .ow-players[hidden] { display: none; }
 .ow-players--home { left: 18px; }
 .ow-players--away { right: 18px; }
@@ -2210,5 +2219,4 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-ult.is-ready { animation: ow-ult-ready 1.6s ease-in-out infinite; }
 .ow-ult .ready-icon { position: absolute; inset: 10px; width: 28px; height: 28px; transform: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes ow-ult-ready { 50% { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--ow-side) 95%, transparent)); } }
-@keyframes ow-cards-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
 body:not([data-game="overwatch"]) .ow-players { display: none; }

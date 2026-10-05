@@ -689,6 +689,40 @@
     return wrap;
   }
 
+  // Cards are built once per container and updated in place, so the slide in / out animation
+  // only runs when the toggle (or data presence) actually changes, never on a stats update.
+  // in:  slot 1 of both teams first, then slot 2, ... (100 ms apart), each from its own edge.
+  // out: the reverse order, then the containers hide.
+  const OW_CARD_STEP_MS = 110;
+  const OW_CARD_MS = 480;
+  function buildOwCard(side, index) {
+    const card = document.createElement('article');
+    card.className = `ow-player-card ow-player-card--${side}`;
+    card.style.setProperty('--ow-in-delay', `${index * OW_CARD_STEP_MS}ms`);
+    card.style.setProperty('--ow-out-delay', `${(4 - index) * OW_CARD_STEP_MS}ms`);
+    const ult = document.createElement('div');
+    const name = document.createElement('strong');
+    const ead = document.createElement('span'); ead.className = 'ow-ead';
+    const numbers = document.createElement('div'); numbers.className = 'ow-numbers';
+    card.append(ult, name, ead, numbers);
+    return card;
+  }
+
+  function fillOwCard(card, p, rosterEntry, game, index) {
+    const heroName = p.hero || rosterEntry?.character || '';
+    const heroArt = safeImageUrl(heroName ? game.characterArt?.[heroName]?.url : '', '');
+    card.classList.toggle('has-hero', Boolean(heroArt));
+    if (heroArt) card.style.setProperty('--ow-hero-art', `url("${heroArt}")`); else card.style.removeProperty('--ow-hero-art');
+    const ring = owUltRing(p.ultimate);
+    card.children[0].replaceWith(ring);
+    card.children[1].textContent = rosterEntry?.handle || p.name || `PLAYER ${index + 1}`;
+    const pair = (label, value) => { const el = document.createElement('span'); const i = document.createElement('i'); i.textContent = label; const b = document.createElement('b'); b.textContent = value; el.append(i, b); return el; };
+    const ead = card.children[2]; ead.replaceChildren();
+    ['elims', 'assists', 'deaths'].forEach((k, i) => { const el = pair(['E', 'A', 'D'][i], Number.isFinite(Number(p[k])) ? String(Number(p[k])) : '–'); ead.append(...el.childNodes); });
+    card.children[3].replaceChildren(...[['DMG', p.damage], ['HEAL', p.healing], ['MIT', p.mitigation]].map(([label, v]) => pair(label, owCompact(v))));
+  }
+
+  const owCardsState = new WeakMap(); // container -> { shown, hideTimer }
   function renderOverwatchPlayerCards(selectedGame, game) {
     const live = game.overwatchOcr?.live;
     const hasData = ['home', 'away'].some((side) => (live?.teams?.[side]?.players || []).some((p) => p && (p.name || Number.isFinite(Number(p.damage)))));
@@ -696,29 +730,31 @@
     for (const side of ['home', 'away']) {
       const container = $(`#ow-${side}-players`);
       if (!container) continue;
-      container.hidden = !show;
-      if (!show) { container.replaceChildren(); continue; }
-      const roster = side === 'home' ? (game.rosters?.[game.activeRosterKey || 'varsity'] || game.rosters?.varsity || []) : (game.awayRosters?.[game.activeRosterKey || 'varsity'] || game.awayRosters?.varsity || []);
-      const players = live.teams?.[side]?.players || [];
-      container.replaceChildren(...Array.from({ length: 5 }, (_v, index) => {
-        const p = players[index] || {};
-        const rosterEntry = roster.find((r) => r?.handle && p.name && r.handle.toUpperCase() === String(p.name).toUpperCase()) || null;
-        const heroArt = safeImageUrl(rosterEntry?.character ? game.characterArt?.[rosterEntry.character]?.url : '', '');
-        const card = document.createElement('article');
-        card.className = `ow-player-card ow-player-card--${side}`;
-        if (heroArt) { card.style.setProperty('--ow-hero-art', `url("${heroArt}")`); card.classList.add('has-hero'); }
-        const name = document.createElement('strong');
-        name.textContent = rosterEntry?.handle || p.name || `PLAYER ${index + 1}`;
-        const pair = (tag, label, value) => { const el = document.createElement(tag); const i = document.createElement('i'); i.textContent = label; const b = document.createElement('b'); b.textContent = value; el.append(i, b); return el; };
-        const ead = document.createElement('span');
-        ead.className = 'ow-ead';
-        ['elims', 'assists', 'deaths'].forEach((k, i) => { const [label, value] = [['E', 'A', 'D'][i], Number.isFinite(Number(p[k])) ? String(Number(p[k])) : '–']; const el = pair('span', label, value); ead.append(...el.childNodes); });
-        const numbers = document.createElement('div');
-        numbers.className = 'ow-numbers';
-        numbers.append(...[['DMG', p.damage], ['HEAL', p.healing], ['MIT', p.mitigation]].map(([label, v]) => pair('span', label, owCompact(v))));
-        card.append(owUltRing(p.ultimate), name, ead, numbers);
-        return card;
-      }));
+      const st = owCardsState.get(container) || { shown: false, hideTimer: null };
+      owCardsState.set(container, st);
+      if (container.children.length !== 5) container.replaceChildren(...Array.from({ length: 5 }, (_v, i) => buildOwCard(side, i)));
+      if (show) {
+        const roster = side === 'home' ? (game.rosters?.[game.activeRosterKey || 'varsity'] || game.rosters?.varsity || []) : (game.awayRosters?.[game.activeRosterKey || 'varsity'] || game.awayRosters?.varsity || []);
+        const players = live.teams?.[side]?.players || [];
+        [...container.children].forEach((card, index) => {
+          const p = players[index] || {};
+          const rosterEntry = roster.find((r) => r?.handle && p.name && r.handle.toUpperCase() === String(p.name).toUpperCase()) || null;
+          fillOwCard(card, p, rosterEntry, game, index);
+        });
+      }
+      if (show && !st.shown) {
+        clearTimeout(st.hideTimer); st.hideTimer = null;
+        container.hidden = false;
+        container.classList.remove('is-out');
+        void container.offsetWidth; // restart the "in" animation
+        container.classList.add('is-in');
+        st.shown = true;
+      } else if (!show && st.shown) {
+        container.classList.remove('is-in');
+        container.classList.add('is-out');
+        st.shown = false;
+        st.hideTimer = setTimeout(() => { if (!st.shown) { container.hidden = true; container.classList.remove('is-out'); } }, OW_CARD_MS + 4 * OW_CARD_STEP_MS + 60);
+      } else if (!show && !st.hideTimer) container.hidden = true;
     }
   }
 
@@ -1206,6 +1242,9 @@
     updateDiagnostics(state, roots.key, 'PAIR KEY');
     activeRenderRoot = previousRoot;
   }
+
+  // Preview hook for scripts/ow-hud-preview.cjs (headless frame strips); only with ?preview=1.
+  if (OVERLAY_QUERY.get('preview') === '1') window.__owRender = (state) => render(state);
 
   function render(state) {
     if (!OUTPUT_VALID) {

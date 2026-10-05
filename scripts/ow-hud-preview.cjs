@@ -39,10 +39,22 @@ const server = http.createServer((req, res) => {
 app.whenReady().then(async () => {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const win = new BrowserWindow({ show: false, width: 1920, height: 1080, webPreferences: { offscreen: true } });
-  await win.loadURL(`http://127.0.0.1:${server.address().port}/overlays/scoreboard.html?output=fill`);
+  await win.loadURL(`http://127.0.0.1:${server.address().port}/overlays/scoreboard.html?output=fill&preview=1`);
   if (background) {
     const data = fs.readFileSync(background).toString('base64');
     await win.webContents.executeJavaScript(`document.body.style.background = 'url(data:image/png;base64,${data}) center/1920px 1080px no-repeat'`);
+  }
+  if (process.env.ANIM) {
+    // Frame strip of the stat-card slide: toggle on, capture at times; toggle off, capture again.
+    const shot = async (tag) => fs.writeFileSync(outFile.replace(/\.png$/, `-${tag}.png`), (await win.webContents.capturePage()).toPNG());
+    const setShow = (on) => win.webContents.executeJavaScript(`(() => { const s = ${JSON.stringify(state)}; s.games.overwatch.overwatchShowStatCards = ${on}; window.__owRender ? window.__owRender(s) : null; })()`);
+    await new Promise((r) => setTimeout(r, 1500));
+    await setShow(false); await new Promise((r) => setTimeout(r, 1500));
+    await setShow(true);
+    for (const ms of [150, 350, 600, 1100]) { await new Promise((r) => setTimeout(r, ms - (ms === 150 ? 0 : 0))); await shot(`in-${ms}`); }
+    await setShow(false);
+    for (const ms of [150, 400, 1100]) { await new Promise((r) => setTimeout(r, ms)); await shot(`out-${ms}`); }
+    app.exit(0); return;
   }
   await new Promise((resolve) => setTimeout(resolve, 3000));
   fs.writeFileSync(outFile, (await win.webContents.capturePage()).toPNG());
