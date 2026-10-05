@@ -39,6 +39,7 @@ const STAGE_MODE_CHOICES = [
 	{ id: 'graphic', label: 'Mirror Graphic' },
 	{ id: 'individual', label: 'Individual' },
 	{ id: 'playercard', label: 'Player Card (NDI)' },
+	{ id: 'stagendi', label: 'Stage NDI (OBS)' },
 	{ id: 'hold', label: 'Hold Graphic' },
 	{ id: 'blackout', label: 'Blackout' },
 	{ id: 'offline', label: 'Offline' },

@@ -9,6 +9,7 @@ const STAGE_DISPLAY_MODES = Object.freeze({
   graphic: 'graphic',
   individual: 'individual',
   playercard: 'playercard',
+  stagendi: 'stagendi',
   blackout: 'blackout',
   hold: 'hold'
 });
@@ -19,6 +20,8 @@ const MODE_ALIASES = Object.freeze({
   'mirror-graphic': 'graphic',
   black: 'blackout',
   player_card: 'playercard',
+  stage_ndi: 'stagendi',
+  'stage-ndi': 'stagendi',
   'player-card': 'playercard',
   safe: 'hold'
 });

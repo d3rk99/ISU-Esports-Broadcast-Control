@@ -3,7 +3,7 @@ import type ModuleInstance from './main.js'
 type Team = 'home' | 'away'
 type Operation = 'increment' | 'decrement'
 type ProgramOutput = 'scoreboard' | 'roster' | 'map-pool' | 'clean'
-type StageMode = 'gameplay' | 'wall' | 'graphic' | 'individual' | 'playercard' | 'hold' | 'blackout'
+type StageMode = 'gameplay' | 'wall' | 'graphic' | 'individual' | 'playercard' | 'stagendi' | 'hold' | 'blackout'
 type StageUpdateTarget = 'outdated' | 'all' | 'station'
 
 export type ActionsSchema = {
@@ -23,6 +23,7 @@ export type ActionsSchema = {
 	select_program_output: { options: { output: ProgramOutput } }
 	stage_global_mode: { options: { mode: StageMode } }
 	stage_station_mode: { options: { station: string; mode: StageMode } }
+	obs_stage_mode: { options: { station: string; mode: string } }
 	stage_assign_mode_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
 	stage_prepare_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
 	stage_fire_prepared: { options: { executeDelaySeconds: number } }
@@ -56,6 +57,7 @@ const STAGE_MODE_CHOICES = [
 	{ id: 'graphic', label: 'Mirror Graphic' },
 	{ id: 'individual', label: 'Individual' },
 	{ id: 'playercard', label: 'Player Card (NDI)' },
+	{ id: 'stagendi', label: 'Stage NDI (OBS)' },
 	{ id: 'hold', label: 'Hold Graphic' },
 	{ id: 'blackout', label: 'Blackout' },
 ]
@@ -237,6 +239,27 @@ export function UpdateActions(self: ModuleInstance): void {
 					station: event.options.station,
 					mode: event.options.mode,
 				}),
+		},
+		obs_stage_mode: {
+			name: 'Stage Displays (OBS NDI): Set station graphic',
+			options: [
+				{ id: 'station', type: 'dropdown', label: 'Station', default: 'all', choices: [{ id: 'all', label: 'All stations' }, ...STATION_CHOICES] },
+				{
+					id: 'mode',
+					type: 'dropdown',
+					label: 'Graphic',
+					default: 'hold',
+					choices: [
+						{ id: 'hold', label: 'Hold' },
+						{ id: 'intro', label: 'Team intro' },
+						{ id: 'player', label: 'Player' },
+						{ id: 'score', label: 'Score' },
+						{ id: 'blackout', label: 'Black' },
+					],
+				},
+			],
+			callback: async (event) =>
+				self.sendControlAction({ action: 'stage.obs.mode', station: event.options.station, mode: event.options.mode }),
 		},
 		stage_assign_mode_preset: {
 			name: 'Stage Displays: Assign preset to mode',

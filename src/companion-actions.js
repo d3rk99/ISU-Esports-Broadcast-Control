@@ -1,4 +1,5 @@
 import { GAME_CONFIGS, rocketLeagueArenaName } from './game-config.js';
+import { setStageObsMode } from './obs-stage-panel.js';
 import { tagSimilarity, NAME_MATCH } from './overwatch-ocr-panel.js';
 
 function actionError(message, statusCode = 400) {
@@ -155,6 +156,12 @@ export function applyCompanionAction(state, request = {}) {
     if (!['scoreboard', 'roster', 'map-pool', 'clean'].includes(output)) throw actionError('output must be scoreboard, roster, map-pool, or clean');
     state.activeOutputOverlay = output;
     return { message: `Program output selected: ${output}`, outputChanged: true };
+  }
+  if (action === 'stage.obs.mode') {
+    const station = request.station === 'all' || request.station === '' || request.station === undefined ? 'all' : Number(request.station);
+    if (station !== 'all' && !(station >= 1 && station <= 10)) throw actionError('station must be 1-10 or all');
+    try { setStageObsMode(state, station, String(request.mode || '')); } catch (error) { throw actionError(error.message); }
+    return { message: `OBS stage ${station === 'all' ? 'all stations' : `station ${station}`}: ${request.mode}` };
   }
   if (action === 'game.select') {
     if (!GAME_CONFIGS[request.game]) throw actionError(`Unknown game: ${request.game || '(empty)'}`);

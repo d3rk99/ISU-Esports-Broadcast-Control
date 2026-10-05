@@ -7,6 +7,7 @@ import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
+import { ensureStageObsState, renderObsStagePanel, setStageObsMode } from './obs-stage-panel.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
@@ -66,6 +67,8 @@ let companionSettings = {
 let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
 let stageDisplayStatus = { enabled: false, port: 3178, onlineCount: 0, stations: [] };
 let ndiCardStatus = { enabled: false, stations: [], outputs: [], error: '' };
+let obsStage = { config: {}, status: null, error: '', message: '' };
+window.isuDesktop?.getObsStage?.().then((config) => { obsStage.config = config || {}; }).catch(() => {});
 window.isuDesktop?.getNdiCardStatus?.().then((status) => { ndiCardStatus = status || ndiCardStatus; }).catch(() => {});
 setInterval(() => {
   if (state.activeView !== 'stage' || !window.isuDesktop?.getNdiCardStatus) return;
@@ -295,6 +298,7 @@ function stageModeLabel(mode = '') {
     graphic: 'Mirror Graphic',
     individual: 'Individual',
     playercard: 'Player Card (NDI)',
+    stagendi: 'Stage NDI (OBS)',
     blackout: 'Blackout',
     hold: 'Hold Graphic',
     offline: 'Offline'
@@ -307,6 +311,7 @@ function renderStageModeButtons(scope, station = '') {
     ['wall', 'Wall'],
     ['individual', 'Individual'],
     ['playercard', 'Player Card'],
+    ['stagendi', 'Stage NDI'],
     ['blackout', 'Blackout']
   ];
   return modes.map(([mode, label]) => `<button data-action="${scope === 'global' ? 'stage-global-mode' : 'stage-station-mode'}" data-stage-mode="${mode}" ${station ? `data-station="${station}"` : ''}>${label}</button>`).join('');
@@ -454,6 +459,7 @@ function renderStageDisplays() {
       <div class="section-heading"><div><span class="section-number">01</span><div><h2>Stage display clients</h2><p>${Number(stageDisplayStatus.onlineCount || 0)} of 10 stations online &middot; WebSocket port ${Number(stageDisplayStatus.port || 3178)}</p></div></div>
         <div class="heading-actions"><button class="secondary-button" data-action="stage-clear-previews">CLEAR PREVIEWS</button><button class="secondary-button" data-action="refresh-stage-displays">REFRESH</button></div>
       </div>
+      ${renderObsStagePanel(state, obsStage)}
       ${renderNdiCardPanel()}
       ${warnings.length ? `<article class="panel stage-warning-panel"><div class="panel-title compact"><div><h2>Stage warnings</h2><p>${warnings.map(escapeHtml).join('<br>')}</p></div></div></article>` : ''}
       <article class="panel stage-update-panel">
@@ -2661,6 +2667,35 @@ root.addEventListener('click', async (event) => {
     });
     stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
     toast(result?.ok ? `Stage preset: ${result.preset}` : result?.error || 'Stage preset unavailable');
+    render();
+    return;
+  }
+  if (button.dataset.action === 'obs-stage-mode') {
+    const station = button.dataset.obsStation;
+    const mode = button.dataset.obsMode;
+    commit(() => { setStageObsMode(state, station === 'all' ? 'all' : Number(station), mode); }, `Stage ${station === 'all' ? 'all stations' : `station ${station}`}: ${mode}`);
+    render();
+    return;
+  }
+  if (['obs-stage-save', 'obs-stage-setup', 'obs-stage-check'].includes(button.dataset.action)) {
+    const field = (k) => root.querySelector(`[data-obs-cfg="${k}"]`)?.value ?? '';
+    const [resolution, fps] = String(field('format') || '1280x720@30').split('@');
+    obsStage.error = ''; obsStage.message = button.dataset.action === 'obs-stage-setup' ? 'Setting up OBS…' : button.dataset.action === 'obs-stage-check' ? 'Checking OBS…' : '';
+    render();
+    try {
+      obsStage.config = (await window.isuDesktop?.saveObsStage({ host: field('host'), port: field('port'), password: field('password'), resolution, fps: Number(fps), controllerUrl: field('controllerUrl') })) || obsStage.config;
+      if (button.dataset.action === 'obs-stage-setup') {
+        const result = await window.isuDesktop?.setupObsStage();
+        if (!result?.ok) throw new Error(result?.error || 'OBS setup failed');
+        obsStage.message = `OBS ${result.obsVersion} ready: ${result.ndiNames.length} NDI outputs (${result.ndiNames[0]} … ${result.ndiNames.at(-1)})${result.log.length ? ` · added ${result.log.length} item(s)` : ' · nothing missing'}`;
+      }
+      if (button.dataset.action !== 'obs-stage-save') {
+        const status = await window.isuDesktop?.getObsStageStatus();
+        if (!status?.ok) throw new Error(status?.error || 'Could not read OBS status');
+        obsStage.status = status;
+        if (button.dataset.action === 'obs-stage-check') obsStage.message = '';
+      } else obsStage.message = 'Saved';
+    } catch (error) { obsStage.error = error.message; obsStage.message = ''; }
     render();
     return;
   }

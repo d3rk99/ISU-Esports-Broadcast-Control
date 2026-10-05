@@ -20,6 +20,7 @@ const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
 const OVERLAY_HOST = '127.0.0.1';
 const { OverlayEventHub } = require('./overlay-events.cjs');
+const { ObsClient, setupStageScenes, stageStatus: obsStageStatus } = require('./obs-stage.cjs');
 // Declared before recordDiagnostic is defined; onDrop only fires at runtime, after startup.
 const overlayClients = new OverlayEventHub({
   onDrop: ({ buffered }) => recordDiagnostic('overlay-client-dropped', `Dropped a stalled overlay viewer with ${Math.round(buffered / 1024)} KB unsent; it will reconnect`)
@@ -1140,6 +1141,46 @@ function registerIpc() {
   });
   ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('overwatch-ocr:set-name', (_event, details = {}) => overwatchOcrService.setPlayerName(details));
+  // OBS stage displays: OBS draws /overlays/stage.html?station=N and sends NDI "ISU Stage NN".
+  // Connection settings (incl. the obs-websocket password) live only in userData, never in
+  // the broadcast state.
+  const obsStagePath = () => path.join(app.getPath('userData'), 'obs-stage.json');
+  const readObsStage = () => { try { return JSON.parse(fs.readFileSync(obsStagePath(), 'utf8')); } catch { return {}; } };
+  const publicObsStage = (cfg = readObsStage()) => ({ host: cfg.host || '127.0.0.1', port: Number(cfg.port) || 4455, hasPassword: Boolean(cfg.password), resolution: cfg.resolution || '1280x720', fps: Number(cfg.fps) || 30, controllerUrl: cfg.controllerUrl || '' });
+  const obsWith = async (fn) => {
+    const cfg = readObsStage();
+    const client = new ObsClient();
+    try { await client.connect({ host: cfg.host || '127.0.0.1', port: Number(cfg.port) || 4455, password: cfg.password || '' }); return await fn(client, cfg); }
+    finally { client.close(); }
+  };
+  ipcMain.handle('obs-stage:get', () => publicObsStage());
+  ipcMain.handle('obs-stage:save', (_event, details = {}) => {
+    const prev = readObsStage();
+    const next = {
+      host: String(details.host || '127.0.0.1').trim().slice(0, 255),
+      port: Math.max(1, Math.min(65535, Math.round(Number(details.port) || 4455))),
+      // blank keeps the saved password; clearPassword removes it
+      password: details.clearPassword ? '' : (String(details.password || '') || prev.password || ''),
+      resolution: ['1280x720', '1920x1080'].includes(details.resolution) ? details.resolution : '1280x720',
+      fps: [30, 60].includes(Number(details.fps)) ? Number(details.fps) : 30,
+      controllerUrl: String(details.controllerUrl || '').trim().slice(0, 255)
+    };
+    fs.writeFileSync(obsStagePath(), JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 });
+    return publicObsStage(next);
+  });
+  ipcMain.handle('obs-stage:setup', async () => {
+    try {
+      return { ok: true, ...(await obsWith((client, cfg) => {
+        const [width, height] = (cfg.resolution || '1280x720').split('x').map(Number);
+        const lan = Object.values(os.networkInterfaces()).flat().find((e) => e?.family === 'IPv4' && !e.internal)?.address || '127.0.0.1';
+        return setupStageScenes(client, { controllerUrl: cfg.controllerUrl || `http://${lan}:${OVERLAY_PORT}`, width, height, fps: Number(cfg.fps) || 30 });
+      })) };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle('obs-stage:status', async () => {
+    try { return { ok: true, ...(await obsWith((client) => obsStageStatus(client))) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
   // NDI player cards: settings persist in userData; outputs are (re)built on change.
   ipcMain.handle('ndi-cards:status', () => ndiPlayerCards.status());
   ipcMain.handle('ndi-cards:configure', async (_event, settings = {}) => {

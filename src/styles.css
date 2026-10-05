@@ -766,3 +766,17 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-ocr-name-input:hover, .ow-ocr-name-input:focus { border-color: #46515c; background: #0d1217; }
 .ow-ocr-name-input.is-manual { color: #ffd37a; border-color: #6b5320; }
 .ow-dbg-cell button { justify-self: start; padding: 3px 8px; font-size: 11px; }
+
+/* Stage displays through OBS (NDI) */
+.obs-stage-connect { display: grid; grid-template-columns: 1.3fr .7fr 1fr .9fr 1.6fr; gap: 10px; }
+.obs-stage-actions { display: flex; gap: 8px; margin: 10px 0 4px; }
+.obs-stage-rows { display: grid; gap: 4px; margin-top: 6px; }
+.obs-stage-row { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.07); border-radius: 6px; background: rgba(255,255,255,.02); }
+.obs-stage-row b { font-variant-numeric: tabular-nums; }
+.obs-stage-all { border-color: rgba(244,121,32,.4); }
+.obs-stage-ndi { color: #9aa6b2; font-size: 12px; }
+.obs-stage-ndi.ok { color: #6ee7a8; }
+.obs-stage-ndi.bad { color: #ff8a80; }
+.obs-stage-modes { display: flex; gap: 4px; }
+.obs-stage-modes button { padding: 4px 8px; font-size: 11px; }
+.obs-stage-modes button.active { background: var(--game-accent, #f47920); color: #101012; border-color: transparent; }

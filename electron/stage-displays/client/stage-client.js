@@ -218,22 +218,28 @@ function preparePreset(details = {}) {
 let ndiPending = null;
 function drawNdiFrame() {
   const frame = ndiPending; ndiPending = null;
-  if (!frame || !ndiContext || currentMode !== 'playercard') return;
+  if (!frame || !ndiContext || !['playercard', 'stagendi'].includes(currentMode)) return;
   const { width, height, stride } = frame;
   const src = new Uint8Array(frame.data.buffer || frame.data, frame.data.byteOffset || 0, frame.data.byteLength || frame.data.length);
   if (ndiCanvas.width !== width || ndiCanvas.height !== height) { ndiCanvas.width = width; ndiCanvas.height = height; }
   const image = ndiContext.createImageData(width, height);
   const out = image.data;
-  for (let y = 0; y < height; y += 1) {
-    let s = y * stride; let o = y * width * 4;
-    for (let x = 0; x < width; x += 1, s += 4, o += 4) { out[o] = src[s + 2]; out[o + 1] = src[s + 1]; out[o + 2] = src[s]; out[o + 3] = 255; }
+  if (frame.rgba) {
+    // RGBX from the NDI SDK: copy whole rows, then force alpha (X is undefined).
+    for (let y = 0; y < height; y += 1) out.set(src.subarray(y * stride, y * stride + width * 4), y * width * 4);
+    for (let o = 3; o < out.length; o += 4) out[o] = 255;
+  } else {
+    for (let y = 0; y < height; y += 1) {
+      let s = y * stride; let o = y * width * 4;
+      for (let x = 0; x < width; x += 1, s += 4, o += 4) { out[o] = src[s + 2]; out[o + 1] = src[s + 1]; out[o + 2] = src[s]; out[o + 3] = 255; }
+    }
   }
   ndiContext.putImageData(image, 0, 0);
   document.body.classList.add('ndi-live');
 }
 window.stageClient?.onNdiFrame?.((frame) => { const first = !ndiPending; ndiPending = frame; if (first) requestAnimationFrame(drawNdiFrame); });
 window.stageClient?.onNdiStatus?.((status) => {
-  if (currentMode !== 'playercard') return;
+  if (!['playercard', 'stagendi'].includes(currentMode)) return;
   if (status.state === 'error') { document.body.classList.remove('ndi-live'); setSceneText('hold', {}); subhead.textContent = status.error; reportStatus(status.error); }
   else if (status.state === 'receiving') reportStatus('');
 });
@@ -242,13 +248,13 @@ async function applyMode(mode = 'hold', details = {}) {
   currentMode = mode;
   document.body.className = `mode-${mode}`;
   try {
-    if (mode !== 'playercard') document.body.classList.remove('ndi-live');
-    if (mode === 'playercard') {
+    if (!['playercard', 'stagendi'].includes(mode)) document.body.classList.remove('ndi-live');
+    if (mode === 'playercard' || mode === 'stagendi') {
       // Frames arrive over NDI (main process); show the hold scene until the first one lands.
       clearPresetFrame();
       stopGameplayStream();
       setSceneText('hold', details);
-      subhead.textContent = 'Connecting to player card…';
+      subhead.textContent = mode === 'stagendi' ? 'Connecting to OBS stage feed…' : 'Connecting to player card…';
     } else if (mode === 'gameplay') {
       clearPresetFrame();
       await startGameplayMirror();
@@ -303,6 +309,7 @@ function populateConfigForm() {
   setOptions(configForm.elements.stageDisplay, displayOptions, config.stageDisplay);
   configForm.elements.controller.value = config.controller || '';
   configForm.elements.stageKey.value = config.stageKey || '';
+  if (configForm.elements.obsHost) configForm.elements.obsHost.value = config.obsHost || '';
   configForm.elements.cursorLockEnabled.checked = Boolean(config.cursorLockEnabled);
   configForm.elements.startWithWindows.checked = Boolean(config.startWithWindows);
   configForm.elements.startWithWindows.disabled = !config.startupSupported;
@@ -354,6 +361,7 @@ async function saveClientConfig(event) {
       stationId: Number(configForm.elements.stationId.value),
       controller: configForm.elements.controller.value.trim(),
       stageKey: configForm.elements.stageKey.value.trim(),
+      obsHost: configForm.elements.obsHost?.value.trim() || '',
       playerDisplay: Number(configForm.elements.playerDisplay.value),
       stageDisplay: Number(configForm.elements.stageDisplay.value),
       wallPosition: Number(configForm.elements.wallPosition.value),

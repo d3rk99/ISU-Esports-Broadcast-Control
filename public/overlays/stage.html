@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISU Stage Station</title>
+    <link rel="stylesheet" href="./stage.css" />
+  </head>
+  <!-- One stage station, drawn by an OBS Browser Source (1280x720 or 1920x1080) and sent out as
+       NDI "ISU Stage NN" by a DistroAV filter. Mode + content come from the controller state
+       (state.stageObs.stations[NN]); the page switches scenes itself, so OBS never reloads. -->
+  <body class="stage-page">
+    <main id="stage" data-mode="hold">
+      <div class="st-bg" aria-hidden="true"><i></i><i></i><i></i></div>
+
+      <section class="st-scene st-hold" data-scene="hold">
+        <small class="st-eyebrow">IDAHO STATE ESPORTS</small>
+        <h1 class="st-title" id="st-hold-title">STAGE</h1>
+        <span class="st-sub" id="st-hold-sub">STATION 01</span>
+      </section>
+
+      <section class="st-scene st-intro" data-scene="intro">
+        <div class="st-team st-team--home"><div class="st-logo" id="st-home-logo"></div><strong id="st-home-name">HOME</strong></div>
+        <div class="st-vs">VS</div>
+        <div class="st-team st-team--away"><div class="st-logo" id="st-away-logo"></div><strong id="st-away-name">AWAY</strong></div>
+      </section>
+
+      <section class="st-scene st-player" data-scene="player">
+        <div class="st-hero" id="st-hero" aria-hidden="true"></div>
+        <div class="st-portrait" id="st-portrait"></div>
+        <div class="st-player-copy">
+          <small id="st-player-team">TEAM</small>
+          <strong id="st-player-handle">PLAYER</strong>
+          <span id="st-player-meta"></span>
+          <div class="st-stats" id="st-stats"></div>
+        </div>
+        <div class="st-station" id="st-station">01</div>
+      </section>
+
+      <section class="st-scene st-score" data-scene="score">
+        <div class="st-score-team"><div class="st-logo" id="st-score-home-logo"></div><b id="st-score-home">0</b></div>
+        <div class="st-score-mid"><small id="st-score-label">SERIES</small><span id="st-score-map"></span></div>
+        <div class="st-score-team"><b id="st-score-away">0</b><div class="st-logo" id="st-score-away-logo"></div></div>
+      </section>
+
+      <div class="st-black" aria-hidden="true"></div>
+    </main>
+    <script src="./stage.js" defer></script>
+  </body>
+</html>

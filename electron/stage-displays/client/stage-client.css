@@ -352,5 +352,5 @@ body.config-open #config-open { display: none; }
 
 /* NDI player card: full-screen canvas, only visible once frames arrive. */
 #ndi-card { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; display: none; z-index: 4; }
-body.mode-playercard.ndi-live #ndi-card { display: block; }
-body.mode-playercard.ndi-live #scene { display: none; }
+body.mode-playercard.ndi-live #ndi-card, body.mode-stagendi.ndi-live #ndi-card { display: block; }
+body.mode-playercard.ndi-live #scene, body.mode-stagendi.ndi-live #scene { display: none; }

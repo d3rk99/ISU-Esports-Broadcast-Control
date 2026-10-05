@@ -61,7 +61,9 @@ function normalizeClientConfig(saved = {}) {
     cursorLockEnabled: saved.cursorLockEnabled === true || String(saved.cursorLockEnabled).toLowerCase() === 'true',
     startWithWindows: saved.startWithWindows === true,
     // Shared stage key; must match the controller's. Empty = connect without a key.
-    stageKey: String(saved.stageKey || '').trim()
+    stageKey: String(saved.stageKey || '').trim(),
+    // OBS PC that sends "ISU Stage NN" (only needed if NDI discovery is blocked on the network)
+    obsHost: String(saved.obsHost || '').trim().slice(0, 255)
   };
 }
 
@@ -657,7 +659,7 @@ const ndiReceiver = new NdiCardReceiver({
   onFrame: (frame) => {
     if (!clientWindow || clientWindow.isDestroyed() || ndiFrameBusy) return;
     ndiFrameBusy = true;
-    clientWindow.webContents.send('stage-client:ndi-frame', { width: frame.width, height: frame.height, stride: frame.stride, data: frame.data });
+    clientWindow.webContents.send('stage-client:ndi-frame', { width: frame.width, height: frame.height, stride: frame.stride, data: frame.data, rgba: Boolean(frame.rgba) });
     setImmediate(() => { ndiFrameBusy = false; });
   },
   onStatus: (status) => { clientWindow?.webContents.send('stage-client:ndi-status', status); }
@@ -668,11 +670,12 @@ function controllerHost() {
 }
 
 function setMode(mode = 'hold', details = {}) {
-  const allowed = new Set(['gameplay', 'wall', 'graphic', 'individual', 'playercard', 'blackout', 'hold']);
+  const allowed = new Set(['gameplay', 'wall', 'graphic', 'individual', 'playercard', 'stagendi', 'blackout', 'hold']);
   const nextMode = allowed.has(String(mode)) ? String(mode) : 'hold';
   currentMode = nextMode;
   currentPreset = details.preset || '';
   if (nextMode === 'playercard') ndiReceiver.start({ station: config.stationId, controllerHost: controllerHost() }).catch(() => {});
+  else if (nextMode === 'stagendi') ndiReceiver.start({ station: config.stationId, kind: 'stage', controllerHost: controllerHost(), extraHosts: config.obsHost ? [config.obsHost] : [] }).catch(() => {});
   else ndiReceiver.stop();
   clientWindow?.webContents.send('stage-client:mode', {
     mode: nextMode,

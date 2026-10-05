@@ -1,3 +1,4 @@
+import { ensureStageObsState as ensureStageObs } from './obs-stage-panel.js';
 import { createInitialState, GAME_CONFIGS, GAME_ORDER } from './game-config.js';
 
 export const STORAGE_KEY = 'isu-esports-control-state-v1';
@@ -105,6 +106,7 @@ export function loadState(storage = window.localStorage) {
         });
       }
     }
+    ensureStageObs(parsed);
     return {
       ...fallback,
       ...parsed,
