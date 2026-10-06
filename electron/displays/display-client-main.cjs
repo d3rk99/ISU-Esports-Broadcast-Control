@@ -13,7 +13,24 @@ const { NdiReceiver } = require('./ndi-receiver.cjs');
 const { CursorLock } = require('./cursor-lock.cjs');
 
 const VERSION = require('../../package.json').version;
-if (process.env.DISPLAY_CLIENT_USER_DATA) app.setPath('userData', path.resolve(process.env.DISPLAY_CLIENT_USER_DATA));
+// Own name + own settings folder, so it never shares the controller's single-instance lock
+// (run from source, both apps would otherwise be "isu-esports-broadcast-control").
+app.setName('ISU Display Client');
+app.setPath('userData', process.env.DISPLAY_CLIENT_USER_DATA ? path.resolve(process.env.DISPLAY_CLIENT_USER_DATA) : path.join(app.getPath('appData'), 'ISU Display Client'));
+
+// Crash log: <userData>/display-client.log (Windows: %APPDATA%\ISU Display Client\display-client.log).
+const logPath = () => path.join(app.getPath('userData'), 'display-client.log');
+function logLine(text) {
+  try { fs.mkdirSync(app.getPath('userData'), { recursive: true }); fs.appendFileSync(logPath(), `[${new Date().toISOString()}] ${text}\n`); } catch {}
+}
+process.on('uncaughtException', (error) => {
+  logLine(`CRASH ${error?.stack || error}`);
+  try { require('electron').dialog.showErrorBox('ISU Display Client error', `${error?.stack || error}\n\nLog: ${logPath()}`); } catch {}
+});
+process.on('unhandledRejection', (error) => logLine(`unhandled rejection ${error?.stack || error}`));
+app.on('render-process-gone', (_e, _wc, details) => logLine(`renderer gone: ${details.reason} (${details.exitCode})`));
+app.on('child-process-gone', (_e, details) => logLine(`child gone: ${details.type} ${details.reason} (${details.exitCode})`));
+logLine(`start v${VERSION} ${process.platform} electron ${process.versions.electron}`);
 
 let config; let win = null; let settingsWin = null; let tray = null;
 let socket = null; let reconnectTimer = null; let reconnectDelay = 1000; let statusTimer = null;
@@ -54,7 +71,7 @@ function saveConfig(next) {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
   fs.writeFileSync(`${configPath()}.tmp`, JSON.stringify(config, null, 2));
   fs.renameSync(`${configPath()}.tmp`, configPath());
-  if (process.platform === 'win32') app.setLoginItemSettings({ openAtLogin: config.startWithWindows });
+  if (process.platform === 'win32') { try { app.setLoginItemSettings({ openAtLogin: config.startWithWindows }); } catch (error) { logLine(`start with Windows failed: ${error.message}`); } }
   return config;
 }
 
@@ -78,7 +95,7 @@ const ndi = new NdiReceiver({
     win.webContents.send('display:frame', frame);
     setImmediate(() => { frameBusy = false; });
   },
-  onStatus: (status) => { ndiState = { ...ndiState, ...status }; win?.webContents.send('display:ndi-status', ndiState); reportStatus(); }
+  onStatus: (status) => { if (status.error && status.error !== ndiState.error) logLine(`ndi: ${status.error}`); ndiState = { ...ndiState, ...status }; win?.webContents.send('display:ndi-status', ndiState); reportStatus(); }
 });
 
 function applyMode(next) {
@@ -192,22 +209,24 @@ ipcMain.on('display:mirror-status', (_e, status = {}) => {
 ipcMain.on('display:open-settings', openSettings);
 
 // ---- lifecycle ---------------------------------------------------------------------------
-if (!app.requestSingleInstanceLock()) app.quit();
+if (!app.requestSingleInstanceLock()) { logLine('another Display Client is already running: quitting'); app.quit(); }
 else {
   app.on('second-instance', openSettings);
   app.whenReady().then(() => {
     config = loadConfig();
+    logLine(`config ${JSON.stringify({ ...config, key: config.key ? '(set)' : '' })} displays ${screen.getAllDisplays().length}`);
     createWindow();
-    tray = new Tray(trayIcon());
-    tray.on('double-click', openSettings);
-    updateTray();
-    globalShortcut.register('Control+Alt+S', openSettings);
-    globalShortcut.register('Control+Alt+L', () => { saveConfig({ cursorLock: !config.cursorLock }); applyCursorLock(); });
+    try { tray = new Tray(trayIcon()); tray.on('double-click', openSettings); updateTray(); } catch (error) { logLine(`tray failed: ${error.message}`); }
+    try {
+      if (!globalShortcut.register('Control+Alt+S', openSettings)) logLine('Ctrl+Alt+S is taken by another app');
+      if (!globalShortcut.register('Control+Alt+L', () => { saveConfig({ cursorLock: !config.cursorLock }); applyCursorLock(); })) logLine('Ctrl+Alt+L is taken by another app');
+    } catch (error) { logLine(`shortcuts failed: ${error.message}`); }
     applyCursorLock();
     applyMode(mode); // NDI by default, before the controller even answers
     connect();
     statusTimer = setInterval(reportStatus, 2000);
-  });
+    logLine('ready');
+  }).catch((error) => { logLine(`STARTUP FAILED ${error?.stack || error}`); try { require('electron').dialog.showErrorBox('ISU Display Client could not start', `${error?.stack || error}\n\nLog: ${logPath()}`); } catch {} });
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     clearInterval(statusTimer); clearTimeout(reconnectTimer);
