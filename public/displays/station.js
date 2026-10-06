@@ -7,7 +7,18 @@
   const $ = (id) => document.getElementById(id);
   const setText = (id, v) => { const el = $(id); if (el) el.textContent = String(v ?? ''); };
   const pad = (n) => String(n).padStart(2, '0');
-  const safeUrl = (v) => { const u = String(v || ''); return (/^(https?:|data:image\/)/i.test(u) || u.startsWith('/')) ? u.replace(/["\\]/g, '') : ''; };
+  const safeUrl = (v) => {
+    let u = String(v || '');
+    // Uploads are served by the controller. Saved roster URLs can contain its
+    // loopback address, which points at the wrong PC when OBS runs remotely.
+    if (/^https?:\/\//i.test(u)) {
+      try {
+        const url = new URL(u);
+        if (url.pathname.startsWith('/user-assets/')) u = `${url.pathname}${url.search}`;
+      } catch { return ''; }
+    }
+    return (/^(https?:|data:image\/)/i.test(u) || u.startsWith('/')) ? u.replace(/["\\]/g, '') : '';
+  };
   const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('en-US') : '–'; };
 
   // Same >= 90% gamertag match the controller roster sync uses.
