@@ -53,10 +53,17 @@
     const slug = url.split('/').pop().replace(/\.[a-z]+$/i, '');
     const f = url.includes('/hero-art-hd/') ? faces?.[slug] : null;
     const vw = window.innerWidth; const vh = window.innerHeight;
-    if (!f) { Object.assign(img.style, { height: '100%', width: 'auto', left: 'auto', right: '0', top: 'auto', bottom: '0' }); return; }
+    if (!f) {
+      // Old placement: fit inside a 62vw x 100vh box, bottom-right, 2vw past the right edge.
+      const ratio = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 0.6;
+      const height = Math.min(vh, (vw * 0.62) / ratio); const width = height * ratio;
+      Object.assign(img.style, { height: `${height}px`, width: `${width}px`, left: 'auto', top: 'auto', right: `${-vw * 0.02}px`, bottom: '0' });
+      if (!img.naturalWidth) img.onload = () => { img.onload = null; placeHero(url); };
+      return;
+    }
     const [fx, fy, ar, fh] = f;
-    // Same head size for everyone, but never smaller than 1.1 or bigger than 2.6 screen heights.
-    const height = Math.min(2.6, Math.max(1.1, FACE_SIZE / (fh || TYPICAL_FACE))) * vh;
+    // Same head size for everyone, kept between 0.75 and 2.6 screen heights.
+    const height = Math.min(2.6, Math.max(0.75, FACE_SIZE / (fh || TYPICAL_FACE))) * vh;
     const width = height * ar;
     Object.assign(img.style, { height: `${height}px`, width: `${width}px`, right: 'auto', bottom: 'auto',
       left: `${vw * FACE_X - fx * width}px`, top: `${vh * FACE_Y - fy * height}px` });

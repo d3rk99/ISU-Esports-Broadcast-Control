@@ -21,3 +21,6 @@ card uses it to put every hero's face at the same spot with the same head size
 (FACE_X / FACE_Y / FACE_SIZE in public/displays/station.js). Made with OpenCV's YuNet face detector;
 heroes with masks/helmets (faceHeight 0) use the top of the silhouette instead.
 When you add or swap a picture, add its line (or the art falls back to bottom-right, fit to height).
+
+Hand-fixed entries live in `faces-manual.json` (Hanzo, Torbjorn, Winston = eyes on the line).
+Junkrat has no entry on purpose: he uses the old bottom-right placement.

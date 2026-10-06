@@ -198,10 +198,10 @@
   "cutout": true,
   "background_removed": "rembg birefnet-general",
   "face": {
-   "x": 0.082,
-   "y": 0.069,
-   "height": 0,
-   "found": "silhouette"
+   "x": 0.575,
+   "y": 0.24,
+   "height": 0.065,
+   "found": "manual: outline guess was his hair; real face found at lower confidence"
   }
  },
  "hazard": {
@@ -260,10 +260,7 @@
   ],
   "cutout": true,
   "face": {
-   "x": 0.266,
-   "y": 0.055,
-   "height": 0,
-   "found": "silhouette"
+   "found": "none: uses the old bottom-right placement (Derk liked it)"
   }
  },
  "juno": {
@@ -603,10 +600,10 @@
   ],
   "cutout": true,
   "face": {
-   "x": 0.492,
+   "x": 0.506,
    "y": 0.215,
-   "height": 0.1212,
-   "found": "face 0.88"
+   "height": 0.148,
+   "found": "manual: big head+beard in a short picture: use the full face box so he is not drawn too big"
   }
  },
  "tracer": {
@@ -682,10 +679,10 @@
   ],
   "cutout": true,
   "face": {
-   "x": 0.513,
-   "y": 0.055,
-   "height": 0,
-   "found": "silhouette"
+   "x": 0.712,
+   "y": 0.124,
+   "height": 0.1,
+   "found": "manual: gorilla: line up his eyes, not a face centre"
   }
  },
  "wuyang": {

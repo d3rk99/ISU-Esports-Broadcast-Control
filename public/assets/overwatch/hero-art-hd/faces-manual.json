@@ -1,0 +1,26 @@
+{
+ "hanzo": {
+  "face": [
+   0.575,
+   0.24,
+   0.065
+  ],
+  "why": "outline guess was his hair; real face found at lower confidence"
+ },
+ "torbjorn": {
+  "face": [
+   0.506,
+   0.215,
+   0.148
+  ],
+  "why": "big head+beard in a short picture: use the full face box so he is not drawn too big"
+ },
+ "winston": {
+  "face": [
+   0.712,
+   0.124,
+   0.1
+  ],
+  "why": "gorilla: line up his eyes, not a face centre"
+ }
+}
