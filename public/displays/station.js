@@ -35,8 +35,37 @@
     return null;
   }
 
+  // Hero art placement: line every hero's face up at the same spot. faces.json maps the art's
+  // file slug -> [faceX, faceY, width/height] (0-1 of the picture, from a face detector or the
+  // top of the silhouette). Art without an entry is shown bottom-right, scaled to fit.
+  const FACE_X = 0.70; const FACE_Y = 0.24; // where the face goes, as a share of the screen
+  const FACE_SIZE = 0.115;                  // face height on screen, as a share of the screen height
+  const TYPICAL_FACE = 0.083;               // face height in a typical picture (for art where no face was found)
+  let faces = null;
+  fetch('/assets/overwatch/hero-art-hd/faces.json', { cache: 'force-cache' }).then((r) => r.json()).then((f) => { faces = f; if (lastState) render(lastState); }).catch(() => { faces = {}; });
+  // faces.json: art file slug -> [faceX, faceY, width/height, faceHeight] (0-1 of the picture;
+  // faceHeight 0 = found from the silhouette top, no face size). Art without an entry: bottom-right, fit.
+  function placeHero(url) {
+    const img = $('player-hero-img');
+    if (!url) { img.classList.remove('on'); img.removeAttribute('src'); return; }
+    if (img.getAttribute('src') !== url) img.src = url;
+    img.classList.add('on');
+    const slug = url.split('/').pop().replace(/\.[a-z]+$/i, '');
+    const f = url.includes('/hero-art-hd/') ? faces?.[slug] : null;
+    const vw = window.innerWidth; const vh = window.innerHeight;
+    if (!f) { Object.assign(img.style, { height: '100%', width: 'auto', left: 'auto', right: '0', top: 'auto', bottom: '0' }); return; }
+    const [fx, fy, ar, fh] = f;
+    // Same head size for everyone, but never smaller than 1.1 or bigger than 2.6 screen heights.
+    const height = Math.min(2.6, Math.max(1.1, FACE_SIZE / (fh || TYPICAL_FACE))) * vh;
+    const width = height * ar;
+    Object.assign(img.style, { height: `${height}px`, width: `${width}px`, right: 'auto', bottom: 'auto',
+      left: `${vw * FACE_X - fx * width}px`, top: `${vh * FACE_Y - fy * height}px` });
+  }
+  let lastState = null;
+  window.addEventListener('resize', () => { if (lastState) render(lastState); });
   let lastPreset = '';
   function render(state) {
+    lastState = state;
     const game = state?.games?.[state?.selectedGame] || {};
     const teams = game.teams || [];
     const rosterKey = state?.activeRoster || 'varsity';
@@ -73,8 +102,7 @@
     const portrait = safeUrl(player?.playerImage);
     $('player-portrait').classList.toggle('has-image', Boolean(portrait));
     $('player-portrait').style.backgroundImage = portrait ? `url("${portrait}")` : '';
-    const heroUrl = safeUrl(hero ? game.characterArt?.[hero]?.url : '');
-    $('player-hero-art').style.backgroundImage = heroUrl ? `url("${heroUrl}")` : '';
+    placeHero(safeUrl(hero ? game.characterArt?.[hero]?.url : ''));
     const saved = game.overwatchLastMapStats?.[station];
     const stats = saved?.stats || live;
     setText('player-stats-label', stats ? (saved?.stats ? `LAST MAP${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}` : 'THIS MAP · LIVE') : '');

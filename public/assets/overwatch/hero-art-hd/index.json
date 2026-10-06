@@ -7,7 +7,13 @@
    1488
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.312,
+   "y": 0.073,
+   "height": 0.0779,
+   "found": "face 0.92"
+  }
  },
  "ashe": {
   "file": "ashe.webp",
@@ -17,7 +23,13 @@
    1385
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.585,
+   "y": 0.18,
+   "height": 0.0774,
+   "found": "face 0.89"
+  }
  },
  "baptiste": {
   "file": "baptiste.webp",
@@ -26,7 +38,13 @@
    694,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.545,
+   "y": 0.128,
+   "height": 0.0914,
+   "found": "face 0.92"
+  }
  },
  "bastion": {
   "file": "bastion.webp",
@@ -35,7 +53,13 @@
    1424,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.773,
+   "y": 0.062,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "brigitte": {
   "file": "brigitte.webp",
@@ -45,7 +69,13 @@
    1263
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.309,
+   "y": 0.182,
+   "height": 0.1003,
+   "found": "face 0.91"
+  }
  },
  "cassidy": {
   "file": "cassidy.webp",
@@ -54,7 +84,13 @@
    1132,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.564,
+   "y": 0.089,
+   "height": 0.0822,
+   "found": "face 0.86"
+  }
  },
  "domina": {
   "file": "domina.webp",
@@ -64,7 +100,13 @@
    1760
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.544,
+   "y": 0.081,
+   "height": 0.0804,
+   "found": "face 0.94"
+  }
  },
  "doomfist": {
   "file": "doomfist.webp",
@@ -74,7 +116,13 @@
    1484
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.475,
+   "y": 0.058,
+   "height": 0.0871,
+   "found": "face 0.92"
+  }
  },
  "dva": {
   "file": "dva.webp",
@@ -84,7 +132,13 @@
    1711
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.381,
+   "y": 0.114,
+   "height": 0.1019,
+   "found": "face 0.86"
+  }
  },
  "echo": {
   "file": "echo.webp",
@@ -94,7 +148,13 @@
    967
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.505,
+   "y": 0.081,
+   "height": 0.0885,
+   "found": "face 0.86"
+  }
  },
  "freja": {
   "file": "freja.webp",
@@ -104,7 +164,13 @@
    1505
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.364,
+   "y": 0.081,
+   "height": 0.069,
+   "found": "face 0.90"
+  }
  },
  "genji": {
   "file": "genji.webp",
@@ -114,7 +180,13 @@
    1546
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.379,
+   "y": 0.055,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "hanzo": {
   "file": "hanzo.webp",
@@ -124,7 +196,13 @@
    1663
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.082,
+   "y": 0.069,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "hazard": {
   "file": "hazard.webp",
@@ -134,7 +212,13 @@
    1632
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.475,
+   "y": 0.088,
+   "height": 0.0704,
+   "found": "face 0.90"
+  }
  },
  "illari": {
   "file": "illari.webp",
@@ -144,7 +228,13 @@
    1388
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.434,
+   "y": 0.1,
+   "height": 0.0914,
+   "found": "face 0.94"
+  }
  },
  "junker-queen": {
   "file": "junker-queen.webp",
@@ -153,7 +243,13 @@
    600,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.396,
+   "y": 0.103,
+   "height": 0.0779,
+   "found": "face 0.86"
+  }
  },
  "junkrat": {
   "file": "junkrat.webp",
@@ -162,7 +258,13 @@
    1228,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.266,
+   "y": 0.055,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "juno": {
   "file": "juno.webp",
@@ -172,7 +274,13 @@
    1258
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.47,
+   "y": 0.087,
+   "height": 0.0919,
+   "found": "face 0.92"
+  }
  },
  "kiriko": {
   "file": "kiriko.webp",
@@ -182,7 +290,13 @@
    1698
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.48,
+   "y": 0.144,
+   "height": 0.0674,
+   "found": "face 0.93"
+  }
  },
  "lifeweaver": {
   "file": "lifeweaver.webp",
@@ -192,7 +306,13 @@
    1734
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.653,
+   "y": 0.112,
+   "height": 0.0827,
+   "found": "face 0.92"
+  }
  },
  "lucio": {
   "file": "lucio.webp",
@@ -201,7 +321,13 @@
    634,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.531,
+   "y": 0.13,
+   "height": 0.0993,
+   "found": "face 0.90"
+  }
  },
  "mauga": {
   "file": "mauga.webp",
@@ -211,7 +337,13 @@
    1481
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.502,
+   "y": 0.108,
+   "height": 0.0816,
+   "found": "face 0.89"
+  }
  },
  "mei": {
   "file": "mei.webp",
@@ -220,7 +352,13 @@
    710,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.477,
+   "y": 0.126,
+   "height": 0.0965,
+   "found": "face 0.93"
+  }
  },
  "mercy": {
   "file": "mercy.webp",
@@ -230,7 +368,13 @@
    1561
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.614,
+   "y": 0.106,
+   "height": 0.0975,
+   "found": "face 0.93"
+  }
  },
  "mizuki": {
   "file": "mizuki.webp",
@@ -240,7 +384,13 @@
    1508
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.467,
+   "y": 0.053,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "moira": {
   "file": "moira.webp",
@@ -249,7 +399,13 @@
    696,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.54,
+   "y": 0.083,
+   "height": 0.0652,
+   "found": "face 0.80"
+  }
  },
  "orisa": {
   "file": "orisa.webp",
@@ -259,7 +415,13 @@
    1737
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.198,
+   "y": 0.052,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "pharah": {
   "file": "pharah.webp",
@@ -268,7 +430,13 @@
    1147,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.513,
+   "y": 0.118,
+   "height": 0.051,
+   "found": "face 0.90"
+  }
  },
  "ramattra": {
   "file": "ramattra.webp",
@@ -278,7 +446,13 @@
    1183
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.607,
+   "y": 0.12,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "reaper": {
   "file": "reaper.webp",
@@ -288,7 +462,13 @@
    1519
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.417,
+   "y": 0.058,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "reinhardt": {
   "file": "reinhardt.webp",
@@ -298,7 +478,13 @@
    1754
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.578,
+   "y": 0.285,
+   "height": 0.0502,
+   "found": "face 0.85"
+  }
  },
  "roadhog": {
   "file": "roadhog.webp",
@@ -307,7 +493,13 @@
    1477,
    1499
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.318,
+   "y": 0.068,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "shion": {
   "file": "shion.webp",
@@ -317,7 +509,13 @@
    1515
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.494,
+   "y": 0.073,
+   "height": 0.0817,
+   "found": "face 0.91"
+  }
  },
  "sigma": {
   "file": "sigma.webp",
@@ -327,7 +525,13 @@
    1414
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.522,
+   "y": 0.078,
+   "height": 0.0806,
+   "found": "face 0.92"
+  }
  },
  "sojourn": {
   "file": "sojourn.webp",
@@ -337,7 +541,13 @@
    1537
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.432,
+   "y": 0.109,
+   "height": 0.091,
+   "found": "face 0.90"
+  }
  },
  "soldier-76": {
   "file": "soldier-76.webp",
@@ -346,7 +556,13 @@
    959,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.327,
+   "y": 0.084,
+   "height": 0.0813,
+   "found": "face 0.77"
+  }
  },
  "sombra": {
   "file": "sombra.webp",
@@ -355,7 +571,13 @@
    1207,
    1204
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.432,
+   "y": 0.113,
+   "height": 0.1001,
+   "found": "face 0.92"
+  }
  },
  "symmetra": {
   "file": "symmetra.webp",
@@ -364,7 +586,13 @@
    831,
    1800
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.479,
+   "y": 0.235,
+   "height": 0.0675,
+   "found": "face 0.89"
+  }
  },
  "torbjorn": {
   "file": "torbjorn.webp",
@@ -373,7 +601,13 @@
    1500,
    1381
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.492,
+   "y": 0.215,
+   "height": 0.1212,
+   "found": "face 0.88"
+  }
  },
  "tracer": {
   "file": "tracer.webp",
@@ -383,7 +617,13 @@
    1669
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.705,
+   "y": 0.137,
+   "height": 0.0813,
+   "found": "face 0.89"
+  }
  },
  "vendetta": {
   "file": "vendetta.webp",
@@ -393,7 +633,13 @@
    1779
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.641,
+   "y": 0.2,
+   "height": 0.0674,
+   "found": "face 0.91"
+  }
  },
  "venture": {
   "file": "venture.webp",
@@ -403,7 +649,13 @@
    1468
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.317,
+   "y": 0.089,
+   "height": 0.0889,
+   "found": "face 0.94"
+  }
  },
  "widowmaker": {
   "file": "widowmaker.webp",
@@ -413,7 +665,13 @@
    1603
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.438,
+   "y": 0.101,
+   "height": 0.0852,
+   "found": "face 0.78"
+  }
  },
  "winston": {
   "file": "winston.webp",
@@ -422,7 +680,13 @@
    1182,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.513,
+   "y": 0.055,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "wuyang": {
   "file": "wuyang.webp",
@@ -432,7 +696,13 @@
    1480
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.534,
+   "y": 0.097,
+   "height": 0.0958,
+   "found": "face 0.92"
+  }
  },
  "zarya": {
   "file": "zarya.webp",
@@ -441,7 +711,13 @@
    1500,
    1417
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.359,
+   "y": 0.109,
+   "height": 0.1066,
+   "found": "face 0.92"
+  }
  },
  "zenyatta": {
   "file": "zenyatta.webp",
@@ -450,7 +726,13 @@
    1155,
    1500
   ],
-  "cutout": true
+  "cutout": true,
+  "face": {
+   "x": 0.507,
+   "y": 0.054,
+   "height": 0,
+   "found": "silhouette"
+  }
  },
  "anran": {
   "file": "anran.webp",
@@ -460,7 +742,13 @@
    1708
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.475,
+   "y": 0.144,
+   "height": 0.0804,
+   "found": "face 0.92"
+  }
  },
  "emre": {
   "file": "emre.webp",
@@ -470,7 +758,13 @@
    1769
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.395,
+   "y": 0.114,
+   "height": 0.0767,
+   "found": "face 0.91"
+  }
  },
  "jetpack-cat": {
   "file": "jetpack-cat.webp",
@@ -480,7 +774,13 @@
    1271
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.492,
+   "y": 0.164,
+   "height": 0.2494,
+   "found": "face 0.87"
+  }
  },
  "sierra": {
   "file": "sierra.webp",
@@ -490,6 +790,12 @@
    1771
   ],
   "cutout": true,
-  "background_removed": "rembg birefnet-general"
+  "background_removed": "rembg birefnet-general",
+  "face": {
+   "x": 0.484,
+   "y": 0.085,
+   "height": 0.0864,
+   "found": "face 0.94"
+  }
  }
 }

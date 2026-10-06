@@ -41,8 +41,12 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 
 /* player card */
 .player { grid-template-columns: 38vw 1fr; align-items: end; justify-items: start; }
-.hero-art { position: absolute; right: -2vw; bottom: 0; width: 62vw; height: 100%; background-size: contain; background-repeat: no-repeat; background-position: right bottom; opacity: .5; filter: drop-shadow(0 0 3vh rgba(0,0,0,.5)); -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 35%); mask-image: linear-gradient(90deg, transparent 0%, #000 35%); animation: drift 14s ease-in-out infinite alternate; }
-@keyframes drift { from { transform: scale(1.04); } to { transform: scale(1.1) translateX(-2vw); } }
+.hero-art { position: absolute; inset: 0; overflow: hidden; opacity: .5; -webkit-mask-image: linear-gradient(90deg, transparent 0%, transparent 30%, #000 55%); mask-image: linear-gradient(90deg, transparent 0%, transparent 30%, #000 55%); animation: drift 14s ease-in-out infinite alternate; }
+/* Placed by station.js from hero-art-hd/faces.json so every hero's FACE lands at the same spot
+   (FACE_X/FACE_Y of the screen) with about the same head size; the figure runs off the bottom. */
+.hero-art img { position: absolute; display: none; filter: drop-shadow(0 0 3vh rgba(0,0,0,.5)); }
+.hero-art img.on { display: block; }
+@keyframes drift { from { transform: scale(1.02); } to { transform: scale(1.06) translateX(-1vw); } }
 .portrait { position: relative; display: grid; place-items: center; align-self: end; width: 36vw; height: 92vh; background-size: contain; background-repeat: no-repeat; background-position: bottom center; filter: drop-shadow(0 0 4vh rgba(0,0,0,.6)); }
 .portrait b { font-size: 26vh; font-style: italic; color: color-mix(in srgb, var(--team) 55%, transparent); }
 .portrait.has-image b { display: none; }
