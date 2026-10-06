@@ -1,0 +1,74 @@
+// Runs public/displays/station.js against a tiny fake DOM (no browser) and checks the player card.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+function fakeDom() {
+  const els = new Map();
+  const make = (id) => {
+    const el = {
+      id, textContent: '', hidden: false, dataset: {}, children: [], attrs: {}, style: { _v: {}, setProperty(k, v) { this._v[k] = v; }, removeProperty(k) { delete this._v[k]; } },
+      classList: { _s: new Set(), add(c) { this._s.add(c); }, remove(c) { this._s.delete(c); }, toggle(c, on) { if (on === undefined ? !this._s.has(c) : on) this._s.add(c); else this._s.delete(c); }, contains(c) { return this._s.has(c); } },
+      get className() { return [...this.classList._s].join(' '); },
+      set className(v) { this.classList._s = new Set(String(v).split(/\s+/).filter(Boolean)); },
+      get offsetWidth() { return 0; }, get clientWidth() { return 800; }, get scrollWidth() { return 400; },
+      get parentElement() { return els.get('__copy'); },
+      get naturalWidth() { return 1600; }, get naturalHeight() { return 800; },
+      setAttribute(k, v) { this.attrs[k] = String(v); }, getAttribute(k) { return this.attrs[k] ?? null; }, removeAttribute(k) { delete this.attrs[k]; },
+      replaceChildren(...c) { this.children = c; }, append(...c) { this.children.push(...c); }, querySelector() { return null; }
+    };
+    Object.defineProperty(el, 'src', { get() { return el.attrs.src; }, set(v) { el.attrs.src = String(v); }, configurable: true });
+    return el;
+  };
+  const document = {
+    getElementById(id) { if (!els.has(id)) els.set(id, make(id)); return els.get(id); },
+    createElement(tag) { const e = make(tag); e.tag = tag; Object.defineProperty(e, 'innerText', { get() { return [this.textContent, ...this.children.map((c) => c.textContent ?? c)].join(' ').trim(); } }); return e; },
+    createTextNode(t) { return String(t); },
+    fonts: { ready: Promise.resolve() }
+  };
+  return { document, els };
+}
+
+function loadStation(station = 1, initialState = {}) {
+  const { document, els } = fakeDom();
+  class FakeImage { set src(v) { this._src = v; setTimeout(() => this.onload?.(), 0); } get src() { return this._src; } }
+  const window = { innerWidth: 1920, innerHeight: 1080, addEventListener() {}, isuLiveState: () => {} };
+  const ctx = { window, document, location: { search: `?station=${station}` }, URLSearchParams, Image: FakeImage, setTimeout, console,
+    getComputedStyle: () => ({ paddingRight: '0' }), fetch: async (url) => ({ json: async () => (String(url).includes('/api/state') ? initialState : {}) }), requestAnimationFrame: (f) => setTimeout(f, 0) };
+  ctx.window.window = ctx.window; Object.assign(ctx.window, { document });
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/displays/station.js'), 'utf8'), ctx);
+  return { render: ctx.window.__station.render, $: (id) => document.getElementById(id), els };
+}
+
+const rlState = (live) => ({ selectedGame: 'rocketleague', activeRoster: 'varsity', displays: { stations: { 1: { preset: 'player', team: '' } } },
+  games: { rocketleague: { teams: [{ name: 'IDAHO STATE', color: '#f47920' }, { name: 'BOISE STATE' }], match: {}, mapRows: [],
+    rocketLeague: { live },
+    rosters: { varsity: [{ handle: 'D3RK99', name: 'Derek', role: 'Striker', character: 'Fennec', characterImage: '/user-assets/fennec.png', stageStation: 1 }] }, awayRosters: { varsity: [] } } } });
+
+test('station player card (Rocket League): car PNG is the background, live RL stats by gamertag', async () => {
+  const state = rlState({ overtime: false, players: [{ name: 'SOMEONE', score: 50 }, { name: 'D3RK_99', score: 412, goals: 2, assists: 1, saves: 3, shots: 5, demos: 1, boost: 64 }] });
+  const page = loadStation(1, state);
+  page.render(state);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(page.$('player-hero-img').getAttribute('src'), '/user-assets/fennec.png', 'car PNG from the roster');
+  assert.ok(page.$('player-hero-img').classList.contains('is-car'));
+  assert.equal(page.$('player-stats-label').textContent, 'THIS GAME · LIVE');
+  const stats = page.$('player-stats').children.map((d) => d.children.map((c) => c.textContent).join(' '));
+  assert.deepEqual(stats, ['412 SCORE', '2 GOALS', '1 ASSISTS', '3 SAVES', '5 SHOTS', '1 DEMOS']);
+  assert.equal(page.$('player-boost').hidden, false);
+  assert.equal(page.$('player-boost-num').textContent, '64');
+  assert.equal(page.$('player-meta').textContent, 'Derek · Striker · Fennec');
+});
+
+test('station player card (Rocket League): no live match = no stats, boost hidden, car still shown', async () => {
+  const state = rlState({ players: [] });
+  const page = loadStation(1, state);
+  page.render(state);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(page.$('player-stats').children.length, 0);
+  assert.equal(page.$('player-boost').hidden, true);
+  assert.equal(page.$('player-hero-img').getAttribute('src'), '/user-assets/fennec.png');
+});

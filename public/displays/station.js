@@ -56,11 +56,22 @@
   fetch('/assets/overwatch/hero-art-hd/faces.json', { cache: 'force-cache' }).then((r) => r.json()).then((f) => { faces = f; if (lastState) render(lastState); }).catch(() => { faces = {}; });
   // faces.json: art file slug -> [faceX, faceY, width/height, faceHeight] (0-1 of the picture;
   // faceHeight 0 = found from the silhouette top, no face size). Art without an entry: bottom-right, fit.
-  function placeHero(url) {
+  function placeHero(url, kind = 'hero') {
     const img = $('player-hero-img');
     if (!url) { img.classList.remove('on'); img.removeAttribute('src'); return; }
     if (img.getAttribute('src') !== url) img.src = url;
     img.classList.add('on');
+    img.classList.toggle('is-car', kind === 'car');
+    if (kind === 'car') {
+      // Car PNGs are wide side/3-quarter shots: show the whole car, big, on the right half,
+      // sitting a little below the middle (behind the stats column).
+      const vw = window.innerWidth; const vh = window.innerHeight;
+      const ratio = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 16 / 9;
+      const width = Math.min(vw * 0.62, vh * 0.78 * ratio); const height = width / ratio;
+      Object.assign(img.style, { width: `${width}px`, height: `${height}px`, left: 'auto', top: 'auto', right: `${vw * 0.02}px`, bottom: `${Math.max(0, vh * 0.5 - height * 0.42)}px` });
+      if (!img.naturalWidth) img.onload = () => { img.onload = null; placeHero(url, kind); };
+      return;
+    }
     const slug = url.split('/').pop().replace(/\.[a-z]+$/i, '');
     const f = url.includes('/hero-art-hd/') ? faces?.[slug] : null;
     const vw = window.innerWidth; const vh = window.innerHeight;
@@ -142,16 +153,44 @@
     setText('player-station', pad(station));
     const live = player?.handle ? bestByTag(game.overwatchOcr?.live?.teams?.[found.side]?.players, player.handle) : null;
     const hero = live?.hero || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
-    setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, hero].filter(Boolean).join(' · '));
+    const isRL = state?.selectedGame === 'rocketleague';
+    setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, isRL ? player?.character : hero].filter(Boolean).join(' · '));
     showPortrait(safeUrl(player?.playerImage));
-    placeHero(safeUrl(hero ? game.characterArt?.[hero]?.url : ''));
-    const saved = game.overwatchLastMapStats?.[station];
-    const stats = saved?.stats || live;
-    setText('player-stats-label', stats ? (saved?.stats ? `LAST MAP${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}` : 'THIS MAP · LIVE') : '');
-    $('player-stats').replaceChildren(...(stats ? [['elims', 'ELIMS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS'], ['damage', 'DAMAGE'], ['healing', 'HEALING'], ['mitigation', 'MITIGATED']].map(([k, label]) => {
+    // Background art: Rocket League = the player's own car PNG (roster 'Player car PNG', manual or
+    // auto-rendered from the loadout); other games = the hero/agent/fighter art.
+    const isRocketLeague = state?.selectedGame === 'rocketleague';
+    const art = isRocketLeague ? player?.characterImage : (hero ? game.characterArt?.[hero]?.url : '');
+    placeHero(safeUrl(art), isRocketLeague ? 'car' : 'hero');
+    $('st').classList.toggle('game-rl', isRocketLeague);
+    // Stats: Rocket League = live from the RL Stats API (rocketLeague.live.players, matched by
+    // gamertag); Overwatch = scoreboard OCR (live, or saved "last map" after NEXT MATCH).
+    let rows = []; let label = '';
+    if (isRocketLeague) {
+      const rlLive = game.rocketLeague?.live;
+      const rlPlayer = player?.handle || player?.name ? bestByTag(rlLive?.players, player.handle || player.name) : null;
+      if (rlPlayer) {
+        label = rlLive?.overtime ? 'THIS GAME · OVERTIME' : 'THIS GAME · LIVE';
+        rows = [['score', 'SCORE'], ['goals', 'GOALS'], ['assists', 'ASSISTS'], ['saves', 'SAVES'], ['shots', 'SHOTS'], ['demos', 'DEMOS']].map(([k, l]) => [rlPlayer[k], l]);
+      }
+      const boost = rlPlayer && Number.isFinite(Number(rlPlayer.boost)) ? Math.max(0, Math.min(100, Number(rlPlayer.boost))) : null;
+      $('player-boost').hidden = boost === null;
+      if (boost !== null) { $('player-boost').style.setProperty('--boost', `${boost}%`); setText('player-boost-num', Math.round(boost)); }
+      $('player-portrait').classList.toggle('is-demolished', Boolean(rlPlayer?.demolished));
+    } else {
+      $('player-boost').hidden = true;
+      $('player-portrait').classList.remove('is-demolished');
+      const saved = game.overwatchLastMapStats?.[station];
+      const stats = saved?.stats || live;
+      if (stats) {
+        label = saved?.stats ? `LAST MAP${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}` : 'THIS MAP · LIVE';
+        rows = [['elims', 'ELIMS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS'], ['damage', 'DAMAGE'], ['healing', 'HEALING'], ['mitigation', 'MITIGATED']].map(([k, l]) => [stats[k], l]);
+      }
+    }
+    setText('player-stats-label', label);
+    $('player-stats').replaceChildren(...rows.map(([v, l]) => {
       const d = document.createElement('div'); const b = document.createElement('b'); const i = document.createElement('i');
-      b.textContent = num(stats[k]); i.textContent = label; d.append(b, i); return d;
-    }) : []));
+      b.textContent = num(v); i.textContent = l; d.append(b, i); return d;
+    }));
 
     // banner: 5-screen canvas, this station shows slot (station-1) % 5
     const canvas = $('banner-canvas');
