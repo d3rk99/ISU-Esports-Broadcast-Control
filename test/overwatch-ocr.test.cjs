@@ -41,12 +41,13 @@ const sample = (x, y) => { const lx = x - FIX.x; const ly = y - FIX.y; return lx
 
 // Same preprocessing as the live service: invert (light text on dark), 4x upscale, threshold,
 // white margin. Emits a binary PGM, which tesseract.js reads directly.
-function cellImage(roi, scale = 4, threshold = 120, pad = 20, shear = 0) {
+function cellImage(roi, scale = 4, threshold = 120, pad = 20, shear = 0) { return cellImageFrom(sample, roi, scale, threshold, pad, shear); }
+function cellImageFrom(sample, roi, scale = 4, threshold = 120, pad = 20, shear = 0) {
   const w = roi.w * scale + pad * 2; const h = roi.h * scale + pad * 2;
   const px = Buffer.alloc(w * h, 255);
   if (shear) {
     // Same as preprocessNativeImage: binarize at scale, then shift each row to undo the slant.
-    const inner = cellImage(roi, scale, threshold, 0).subarray(-(roi.w * scale * roi.h * scale));
+    const inner = cellImageFrom(sample, roi, scale, threshold, 0).subarray(-(roi.w * scale * roi.h * scale));
     const W = roi.w * scale; const H = roi.h * scale;
     for (let y = 0; y < H; y += 1) { const shift = Math.round(shear * (y - H / 2)); for (let x = 0; x < W; x += 1) { const sx = x - shift; if (sx >= 0 && sx < W) px[(y + pad) * w + x + pad] = inner[y * W + sx]; } }
     return Buffer.concat([Buffer.from(`P5\n${w} ${h}\n255\n`), px]);
@@ -417,4 +418,72 @@ test('Overwatch OCR: a hand-set player name sticks over OCR until cleared', asyn
   assert.equal(service.board.teams.away.players[0].name, 'HANZ0X', 'cleared -> OCR takes over again');
   assert.throws(() => service.setPlayerName({ side: 'middle', row: 0, name: 'x' }), /home or away/);
   assert.ok(states.length >= 2);
+});
+
+
+// Live boards move: a competitive Drive puts a small line under the name and pushes the name up,
+// and icons (perks) can nudge the stat columns. Build that from the real board: names of some
+// rows moved up 9 px with a fake drive line under them, and the whole stat block shifted 10 px
+// right. With auto-align the reads still match; the fixed boxes would miss.
+function shiftedBoardSampler({ nameUp = { 'home:1': 9, 'away:3': 9 }, statDx = 10, boardDy = 0 } = {}) {
+  const profile = getProfile();
+  if (boardDy) { const inner = shiftedBoardSampler({ nameUp, statDx, boardDy: 0 }); return (x, y) => inner(x, y - boardDy); }
+  const name = profile.columns.name; const nh = profile.nameCellHeight;
+  const statX0 = Math.min(...['elims', 'assists', 'deaths', 'damage', 'healing', 'mitigation'].map((f) => profile.columns[f].x)) - 4;
+  const rowAt = new Map();
+  for (const team of profile.teams) team.rowCenters.forEach((cy, row) => rowAt.set(`${team.id}:${row}`, cy));
+  return (x, y) => {
+    // stat block shifted right: read from the left
+    if (x >= statX0 + statDx) return sample(x - statDx, y);
+    if (x >= statX0) return 20;
+    if (x >= name.x - 8 && x < name.x + name.w) {
+      for (const [key, up] of Object.entries(nameUp)) {
+        const cy = rowAt.get(key); if (!cy) continue;
+        if (y >= cy - nh / 2 - up - 2 && y < cy - nh / 2 + nh - up + 2) return sample(x, y + up); // name moved up
+        if (y >= cy + nh / 2 - up + 2 && y < cy + nh / 2 - up + 9) return x < name.x + 60 ? 210 : 20; // drive line
+        if (y >= cy - nh / 2 && y < cy + nh / 2 + 4) return 20; // where the name was
+      }
+    }
+    return sample(x, y);
+  };
+}
+
+test('Overwatch OCR: auto-align finds names pushed up by Drives and a shifted stat block', () => {
+  const { alignBoard } = require('../electron/overwatch-ocr-parse.cjs');
+  const clean = alignBoard(sample, getProfile());
+  assert.equal(clean.dx, 0, 'clean board: no column shift');
+  for (const r of Object.values(clean.rows)) { assert.ok(Math.abs(r.statDy) <= 1); assert.ok(Math.abs(r.nameDy) <= 1); }
+  const moved = alignBoard(shiftedBoardSampler(), getProfile());
+  assert.ok(Math.abs(moved.dx - 10) <= 1, `stat block found ~10 px to the right (got ${moved.dx})`);
+  assert.ok(Math.abs(alignBoard(shiftedBoardSampler({ nameUp: {}, statDx: -18 }), getProfile()).dx + 18) <= 1, 'and 18 px to the left');
+  assert.ok(Math.abs(moved.rows['home:1'].nameDy + 9) <= 1, `home2 name found ~9 px up (got ${moved.rows['home:1'].nameDy})`);
+  assert.ok(Math.abs(moved.rows['away:3'].nameDy + 9) <= 1, `away4 name found ~9 px up (got ${moved.rows['away:3'].nameDy})`);
+  assert.ok(Math.abs(moved.rows['home:0'].nameDy) <= 1, 'untouched rows stay put');
+  const low = alignBoard(shiftedBoardSampler({ nameUp: {}, statDx: 0, boardDy: 9 }), getProfile());
+  for (const [k, r] of Object.entries(low.rows)) { assert.ok(Math.abs(r.statDy - 9) <= 1, `${k} stats found 9 px lower (got ${r.statDy})`); assert.ok(Math.abs(r.nameDy - 9) <= 1, `${k} name found 9 px lower (got ${r.nameDy})`); }
+});
+
+test('Overwatch OCR service: reads the moved board correctly with auto-align (and not without)', { timeout: 240000 }, async () => {
+  // Whole board 9 px lower (like the live match), two names pushed up by drives, stats 12 px right.
+  const shifted = shiftedBoardSampler({ nameUp: { 'home:1': 9, 'away:3': 9 }, statDx: 12, boardDy: 9 });
+  const run = async (autoAlign) => {
+    const capture = {
+      capture: async () => ({ fixture: true, width: 1920, height: 1080 }),
+      crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(shifted, roi, pre.scale || 4, pre.threshold || 120, 20, pre.shear || 0) }),
+      luminance: (_f, x, y) => shifted(x, y)
+    };
+    const ocr = new TesseractOcrEngine();
+    const service = new OverwatchOcrService({ capture, ocr });
+    service.settings.autoAlign = autoAlign;
+    try { for (let i = 0; i < 3; i += 1) await service.sweep(); } finally { await ocr.close(); }
+    return service.board;
+  };
+  const board = await run(true);
+  const got = (side, row) => { const p = board.teams[side].players[row]; return [p.ultimate, p.damage, p.healing, p.mitigation]; };
+  for (const side of ['home', 'away']) EXPECTED[side].forEach((row, i) => assert.deepEqual(got(side, i), row, `${side}${i + 1} with auto-align`));
+  assert.equal(board.teams.home.players[1].name, 'DAMAGE 2');
+  assert.equal(board.teams.away.players[3].name, 'SUPPORT 4');
+  const fixed = await run(false);
+  const misses = ['home', 'away'].flatMap((side) => EXPECTED[side].map((row, i) => JSON.stringify([fixed.teams[side].players[i].ultimate, fixed.teams[side].players[i].damage, fixed.teams[side].players[i].healing, fixed.teams[side].players[i].mitigation]) !== JSON.stringify(row))).filter(Boolean).length;
+  assert.ok(misses >= 5, `fixed boxes should miss on the moved board (missed ${misses}/10 rows)`);
 });

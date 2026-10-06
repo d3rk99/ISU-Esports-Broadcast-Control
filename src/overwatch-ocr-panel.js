@@ -20,6 +20,19 @@ const FIELD_LABEL = { name: 'NAME', ultimate: 'ULT', elims: 'E', assists: 'A', d
 // Debug capture: the full captured frame with every box drawn on it (green = accepted,
 // red = rejected), and per cell the raw crop, the black/white image the OCR reads, the raw
 // OCR text + confidence, the digit count measured from the pixels and the accepted value.
+// What auto-align moved (px on the 1080p grid), so a misplaced box can be traced.
+function alignSummary(align) {
+  if (!align) return '<p class="ow-ocr-status">AUTO-ALIGN off · boxes at the profile positions</p>';
+  const rows = Object.entries(align.rows || {}).map(([key, r]) => {
+    const [side, row] = key.split(':');
+    const bits = [];
+    if (r.statDy) bits.push(`stats ${r.statDy > 0 ? '+' : ''}${r.statDy}`);
+    if (r.nameDy) bits.push(`name ${r.nameDy > 0 ? '+' : ''}${r.nameDy}`);
+    return bits.length ? `${side === 'home' ? 'TOP' : 'BOT'} ${Number(row) + 1}: ${bits.join(', ')}` : '';
+  }).filter(Boolean);
+  return `<p class="ow-ocr-status">AUTO-ALIGN · stat columns ${align.dx ? `${align.dx > 0 ? '+' : ''}${align.dx} px` : 'in place'}${rows.length ? ` · ${rows.join(' · ')}` : ' · every row in place'}</p>`;
+}
+
 export function renderOverwatchDebugCapture(debug) {
   if (!debug) return '';
   const pct = (v, total) => `${((v / total) * 100).toFixed(3)}%`;
@@ -33,6 +46,7 @@ export function renderOverwatchDebugCapture(debug) {
   const age = Math.max(0, Math.round((Date.now() - Number(debug.capturedAt || Date.now())) / 1000));
   return `<div class="ow-dbg">
     <p class="ow-ocr-status">DEBUG CAPTURE · ${age}s old · ${esc(debug.sourceName || 'window')} · ${debug.sourceWidth}×${debug.sourceHeight} → ${debug.width}×${debug.height} · ${esc(debug.backend || '')}</p>
+    ${alignSummary(debug.align)}
     ${debug.frameDataUrl ? `<div class="ow-dbg-frame"><img src="${esc(debug.frameDataUrl)}" alt="Captured Overwatch frame">${boxes}</div>` : ''}
     ${debug.heroes?.length ? `<p class="ow-ocr-status">HEROES · ${debug.heroes.map((h) => `${h.side === 'home' ? 'TOP' : 'BOT'} ${h.row + 1}: ${esc(h.hero || `? (${h.candidate} ${h.score})`)}`).join(' · ')}</p>` : ''}
     <div class="ow-dbg-cells">${debug.cells.map(cell).join('')}</div>
@@ -60,6 +74,7 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-ocr="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>READ SCOREBOARD</b><small>Off by default; turn on when Observer 3 is on the board</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-stat-cards ${game.overwatchShowStatCards ? 'checked' : ''}><i></i><span><b>PLAYER STAT CARDS (EXPERIMENTAL)</b><small>Bottom-left / bottom-right cards on the scoreboard overlay</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-hero-autofill ${game.overwatchHeroAutofill === false ? '' : 'checked'}><i></i><span><b>AUTO-FILL ROSTER FROM OCR</b><small>Matches gamertags at ≥90% similarity: hero + role follow the game; empty roster slots get filled from the board</small></span></label>
+      <label class="rl-enable-toggle"><input type="checkbox" data-ow-ocr="autoAlign" ${s.autoAlign === false ? '' : 'checked'}><i></i><span><b>AUTO-ALIGN BOXES</b><small>Follows names pushed up by competitive Drives and columns nudged by icons; DEBUG CAPTURE shows what moved</small></span></label>
       <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-ow-ocr="windowName" value="${esc(s.windowName || 'Overwatch')}"></label>
       <label class="field"><span>READ EVERY (MS)</span><input type="number" min="200" max="5000" step="50" data-ow-ocr="intervalMs" value="${Number(s.intervalMs) || 500}"></label>
       <label class="field"><span>CPU CORES (OCR WORKERS)</span><input type="number" min="1" max="16" step="1" data-ow-ocr="workers" value="${Number(s.workers) || 4}"><small>More = faster reads; default is half your cores</small></label>

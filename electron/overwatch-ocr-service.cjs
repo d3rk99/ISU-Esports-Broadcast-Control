@@ -9,7 +9,7 @@
 // scores keep working; OCR only fills the player stats.
 const os = require('node:os');
 const { HeroMatcher } = require('./overwatch-hero-match.cjs');
-const { getProfile, cellRois, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
+const { getProfile, cellRois, alignBoard, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
 
 // Default OCR workers: half the CPU cores, 2..8 (each Tesseract worker is one thread).
 const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
@@ -24,7 +24,8 @@ function normalizeSettings(s = {}) {
     windowName: String(s.windowName || DEFAULTS.windowName).slice(0, 120),
     profileId: String(s.profileId || DEFAULTS.profileId),
     intervalMs: Math.max(200, Math.min(5000, Math.round(Number(s.intervalMs) || DEFAULTS.intervalMs))),
-    workers: Math.max(1, Math.min(16, Math.round(Number(s.workers) || DEFAULTS.workers)))
+    workers: Math.max(1, Math.min(16, Math.round(Number(s.workers) || DEFAULTS.workers))),
+    autoAlign: s.autoAlign !== false // follow rows/names that drives & icons push around
   };
 }
 
@@ -125,7 +126,12 @@ class OverwatchOcrService {
       const frame = await this.capture.capture(this.settings.windowName);
       const profile = getProfile(this.settings.profileId);
       this.checkFrame(frame, profile);
-      const cells = cellRois(profile);
+      // Auto-align: find where the rows/names really are (drives push names up, icons nudge
+      // columns) and move the boxes there. A clean board gives ~0 shifts.
+      const align = this.settings.autoAlign !== false && typeof this.capture.luminance === 'function'
+        ? alignBoard((x, y) => this.capture.luminance(frame, x, y), profile) : null;
+      this.lastAlign = align;
+      const cells = cellRois(profile, align);
       // Read cells in parallel across the OCR engine's worker pool (one CPU core per worker).
       this.ocr.observerConcurrency = this.settings.workers;
       const reads = new Array(cells.length);
@@ -142,7 +148,8 @@ class OverwatchOcrService {
       if (typeof this.capture.luminance === 'function') {
         const ring = profile.ultimateRing;
         const lum = (x, y) => this.capture.luminance(frame, x, y);
-        for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
+        for (const team of profile.teams) team.rowCenters.forEach((cy0, row) => {
+          const cy = cy0 + (align?.rows?.[`${team.id}:${row}`]?.statDy || 0);
           const read = reads.find((r) => r.side === team.id && r.row === row && r.field === 'ultimate');
           if (isReadyDisc(lum, ring.cx, cy + ring.dy, ring.readyRadius || 12)) { read.value = 'READY'; return; }
           if (read.value !== null) return;
@@ -203,7 +210,8 @@ class OverwatchOcrService {
     this.checkFrame(frame, profile);
     const lum = typeof this.capture.luminance === 'function' ? (x, y) => this.capture.luminance(frame, x, y) : null;
     const cells = [];
-    for (const cell of cellRois(profile)) {
+    const align = this.settings.autoAlign !== false && lum ? alignBoard(lum, profile) : null;
+    for (const cell of cellRois(profile, align)) {
       const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}) });
       const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
       cells.push({
@@ -217,7 +225,7 @@ class OverwatchOcrService {
     }
     const heroes = this.readHeroes(frame, profile).map((r) => ({ side: r.side, row: r.row, hero: r.value, candidate: r.match.candidate, score: r.match.score, runnerUp: r.match.runnerUp }));
     return {
-      heroes,
+      heroes, align,
       capturedAt: this.now(), sourceName: frame.sourceName || '', backend: frame.backend || '',
       width: frame.width, height: frame.height, sourceWidth: frame.sourceWidth || frame.width, sourceHeight: frame.sourceHeight || frame.height,
       frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', cells
