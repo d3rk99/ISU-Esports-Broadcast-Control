@@ -158,9 +158,9 @@ export function applyCompanionAction(state, request = {}) {
     return { message: `Program output selected: ${output}`, outputChanged: true };
   }
   if (action === 'display.preset') {
-    const station = request.station === undefined || request.station === '' || request.station === 'all' ? 'all' : Number(request.station);
+    const station = request.station === undefined || request.station === '' ? 'all' : String(request.station);
     try { applyDisplayPreset(state, station, String(request.preset || ''), String(request.team || '')); } catch (error) { throw actionError(error.message); }
-    return { message: `Displays ${station === 'all' ? 'all' : `station ${station}`}: ${request.preset}` };
+    return { message: `Displays ${/^\d+$/.test(station) ? `station ${station}` : station}: ${request.preset}` };
   }
   if (action === 'game.select') {
     if (!GAME_CONFIGS[request.game]) throw actionError(`Unknown game: ${request.game || '(empty)'}`);

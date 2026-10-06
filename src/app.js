@@ -2142,9 +2142,10 @@ root.addEventListener('click', async (event) => {
     return;
   }
   if (button.dataset.action === 'display-preset') {
-    const station = button.dataset.station === 'all' ? 'all' : Number(button.dataset.station);
+    const station = button.dataset.station; // 'all' | '1-5' | '6-10' | '1'..'10'
     const team = button.dataset.team || '';
-    commit(() => { applyDisplayPreset(state, station, button.dataset.preset, team); }, `Displays ${station === 'all' ? 'all' : String(station).padStart(2, '0')}: ${button.dataset.preset}`);
+    const label = /^\d+$/.test(station) ? station.padStart(2, '0') : station;
+    commit(() => { applyDisplayPreset(state, station, button.dataset.preset, team); }, `Displays ${label}: ${button.dataset.preset}`);
     render();
     return;
   }

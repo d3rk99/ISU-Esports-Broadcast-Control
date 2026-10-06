@@ -59,3 +59,21 @@ test('NDI receiver: source name match, missing runtime reported (not thrown)', a
   await r.start({ source: 'ISU Stage 01' });
   assert.equal(statuses[0].state, 'error');
 });
+
+test('display manager: groups 1-5 and 6-10 switch separately', async () => {
+  const dm = new DisplayManager({ port: 0, host: '127.0.0.1' });
+  await dm.start();
+  try {
+    const s2 = await station(dm.port, { station: 2, hostname: 'V2' });
+    const s7 = await station(dm.port, { station: 7, hostname: 'JV7' });
+    assert.equal(dm.setMode('6-10', 'mirror').ok, true);
+    assert.equal(dm.setMode('1-5', 'ndi').ok, true); await wait(80);
+    assert.equal(s7.messages.at(-1).mode, 'mirror', '6-10 stays on game mirror');
+    assert.equal(s2.messages.at(-1).mode, 'ndi', '1-5 on NDI');
+    const modes = dm.status().stations.map((s) => s.mode);
+    assert.deepEqual(modes, ['ndi', 'ndi', 'ndi', 'ndi', 'ndi', 'mirror', 'mirror', 'mirror', 'mirror', 'mirror']);
+    assert.deepEqual(dm.setMode('6-10', 'mirror').stations, [6, 7, 8, 9, 10]);
+    assert.equal(dm.setMode('11-15', 'ndi').ok, false);
+    s2.ws.close(); s7.ws.close();
+  } finally { await dm.stop(); }
+});

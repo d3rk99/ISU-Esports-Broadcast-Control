@@ -61,6 +61,8 @@ const DISPLAY_PRESET_CHOICES = [
 
 const STATION_CHOICES = [
 	{ id: '', label: 'All stations' },
+	{ id: '1-5', label: 'Stations 1-5' },
+	{ id: '6-10', label: 'Stations 6-10' },
 	...Array.from({ length: 10 }, (_item, index) => ({
 		id: String(index + 1),
 		label: `Station ${String(index + 1).padStart(2, '0')}`,

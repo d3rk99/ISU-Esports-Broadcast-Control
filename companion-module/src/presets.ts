@@ -93,6 +93,13 @@ export function UpdatePresets(self: ModuleInstance): void {
 					presets: ['display-mirror', 'display-ndi'],
 				},
 				{
+					id: 'display-groups',
+					name: 'Stations 1-5 / 6-10',
+					description: 'Control each half of the stage on its own (two matches at once)',
+					type: 'simple',
+					presets: ['display-a-mirror', 'display-a-ndi', 'display-a-player', 'display-a-banner', 'display-b-mirror', 'display-b-ndi', 'display-b-player', 'display-b-banner'],
+				},
+				{
 					id: 'display-presets',
 					name: 'NDI presets (all stations)',
 					type: 'simple',
@@ -158,29 +165,37 @@ export function UpdatePresets(self: ModuleInstance): void {
 		'display-banner': displayPreset('Team banners', 'TEAM\nBANNERS', 'banner', ORANGE),
 		'display-score': displayPreset('Series score', 'SERIES\nSCORE', 'score', ORANGE),
 		'display-black': displayPreset('Black', 'BLACK', 'black', BLACK),
+		'display-a-mirror': displayModePreset('1-5\nMIRROR', 'mirror', GREEN, '1-5'),
+		'display-a-ndi': displayModePreset('1-5\nNDI', 'ndi', BLUE, '1-5'),
+		'display-a-player': displayPreset('1-5 player cards', '1-5\nCARDS', 'player', ORANGE, '1-5'),
+		'display-a-banner': displayPreset('1-5 banners', '1-5\nBANNER', 'banner', ORANGE, '1-5'),
+		'display-b-mirror': displayModePreset('6-10\nMIRROR', 'mirror', GREEN, '6-10'),
+		'display-b-ndi': displayModePreset('6-10\nNDI', 'ndi', BLUE, '6-10'),
+		'display-b-player': displayPreset('6-10 player cards', '6-10\nCARDS', 'player', ORANGE, '6-10'),
+		'display-b-banner': displayPreset('6-10 banners', '6-10\nBANNER', 'banner', ORANGE, '6-10'),
 	}
 
 	self.setPresetDefinitions(structure, presets)
 }
 
-function displayModePreset(text: string, mode: 'mirror' | 'ndi', color: number) {
+function displayModePreset(text: string, mode: 'mirror' | 'ndi', color: number, station = '') {
 	return {
 		type: 'simple' as const,
-		name: `Displays: ${mode === 'mirror' ? 'Game mirror' : 'NDI'} (all)`,
+		name: `Displays: ${mode === 'mirror' ? 'Game mirror' : 'NDI'} (${station || 'all'})`,
 		style: { text, size: 'auto' as const, color: WHITE, bgcolor: color, show_topbar: false },
-		steps: [{ down: [{ actionId: 'display_mode' as const, options: { station: '', mode } }], up: [] }],
+		steps: [{ down: [{ actionId: 'display_mode' as const, options: { station, mode } }], up: [] }],
 		feedbacks: [],
 	}
 }
 
-function displayPreset(name: string, text: string, preset: 'idle' | 'intro' | 'player' | 'banner' | 'score' | 'black', color: number) {
+function displayPreset(name: string, text: string, preset: 'idle' | 'intro' | 'player' | 'banner' | 'score' | 'black', color: number, station = '') {
 	return {
 		type: 'simple' as const,
-		name: `Displays: ${name} (all)`,
+		name: `Displays: ${name} (${station || 'all'})`,
 		style: { text, size: 'auto' as const, color: WHITE, bgcolor: color, show_topbar: false },
-		steps: [{ down: [{ actionId: 'display_preset' as const, options: { station: '', preset, team: '' as const } }], up: [] }],
+		steps: [{ down: [{ actionId: 'display_preset' as const, options: { station, preset, team: '' as const } }], up: [] }],
 		feedbacks: [
-			{ feedbackId: 'display_preset' as const, options: { station: '1', preset }, style: { color: BLACK, bgcolor: GREEN } },
+			{ feedbackId: 'display_preset' as const, options: { station: station === '6-10' ? '6' : '1', preset }, style: { color: BLACK, bgcolor: GREEN } },
 		],
 	}
 }

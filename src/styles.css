@@ -725,3 +725,12 @@ input[type="range"]:focus { border-color: #35353a; }
 .obs-actions button.primary { border-color: #f47920; background: #f47920; color: #101012; }
 .displays-view .bad { color: #ff8a8a; }
 @media (max-width: 1200px) { .disp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .disp-preset-grid { grid-template-columns: repeat(3, 1fr); } .obs-connect { grid-template-columns: 1fr 1fr; } }
+
+.disp-group { margin-bottom: 14px; }
+.disp-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.disp-group-head h2 { margin: 0; font-size: 16px; }
+.disp-group-head p { margin: 2px 0 0; color: #8a94a3; font-size: 11px; }
+.disp-group-modes { grid-template-columns: auto auto; }
+.disp-group-modes button { padding: 8px 14px; }
+.disp-group .disp-grid { margin-bottom: 10px; }
+.disp-group .disp-preset-grid .disp-preset-btn small { display: none; }

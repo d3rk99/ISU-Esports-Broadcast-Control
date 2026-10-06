@@ -9,11 +9,11 @@ const pad = (n) => String(n).padStart(2, '0');
 
 export function ensureDisplayView(state) { return ensureDisplayState(state); }
 
-function stationRows(state, displayStatus, obsStatus) {
+function stationRows(state, displayStatus, obsStatus, numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
   const rows = new Map((displayStatus.stations || []).map((s) => [s.station, s]));
   const obs = new Map((obsStatus?.stations || []).map((s) => [s.station, s]));
-  return Array.from({ length: 10 }, (_v, i) => {
-    const n = i + 1; const s = rows.get(n) || { station: n, online: false, mode: 'ndi', source: `ISU Stage ${pad(n)}` };
+  return numbers.map((n) => {
+    const s = rows.get(n) || { station: n, online: false, mode: 'ndi', source: `ISU Stage ${pad(n)}` };
     const preset = state.displays.stations[n]?.preset || 'idle';
     const feed = obs.get(n);
     const health = !s.online ? 'offline' : s.error ? s.error : s.mode === 'mirror' ? 'mirroring' : s.state === 'receiving' ? `NDI ${s.fps || ''} fps`.trim() : s.state || 'connecting';
@@ -39,8 +39,19 @@ export function renderDisplaysView(state, { displayStatus = {}, obsDisplays = {}
   const cfg = { ...saved, ...draft };
   if (draft.format) [cfg.resolution, cfg.fps] = draft.format.split('@');
   const obs = obsDisplays.status || null;
-  const counts = DISPLAY_PRESETS.map((p) => [p.id, Object.values(state.displays.stations).filter((s) => s.preset === p.id).length]);
-  const presetButtons = DISPLAY_PRESETS.map((p) => `<button class="disp-preset-btn ${counts.find(([id]) => id === p.id)[1] === 10 ? 'active' : ''}" data-action="display-preset" data-station="all" data-preset="${p.id}" title="${esc(p.description)}"><b>${esc(p.label)}</b><small>${esc(p.description)}</small></button>`).join('');
+  // Group control: each half (1-5, 6-10) can be a different match, so each has its own
+  // mirror/NDI + preset buttons (e.g. one half stays on game mirror while the other shows player cards).
+  const all = Array.from({ length: 10 }, (_v, i) => i + 1);
+  const presetOf = (n) => state.displays.stations[n]?.preset || 'idle';
+  const modeOf = (n) => (displayStatus.stations || []).find((s) => s.station === n)?.mode || 'ndi';
+  const allSame = (list, fn, v) => list.every((n) => fn(n) === v);
+  const presetButtons = (group, list) => DISPLAY_PRESETS.map((p) => `<button class="disp-preset-btn ${allSame(list, presetOf, p.id) ? 'active' : ''}" data-action="display-preset" data-station="${group}" data-preset="${p.id}" title="${esc(p.description)}"><b>${esc(p.label)}</b><small>${esc(p.description)}</small></button>`).join('');
+  const modeButtons = (group, list, label) => `<button class="${allSame(list, modeOf, 'mirror') ? 'active' : ''}" data-action="display-mode" data-station="${group}" data-mode="mirror">${label}: GAME MIRROR</button><button class="${allSame(list, modeOf, 'ndi') ? 'active' : ''}" data-action="display-mode" data-station="${group}" data-mode="ndi">${label}: NDI</button>`;
+  const group = (key, title, sub, list) => `<article class="panel disp-group" data-key="disp-group-${key}">
+      <div class="disp-group-head"><div><h2>${title}</h2><p>${sub}</p></div><div class="disp-modes disp-group-modes">${modeButtons(key, list, key === '1-5' ? '1-5' : '6-10')}</div></div>
+      <div class="disp-grid">${stationRows(state, displayStatus, obs, list)}</div>
+      <div class="disp-preset-grid">${presetButtons(key, list)}</div>
+    </article>`;
   const obsSummary = obs ? `OBS ${esc(obs.resolution)} · ${esc(obs.fps)}/${esc(obs.targetFps)} fps · CPU ${esc(obs.cpu)}% · render ${esc(obs.renderMs)} ms · skipped ${esc(obs.skippedRender)}/${esc(obs.skippedOutput)} · ${obs.stations.filter((s) => s.active && s.ndiOn).length}/10 feeds live` : 'OBS not checked yet';
   return `<section class="view-stack displays-view">
     <div class="section-heading"><div><span class="section-number">01</span><div><h2>Stations</h2><p>${Number(displayStatus.onlineCount || 0)} of 10 display clients online · port ${Number(displayStatus.port || 3178)}${displayStatus.error ? ` · <b class="bad">${esc(displayStatus.error)}</b>` : ''}</p></div></div>
@@ -49,11 +60,12 @@ export function renderDisplaysView(state, { displayStatus = {}, obsDisplays = {}
         <button class="secondary-button" data-action="display-mode" data-station="all" data-mode="ndi">ALL: NDI</button>
       </div>
     </div>
-    <div class="disp-grid">${stationRows(state, displayStatus, obs)}</div>
+    ${group('1-5', 'Stations 1-5', 'Game mirror or NDI preset for these five only', [1, 2, 3, 4, 5])}
+    ${group('6-10', 'Stations 6-10', 'Game mirror or NDI preset for these five only', [6, 7, 8, 9, 10])}
 
     <article class="panel" data-key="disp-presets">
-      <div class="panel-title"><span class="section-number">02</span><div><h2>NDI presets (all stations)</h2><p>What OBS draws on every <b>ISU Stage NN</b> feed. Pick per station above, or for all here. Changes are instant: the pages update live, OBS never reloads.</p></div></div>
-      <div class="disp-preset-grid">${presetButtons}</div>
+      <div class="panel-title"><span class="section-number">02</span><div><h2>NDI presets (all 10 stations)</h2><p>What OBS draws on every <b>ISU Stage NN</b> feed. Pick per station or per group above, or for all here. Changes are instant: the pages update live, OBS never reloads.</p></div></div>
+      <div class="disp-preset-grid">${presetButtons('all', all)}</div>
       <div class="disp-banner-teams"><span>Team banners:</span>
         <button data-action="display-preset" data-station="all" data-preset="banner" data-team="">AUTO (1-5 home · 6-10 away)</button>
         <button data-action="display-preset" data-station="all" data-preset="banner" data-team="home">ALL HOME</button>

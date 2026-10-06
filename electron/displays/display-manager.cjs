@@ -17,6 +17,16 @@ const MODES = ['mirror', 'ndi'];
 const pad = (n) => String(n).padStart(2, '0');
 const defaultSource = (station) => `ISU Stage ${pad(station)}`;
 
+// 'all' | '1-5' | '6-10' | 1-10 -> station numbers, or null if invalid.
+function stationTargets(station) {
+  const key = String(station ?? '').trim().toLowerCase();
+  if (key === '' || key === 'all') return Array.from({ length: STATIONS }, (_v, i) => i + 1);
+  if (key === '1-5') return [1, 2, 3, 4, 5];
+  if (key === '6-10') return [6, 7, 8, 9, 10];
+  const n = Math.round(Number(key));
+  return n >= 1 && n <= STATIONS ? [n] : null;
+}
+
 function keyOk(expected, provided) {
   if (!expected) return true;
   const a = Buffer.from(String(expected)); const b = Buffer.from(String(provided || ''));
@@ -95,11 +105,11 @@ class DisplayManager {
     return false;
   }
 
-  // station: 1-10 or 'all'. mode: 'mirror' | 'ndi'. source: NDI name (blank = ISU Stage NN).
+  // station: 1-10, '1-5', '6-10' or 'all'. mode: 'mirror' | 'ndi'. source: NDI name (blank = ISU Stage NN).
   setMode(station, mode, source = '') {
     if (!MODES.includes(mode)) return { ok: false, error: 'Mode must be mirror or ndi' };
-    const targets = station === 'all' ? [...this.stations.keys()] : [Math.round(Number(station))];
-    if (!targets.every((n) => n >= 1 && n <= STATIONS)) return { ok: false, error: 'Station must be 1-10 or all' };
+    const targets = stationTargets(station);
+    if (!targets) return { ok: false, error: 'Station must be 1-10, 1-5, 6-10 or all' };
     for (const n of targets) {
       const current = this.stations.get(n);
       current.mode = mode;
@@ -130,4 +140,4 @@ class DisplayManager {
   }
 }
 
-module.exports = { DisplayManager, defaultSource, STATIONS, MODES };
+module.exports = { DisplayManager, defaultSource, stationTargets, STATIONS, MODES };

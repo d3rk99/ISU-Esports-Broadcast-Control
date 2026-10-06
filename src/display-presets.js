@@ -22,13 +22,24 @@ export function ensureDisplayState(state) {
   return state.displays;
 }
 
-// station: 1-10 or 'all'. team: '' (automatic) | 'home' | 'away'.
+// Station groups: each half of the stage (1-5, 6-10) can run its own match, so it can be
+// controlled on its own (which team sits where changes from day to day).
+export const STATION_GROUPS = { all: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], '1-5': [1, 2, 3, 4, 5], '6-10': [6, 7, 8, 9, 10] };
+// 'all' | '1-5' | '6-10' | 1-10 -> list of station numbers (throws on anything else).
+export function stationTargets(station) {
+  const key = String(station ?? '').trim().toLowerCase();
+  if (key === '' || STATION_GROUPS[key]) return [...STATION_GROUPS[key || 'all']];
+  const n = Math.round(Number(key));
+  if (!(n >= 1 && n <= 10)) throw new Error('station must be 1-10, 1-5, 6-10 or all');
+  return [n];
+}
+
+// station: 1-10, '1-5', '6-10' or 'all'. team: '' (automatic) | 'home' | 'away'.
 export function applyDisplayPreset(state, station, preset, team = '') {
   ensureDisplayState(state);
   if (!IDS.includes(preset)) throw new Error(`Unknown display preset: ${preset}`);
   if (!['', 'home', 'away'].includes(team)) throw new Error('team must be home, away or blank');
-  const targets = station === 'all' ? Array.from({ length: 10 }, (_v, i) => i + 1) : [Math.round(Number(station))];
-  if (!targets.every((n) => n >= 1 && n <= 10)) throw new Error('station must be 1-10 or all');
+  const targets = stationTargets(station);
   for (const n of targets) state.displays.stations[n] = { preset, team };
   return targets;
 }

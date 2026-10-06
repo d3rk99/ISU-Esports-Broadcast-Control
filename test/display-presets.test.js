@@ -33,3 +33,19 @@ test('display presets: Companion action and old saves get the displays block', (
   const loaded = loadState(storage);
   assert.equal(loaded.displays.stations[10].preset, 'idle');
 });
+
+test('display presets: station groups 1-5 and 6-10', async () => {
+  const { stationTargets } = await import('../src/display-presets.js');
+  assert.deepEqual(stationTargets('1-5'), [1, 2, 3, 4, 5]);
+  assert.deepEqual(stationTargets('6-10'), [6, 7, 8, 9, 10]);
+  assert.equal(stationTargets('all').length, 10);
+  assert.deepEqual(stationTargets(3), [3]);
+  assert.throws(() => stationTargets('2-4'), /1-5, 6-10/);
+  const state = createInitialState();
+  applyDisplayPreset(state, '1-5', 'player');
+  applyDisplayPreset(state, '6-10', 'black');
+  assert.deepEqual(Object.values(state.displays.stations).map((s) => s.preset), ['player', 'player', 'player', 'player', 'player', 'black', 'black', 'black', 'black', 'black']);
+  applyCompanionAction(state, { action: 'display.preset', station: '6-10', preset: 'banner' });
+  assert.equal(state.displays.stations[6].preset, 'banner');
+  assert.equal(state.displays.stations[5].preset, 'player', '1-5 untouched');
+});
