@@ -67,8 +67,8 @@
       // sitting a little below the middle (behind the stats column).
       const vw = window.innerWidth; const vh = window.innerHeight;
       const ratio = img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 16 / 9;
-      const width = Math.min(vw * 0.62, vh * 0.78 * ratio); const height = width / ratio;
-      Object.assign(img.style, { width: `${width}px`, height: `${height}px`, left: 'auto', top: 'auto', right: `${vw * 0.02}px`, bottom: `${Math.max(0, vh * 0.5 - height * 0.42)}px` });
+      const width = Math.min(vw * 0.58, vh * 0.85 * ratio); const height = width / ratio;
+      Object.assign(img.style, { width: `${width}px`, height: `${height}px`, left: 'auto', top: 'auto', right: `${vw * 0.01}px`, bottom: `${vh * 0.04}px` });
       if (!img.naturalWidth) img.onload = () => { img.onload = null; placeHero(url, kind); };
       return;
     }
