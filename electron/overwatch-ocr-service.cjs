@@ -44,12 +44,14 @@ class OverwatchOcrService {
   }
 
   // One hero read per row (needs capture.rgb). null = not confident, never a guess.
-  readHeroes(frame, profile) {
+  readHeroes(frame, profile, align = this.lastAlign) {
     if (!this.heroMatcher || typeof this.capture.rgb !== 'function') return [];
-    const rgbAt = (x, y) => this.capture.rgb(frame, x, y);
+    const shift = align?.leftDx || 0; // perks move the portrait column left
+    const rgbAt = (x, y) => this.capture.rgb(frame, x + shift, y);
     const reads = [];
     for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
-      const m = this.heroMatcher.match(rgbAt, cy);
+      const dy = align?.rows?.[`${team.id}:${row}`]?.statDy || 0;
+      const m = this.heroMatcher.match(rgbAt, cy + (Math.abs(dy) >= 3 ? dy : 0));
       reads.push({ side: team.id, row, field: 'hero', value: m.hero, match: m });
     });
     return reads;
@@ -129,7 +131,7 @@ class OverwatchOcrService {
       // Auto-align: find where the rows/names really are (drives push names up, icons nudge
       // columns) and move the boxes there. A clean board gives ~0 shifts.
       const align = this.settings.autoAlign !== false && typeof this.capture.luminance === 'function'
-        ? alignBoard((x, y) => this.capture.luminance(frame, x, y), profile) : null;
+        ? alignBoard((x, y) => this.capture.luminance(frame, x, y), profile, typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null) : null;
       this.lastAlign = align;
       const cells = cellRois(profile, align);
       // Read cells in parallel across the OCR engine's worker pool (one CPU core per worker).
@@ -149,11 +151,14 @@ class OverwatchOcrService {
         const ring = profile.ultimateRing;
         const lum = (x, y) => this.capture.luminance(frame, x, y);
         for (const team of profile.teams) team.rowCenters.forEach((cy0, row) => {
-          const cy = cy0 + (align?.rows?.[`${team.id}:${row}`]?.statDy || 0);
+          const dy = align?.rows?.[`${team.id}:${row}`]?.statDy || 0;
+          const cy = cy0 + (Math.abs(dy) >= 3 ? dy : 0); // same rule as the boxes: ignore 1-2 px wiggle
           const read = reads.find((r) => r.side === team.id && r.row === row && r.field === 'ultimate');
-          if (isReadyDisc(lum, ring.cx, cy + ring.dy, ring.readyRadius || 12)) { read.value = 'READY'; return; }
+          const rcx = ring.cx + (align?.leftDx || 0);
+          if (process.env.OW_DEBUG_ULT) console.log('ULT', team.id, row, 'cy', cy, 'rcx', rcx, 'ocr', read.value, 'ready', isReadyDisc(lum, rcx, cy + ring.dy, ring.readyRadius || 12), 'fill', ringFill(lum, rcx, cy + ring.dy, ring.radius));
+          if (isReadyDisc(lum, rcx, cy + ring.dy, ring.readyRadius || 12)) { read.value = 'READY'; return; }
           if (read.value !== null) return;
-          read.value = resolveUltimate(null, ringFill(lum, ring.cx, cy + ring.dy, ring.radius));
+          read.value = resolveUltimate(null, ringFill(lum, rcx, cy + ring.dy, ring.radius));
         });
       }
       // Heroes change rarely (spawn room / death): match the portraits ~once a second (65 ms
@@ -181,7 +186,7 @@ class OverwatchOcrService {
 
   async readCell(frame, profile, cell) {
     const kind = cell.field === 'name' ? 'text' : 'score';
-    const base = { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}) };
+    const base = { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}), ...(cell.column.threshold ? { threshold: cell.column.threshold } : {}) };
     // Digit count straight from the pixels: 0 = empty cell (never read a number into it),
     // otherwise the OCR text must have exactly that many digits.
     const glyphs = kind === 'score' && typeof this.capture.luminance === 'function'
@@ -210,20 +215,20 @@ class OverwatchOcrService {
     this.checkFrame(frame, profile);
     const lum = typeof this.capture.luminance === 'function' ? (x, y) => this.capture.luminance(frame, x, y) : null;
     const cells = [];
-    const align = this.settings.autoAlign !== false && lum ? alignBoard(lum, profile) : null;
+    const align = this.settings.autoAlign !== false && lum ? alignBoard(lum, profile, typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null) : null;
     for (const cell of cellRois(profile, align)) {
-      const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}) });
+      const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}), ...(cell.column.threshold ? { threshold: cell.column.threshold } : {}) });
       const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
       cells.push({
         side: cell.side, row: cell.row, field: cell.field, roi: cell.roi,
         rawDataUrl: crop.rawDataUrl || '', processedDataUrl: crop.processedDataUrl || '',
         text: String(result.text || '').trim(), confidence: Math.round((result.confidence || 0) * 100),
         glyphs: cell.field === 'name' || !lum ? null : glyphCount(lum, cell.roi),
-        accepted: cell.field === 'ultimate' && lum && isReadyDisc(lum, profile.ultimateRing.cx, cell.roi.y + Math.round(cell.roi.h / 2) + profile.ultimateRing.dy, profile.ultimateRing.readyRadius || 12)
+        accepted: cell.field === 'ultimate' && lum && isReadyDisc(lum, profile.ultimateRing.cx + (align?.leftDx || 0), cell.roi.y + Math.round(cell.roi.h / 2) + profile.ultimateRing.dy, profile.ultimateRing.readyRadius || 12)
           ? 'READY' : await this.readCell(frame, profile, cell)
       });
     }
-    const heroes = this.readHeroes(frame, profile).map((r) => ({ side: r.side, row: r.row, hero: r.value, candidate: r.match.candidate, score: r.match.score, runnerUp: r.match.runnerUp }));
+    const heroes = this.readHeroes(frame, profile, align).map((r) => ({ side: r.side, row: r.row, hero: r.value, candidate: r.match.candidate, score: r.match.score, runnerUp: r.match.runnerUp }));
     return {
       heroes, align,
       capturedAt: this.now(), sourceName: frame.sourceName || '', backend: frame.backend || '',

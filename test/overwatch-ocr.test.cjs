@@ -129,7 +129,7 @@ test('Overwatch OCR service: two sweeps of the real board fill every player stat
   // threshold); the real tesseract.js engine and consensus gate do the rest.
   const capture = {
     capture: async () => ({ fixture: true, width: 1920, height: 1080 }),
-    crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold || 120, 20, pre.shear || 0) }),
+    crop: (_frame, roi, pre = {}) => ({ image: cellImage(roi, pre.scale || 4, pre.threshold && pre.threshold !== 120 ? 255 - pre.threshold : 120, 20, pre.shear || 0) }),
     luminance: (_frame, x, y) => sample(x, y)
   };
   const ocr = new TesseractOcrEngine();
@@ -425,6 +425,9 @@ test('Overwatch OCR: a hand-set player name sticks over OCR until cleared', asyn
 // and icons (perks) can nudge the stat columns. Build that from the real board: names of some
 // rows moved up 9 px with a fake drive line under them, and the whole stat block shifted 10 px
 // right. With auto-align the reads still match; the fixed boxes would miss.
+// A Drive line is bright but coloured (gold/purple), never white like the name.
+const DRIVE_LUM = 209;
+const shiftedRgb = (lumAt) => (x, y) => { const v = lumAt(x, y); return v === DRIVE_LUM ? [250, 190, 40] : [v, v, v]; };
 function shiftedBoardSampler({ nameUp = { 'home:1': 9, 'away:3': 9 }, statDx = 10, boardDy = 0 } = {}) {
   const profile = getProfile();
   if (boardDy) { const inner = shiftedBoardSampler({ nameUp, statDx, boardDy: 0 }); return (x, y) => inner(x, y - boardDy); }
@@ -440,7 +443,7 @@ function shiftedBoardSampler({ nameUp = { 'home:1': 9, 'away:3': 9 }, statDx = 1
       for (const [key, up] of Object.entries(nameUp)) {
         const cy = rowAt.get(key); if (!cy) continue;
         if (y >= cy - nh / 2 - up - 2 && y < cy - nh / 2 + nh - up + 2) return sample(x, y + up); // name moved up
-        if (y >= cy + nh / 2 - up + 2 && y < cy + nh / 2 - up + 9) return x < name.x + 60 ? 210 : 20; // drive line
+        if (y >= cy + nh / 2 - up + 2 && y < cy + nh / 2 - up + 9) return x < name.x + 60 ? DRIVE_LUM : 20; // drive line (coloured, see shiftedRgb)
         if (y >= cy - nh / 2 && y < cy + nh / 2 + 4) return 20; // where the name was
       }
     }
@@ -453,7 +456,8 @@ test('Overwatch OCR: auto-align finds names pushed up by Drives and a shifted st
   const clean = alignBoard(sample, getProfile());
   assert.equal(clean.dx, 0, 'clean board: no column shift');
   for (const r of Object.values(clean.rows)) { assert.ok(Math.abs(r.statDy) <= 1); assert.ok(Math.abs(r.nameDy) <= 1); }
-  const moved = alignBoard(shiftedBoardSampler(), getProfile());
+  const movedLum = shiftedBoardSampler();
+  const moved = alignBoard(movedLum, getProfile(), shiftedRgb(movedLum));
   assert.ok(Math.abs(moved.dx - 10) <= 1, `stat block found ~10 px to the right (got ${moved.dx})`);
   assert.ok(Math.abs(alignBoard(shiftedBoardSampler({ nameUp: {}, statDx: -18 }), getProfile()).dx + 18) <= 1, 'and 18 px to the left');
   assert.ok(Math.abs(moved.rows['home:1'].nameDy + 9) <= 1, `home2 name found ~9 px up (got ${moved.rows['home:1'].nameDy})`);
@@ -469,8 +473,9 @@ test('Overwatch OCR service: reads the moved board correctly with auto-align (an
   const run = async (autoAlign) => {
     const capture = {
       capture: async () => ({ fixture: true, width: 1920, height: 1080 }),
-      crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(shifted, roi, pre.scale || 4, pre.threshold || 120, 20, pre.shear || 0) }),
-      luminance: (_f, x, y) => shifted(x, y)
+      crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(shifted, roi, pre.scale || 4, pre.threshold && pre.threshold !== 120 ? 255 - pre.threshold : 120, 20, pre.shear || 0) }),
+      luminance: (_f, x, y) => shifted(x, y),
+      rgb: (_f, x, y) => shiftedRgb(shifted)(x, y)
     };
     const ocr = new TesseractOcrEngine();
     const service = new OverwatchOcrService({ capture, ocr });
@@ -486,4 +491,46 @@ test('Overwatch OCR service: reads the moved board correctly with auto-align (an
   const fixed = await run(false);
   const misses = ['home', 'away'].flatMap((side) => EXPECTED[side].map((row, i) => JSON.stringify([fixed.teams[side].players[i].ultimate, fixed.teams[side].players[i].damage, fixed.teams[side].players[i].healing, fixed.teams[side].players[i].mitigation]) !== JSON.stringify(row))).filter(Boolean).length;
   assert.ok(misses >= 5, `fixed boxes should miss on the moved board (missed ${misses}/10 rows)`);
+});
+
+// Real live-match board WITH perks (Derk 2026-10-06, Neon Junction): the perk column pushes the
+// stat columns 50 px right and the left block (portrait, ult, name) 50 px left. Fixture is the
+// board area (x 480-1439, y 140-939) of the 1920x1080 screenshot.
+const PERKS = { file: path.join(__dirname, 'fixtures', 'ow-board-perks.png'), x: 480, y: 140 };
+const perksImg = readGrayPng(PERKS.file);
+const perksAt = (x, y) => { const lx = x - PERKS.x; const ly = y - PERKS.y; return lx < 0 || ly < 0 || lx >= perksImg.width || ly >= perksImg.height ? 0 : perksImg.data[ly * perksImg.width + lx]; };
+// What the board shows: [elims, assists, deaths, damage, healing, mitigation]
+const PERKS_EXPECTED = {
+  home: [[5, 2, 0, 6004, 981, 2990], [4, 0, 4, 2469, 0, 0], [3, 0, 6, 4126, 167, 0], [0, 0, 0, 0, 0, 0], [3, 6, 4, 2153, 6305, 154]],
+  away: [[6, 2, 2, 5496, 1285, 2538], [10, 0, 0, 3646, 118, 0], [5, 0, 4, 4420, 50, 484], [3, 7, 1, 2652, 6371, 712], [8, 7, 1, 5067, 4112, 307]]
+};
+
+test('Overwatch OCR: perk layout found from the header bar (stats +50 px, left block -50 px)', () => {
+  const { alignBoard, headerColumns } = require('../electron/overwatch-ocr-parse.cjs');
+  const cols = headerColumns(perksAt, getProfile());
+  assert.deepEqual([cols.elims, cols.assists, cols.deaths, cols.damage, cols.healing, cols.mitigation], [971, 1021, 1071, 1152, 1243, 1335]);
+  assert.equal(cols.leftDx, -50);
+  assert.equal(alignBoard(perksAt, getProfile()).perks, true);
+});
+
+test('Overwatch OCR service: real perks board - stats read right, never a wrong number', { timeout: 240000 }, async () => {
+  const capture = {
+    capture: async () => ({ width: 1920, height: 1080 }),
+    crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(perksAt, roi, pre.scale || 4, pre.threshold && pre.threshold !== 120 ? 255 - pre.threshold : 120, 20, pre.shear || 0) }),
+    luminance: (_f, x, y) => perksAt(x, y)
+  };
+  const ocr = new TesseractOcrEngine();
+  const service = new OverwatchOcrService({ capture, ocr });
+  try { for (let i = 0; i < 3; i += 1) await service.sweep(); } finally { await ocr.close(); }
+  const fields = ['elims', 'assists', 'deaths', 'damage', 'healing', 'mitigation'];
+  let right = 0; const wrong = [];
+  for (const side of ['home', 'away']) PERKS_EXPECTED[side].forEach((row, i) => fields.forEach((f, k) => {
+    const got = service.board.teams[side].players[i][f];
+    if (got === row[k]) right += 1; else if (got !== null) wrong.push(`${side}${i + 1} ${f}: ${got} (board ${row[k]})`);
+  }));
+  assert.deepEqual(wrong, [], 'a missed cell is ok (stays empty), a wrong number is not');
+  console.log(`perks board: ${right}/60 stat cells read`);
+  assert.ok(right >= 55, `at least 55/60 stat cells read (got ${right})`);
+  // Ult READY discs for the three home players that have it.
+  assert.deepEqual([0, 2, 4].map((r) => service.board.teams.home.players[r].ultimate), ['READY', 'READY', 'READY']);
 });

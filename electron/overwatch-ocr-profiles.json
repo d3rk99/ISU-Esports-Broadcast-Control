@@ -1,107 +1,110 @@
 {
-  "default-1080p": {
-    "label": "OW2 spectator scoreboard (Tab) \u00b7 1920x1080",
-    "width": 1920,
-    "height": 1080,
-    "description": "Observer 3 keeps the in-game scoreboard (Tab) open. All regions are on the 1920x1080 grid; other 16:9 sizes are scaled to it. Measured from the ISU spectator screenshot 2026-10-05.",
-    "cellHeight": 16,
-    "teams": [
-      {
-        "id": "home",
-        "label": "Top team (left / blue side of the board)",
-        "rowCenters": [
-          221,
-          287,
-          353,
-          419,
-          485
-        ]
-      },
-      {
-        "id": "away",
-        "label": "Bottom team",
-        "rowCenters": [
-          627,
-          693,
-          759,
-          825,
-          891
-        ]
-      }
-    ],
-    "columns": {
-      "ultimate": {
-        "label": "Ultimate %",
-        "x": 659,
-        "w": 20,
-        "kind": "percent",
-        "allowedChars": "0123456789"
-      },
-      "name": {
-        "label": "Player name",
-        "x": 690,
-        "w": 208,
-        "kind": "text",
-        "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _",
-        "shear": 0.21,
-        "note": "names are italic (BigNoodleTooOblique); shear straightens them before OCR"
-      },
-      "elims": {
-        "label": "Eliminations",
-        "x": 904,
-        "w": 34,
-        "kind": "count",
-        "allowedChars": "0123456789"
-      },
-      "assists": {
-        "label": "Assists",
-        "x": 954,
-        "w": 34,
-        "kind": "count",
-        "allowedChars": "0123456789"
-      },
-      "deaths": {
-        "label": "Deaths",
-        "x": 1004,
-        "w": 34,
-        "kind": "count",
-        "allowedChars": "0123456789"
-      },
-      "damage": {
-        "label": "Damage",
-        "x": 1066,
-        "w": 72,
-        "kind": "stat",
-        "allowedChars": "0123456789,"
-      },
-      "healing": {
-        "label": "Healing",
-        "x": 1158,
-        "w": 72,
-        "kind": "stat",
-        "allowedChars": "0123456789,"
-      },
-      "mitigation": {
-        "label": "Mitigation",
-        "x": 1250,
-        "w": 72,
-        "kind": "stat",
-        "allowedChars": "0123456789,"
-      }
-    },
-    "ultimateRing": {
-      "cx": 670,
-      "dy": -2,
-      "radius": 16,
-      "note": "ring centre x on the 1080p grid and y relative to the row centre; fills clockwise from 12 o'clock. The ult % sits inside it (x 661-676).",
-      "readyRadius": 12
-    },
-    "preprocess": {
-      "scale": 4,
-      "grayscale": true,
-      "threshold": 120,
-      "invert": true
-    },
-    "nameCellHeight": 24
-  }
+ "default-1080p": {
+  "label": "OW2 spectator scoreboard (Tab) \u00b7 1920x1080",
+  "width": 1920,
+  "height": 1080,
+  "description": "Observer 3 keeps the in-game scoreboard (Tab) open. All regions are on the 1920x1080 grid; other 16:9 sizes are scaled to it. Measured from the ISU spectator screenshot 2026-10-05.",
+  "cellHeight": 16,
+  "teams": [
+   {
+    "id": "home",
+    "label": "Top team (left / blue side of the board)",
+    "rowCenters": [
+     221,
+     287,
+     353,
+     419,
+     485
+    ]
+   },
+   {
+    "id": "away",
+    "label": "Bottom team",
+    "rowCenters": [
+     627,
+     693,
+     759,
+     825,
+     891
+    ]
+   }
+  ],
+  "columns": {
+   "ultimate": {
+    "label": "Ultimate %",
+    "x": 659,
+    "w": 20,
+    "kind": "percent",
+    "allowedChars": "0123456789"
+   },
+   "name": {
+    "label": "Player name",
+    "x": 690,
+    "w": 208,
+    "kind": "text",
+    "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _",
+    "shear": 0.21,
+    "note": "names are italic (BigNoodleTooOblique); shear straightens them before OCR. threshold 185 (only pixels brighter than this are text): names are pure white, but a bright team colour behind them (teal ~120-140) sat right on the old 120 cut-off and turned the name box to noise",
+    "threshold": 185
+   },
+   "elims": {
+    "label": "Eliminations",
+    "x": 904,
+    "w": 34,
+    "kind": "count",
+    "allowedChars": "0123456789"
+   },
+   "assists": {
+    "label": "Assists",
+    "x": 954,
+    "w": 34,
+    "kind": "count",
+    "allowedChars": "0123456789"
+   },
+   "deaths": {
+    "label": "Deaths",
+    "x": 1004,
+    "w": 34,
+    "kind": "count",
+    "allowedChars": "0123456789"
+   },
+   "damage": {
+    "label": "Damage",
+    "x": 1066,
+    "w": 72,
+    "kind": "stat",
+    "allowedChars": "0123456789,"
+   },
+   "healing": {
+    "label": "Healing",
+    "x": 1158,
+    "w": 72,
+    "kind": "stat",
+    "allowedChars": "0123456789,"
+   },
+   "mitigation": {
+    "label": "Mitigation",
+    "x": 1250,
+    "w": 72,
+    "kind": "stat",
+    "allowedChars": "0123456789,"
+   }
+  },
+  "ultimateRing": {
+   "cx": 670,
+   "dy": -2,
+   "radius": 16,
+   "note": "ring centre x on the 1080p grid and y relative to the row centre; fills clockwise from 12 o'clock. The ult % sits inside it (x 661-676).",
+   "readyRadius": 12
+  },
+  "preprocess": {
+   "scale": 4,
+   "grayscale": true,
+   "threshold": 120,
+   "invert": true
+  },
+  "nameCellHeight": 24,
+  "barLeft": 543,
+  "layoutNote": "barLeft = left end of the light header bar above the top team (x on the 1080p grid). Auto-align compares the live bar with it: perks push the left block (portrait, ult, name) ~50 px left and the stat columns ~50 px right; the stat columns are read from the header labels."
+ }
 }

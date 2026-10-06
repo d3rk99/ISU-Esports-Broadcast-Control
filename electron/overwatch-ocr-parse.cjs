@@ -22,11 +22,11 @@ function getProfile(id = 'default-1080p') {
 // boxes to it. Nothing found = the profile positions, so a clean board reads exactly as before.
 
 // Runs of rows in [y0, y1) that contain bright (text) pixels between x0 and x1.
-function inkBands(lum, x0, x1, y0, y1, thr = 165, minPx = 2) {
+function inkBands(lum, x0, x1, y0, y1, thr = 165, minPx = 2, isInk = null) {
   const bands = []; let start = -1;
   for (let y = y0; y <= y1; y += 1) {
     let on = false;
-    if (y < y1) { let n = 0; for (let x = x0; x < x1; x += 1) if (lum(x, y) >= thr && ++n >= minPx) { on = true; break; } }
+    if (y < y1) { let n = 0; for (let x = x0; x < x1; x += 1) if ((isInk ? isInk(x, y) : lum(x, y) >= thr) && ++n >= minPx) { on = true; break; } }
     if (on && start < 0) start = y;
     if (!on && start >= 0) { bands.push({ y0: start, y1: y, h: y - start, c: (start + y - 1) / 2 }); start = -1; }
   }
@@ -67,12 +67,75 @@ function statOffset(lum, profile, statDy = {}) {
   return best;
 }
 
+// Stat columns from the header bar. Above each team the board has a light bar with dark
+// labels E A D DMG H MIT, centred over their columns. Perks add a column between the name and
+// E, which pushes every stat column ~50 px right; the labels move with them, so the labels are
+// the most reliable anchor. Returns { elims: centreX, ... } or null if the bar isn't readable.
+function headerColumns(lum, profile = getProfile()) {
+  const cols = STAT_FIELDS.filter((f) => profile.columns[f]);
+  const firstRow = Math.min(...profile.teams.flatMap((t) => t.rowCenters));
+  const x0 = Math.min(...cols.map((f) => profile.columns[f].x)) - 90; const x1 = Math.max(...cols.map((f) => profile.columns[f].x + profile.columns[f].w)) + 110;
+  // The bar: rows above the first player row whose middle is light.
+  const barRows = [];
+  for (let y = firstRow - 75; y < firstRow - 25; y += 1) {
+    let light = 0; let n = 0;
+    for (let x = x0; x < x1; x += 4) { n += 1; if (lum(x, y) >= 180) light += 1; }
+    if (light / n >= 0.7) barRows.push(y);
+  }
+  if (barRows.length < 8) return null;
+  // Left end of the bar (the board's left edge moves with the layout too: with perks the
+  // whole left block - portrait, ult ring, name - sits ~50 px further left).
+  const midY = barRows[Math.floor(barRows.length / 2)];
+  let barLeft = null;
+  for (let x = Math.max(0, x0 - 520); x < x0; x += 1) {
+    let light = 0; for (let k = 0; k < 120; k += 4) if (lum(x + k, midY) >= 180) light += 1;
+    if (light >= 28) { barLeft = x; break; }
+  }
+  const dark = new Int32Array(x1 - x0);
+  for (const y of barRows) for (let x = x0; x < x1; x += 1) if (lum(x, y) < 110) dark[x - x0] += 1;
+  const blobs = []; let start = -1;
+  for (let i = 0; i <= dark.length; i += 1) {
+    const on = i < dark.length && dark[i] > 1;
+    if (on && start < 0) start = i;
+    if (!on && start >= 0) { blobs.push([start + x0, i + x0]); start = -1; }
+  }
+  const merged = [];
+  for (const b of blobs) { const last = merged.at(-1); if (last && b[0] - last[1] <= 6) last[1] = b[1]; else merged.push([...b]); }
+  // Letters (3-40 px wide); the bar's end / other panels show up as wide dark blocks.
+  const labels = merged.filter(([a, b]) => b - a >= 3 && b - a <= 40).map(([a, b]) => (a + b) / 2);
+  if (labels.length < cols.length) return null;
+  // Pick the run of labels whose spacing best matches the profile's column spacing
+  // (each gap within 35%); the profile only needs to be right about spacing, not position.
+  const expected = cols.map((f) => profile.columns[f].x + profile.columns[f].w / 2);
+  let best = null;
+  for (let start = 0; start + cols.length <= labels.length; start += 1) {
+    const run = labels.slice(start, start + cols.length); let err = 0; let ok = true;
+    for (let i = 1; i < cols.length; i += 1) {
+      const want = expected[i] - expected[i - 1]; const got = run[i] - run[i - 1];
+      if (Math.abs(got - want) > want * 0.35) { ok = false; break; }
+      err += Math.abs(got - want);
+    }
+    if (ok && (!best || err < best.err)) best = { run, err };
+  }
+  if (!best) return null;
+  const out = Object.fromEntries(cols.map((f, i) => [f, Math.round(best.run[i])]));
+  // leftDx: how far the left block moved vs the profile (profile.barLeft = bar's left end there).
+  out.leftDx = barLeft != null && profile.barLeft ? barLeft - profile.barLeft : 0;
+  if (Math.abs(out.leftDx) > 120) out.leftDx = 0;
+  return out;
+}
+
 // Per row: statDy (digits line), nameDy (the name's own text line, ignoring the small drive line
 // under it), and nameX (where the name text starts). Plus dx for the whole stat block.
-function alignBoard(lum, profile = getProfile()) {
+function alignBoard(lum, profile = getProfile(), rgb = null) {
   const { columns } = profile; const search = profile.align?.dy ?? 14;
-  const statCols = STAT_FIELDS.map((f) => columns[f]).filter(Boolean);
-  const sx0 = Math.min(...statCols.map((c) => c.x)); const sx1 = Math.max(...statCols.map((c) => c.x + c.w));
+  // Layout first: the header bar tells where the stat columns are and how far the left block
+  // (portrait, ult ring, name) moved. Perks: stats +50 px, left block -50 px.
+  const header = headerColumns(lum, profile);
+  const leftDx = header?.leftDx || 0;
+  const statX = (f) => (header?.[f] != null ? header[f] - columns[f].w / 2 : columns[f].x);
+  const statCols = STAT_FIELDS.filter((f) => columns[f]);
+  const sx0 = Math.min(...statCols.map(statX)); const sx1 = Math.max(...statCols.map((f) => statX(f) + columns[f].w));
   const rows = {};
   for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
     const key = `${team.id}:${row}`;
@@ -81,24 +144,46 @@ function alignBoard(lum, profile = getProfile()) {
     const statBand = sb.sort((a, b) => Math.abs(a.c - cy) - Math.abs(b.c - cy))[0];
     rows[key] = { statDy: statBand ? Math.round(statBand.c - cy) : 0, nameDy: 0, nameX: null };
   });
-  const dx = statOffset(lum, profile, Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.statDy])));
+  const dx = header ? 0 : statOffset(lum, profile, Object.fromEntries(Object.entries(rows).map(([k, v]) => [k, v.statDy])));
+  // Perks add a column of white icons between the name and E: then the name must stop well
+  // before E or the icons get read as letters. Perks are on when E moved right of the profile.
+  const elimsMid = header?.elims ?? (columns.elims ? columns.elims.x + columns.elims.w / 2 + dx : null);
+  const perks = header && columns.elims ? header.elims - (columns.elims.x + columns.elims.w / 2) >= 30 : false;
+  const nameRight = elimsMid != null ? elimsMid - (perks ? (profile.align?.perkGap ?? 140) : (profile.align?.nameGap ?? 23)) : null;
+  // White text = bright and not coloured (rank emblems / Drives in front of the name are coloured).
+  const isText = (x, y) => { if (lum(x, y) < 165) return false; if (!rgb) return true; const [r, g, b] = rgb(x, y); return Math.max(r, g, b) - Math.min(r, g, b) < 70; };
   if (columns.name) {
-    const n = columns.name;
-    for (const team of profile.teams) team.rowCenters.forEach((cy, row) => {
+    const n = columns.name; const nx = n.x + leftDx;
+    const right = nameRight != null ? Math.min(nx + n.w + 40, Math.round(nameRight)) : nx + n.w;
+    for (const team of profile.teams) team.rowCenters.forEach((cy0, row) => {
       const r = rows[`${team.id}:${row}`];
-      // The name is the TALLEST text line near the row (caps ~16-24 px); a drive line is ~6-9 px.
-      const nb = inkBands(lum, n.x, n.x + n.w, cy - search - 8, cy + search + 18).filter((b) => b.h >= 10 && b.h <= 34);
-      const nameBand = nb.sort((a, b) => b.h - a.h || Math.abs(a.c - cy) - Math.abs(b.c - cy))[0];
-      if (!nameBand) return;
-      r.nameDy = Math.round(nameBand.c - cy);
-      // First text column of that line (names are left-aligned).
-      for (let x = n.x - 12; x < n.x + 80; x += 1) {
-        let hits = 0; for (let y = nameBand.y0; y < nameBand.y1; y += 1) if (lum(x, y) >= 165) hits += 1;
-        if (hits >= 2) { r.nameX = x; break; }
+      r.nameRight = right;
+      const cy = cy0 + r.statDy;
+      // 1) Across: the name is the widest run of white text in the row (a rank emblem left of
+      //    it leaves a shorter white chunk; drives/perks are coloured or outside the window).
+      //    Window stops above the title line under the name.
+      const yA = cy - 22; const yB = cy + 9;
+      const runs = []; let start = -1;
+      for (let x = nx - 40; x <= right; x += 1) {
+        let on = false;
+        if (x < right) { let hits = 0; for (let y = yA; y < yB; y += 1) if (isText(x, y) && ++hits >= 2) { on = true; break; } }
+        if (on && start < 0) start = x;
+        if (!on && start >= 0) { runs.push([start, x]); start = -1; }
       }
+      const merged = [];
+      for (const run of runs) { const last = merged.at(-1); if (last && run[0] - last[1] <= 6) last[1] = run[1]; else merged.push([...run]); }
+      if (!merged.length) return;
+      let best = merged.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+      for (const run of merged) if (run[0] > best[1] && run[0] - best[1] <= 12) best = [best[0], run[1]]; // word spaces
+      if (best[1] - best[0] < 12) return; // too small to be a name
+      r.nameX = best[0];
+      // 2) Up/down: rows with white text inside that span only.
+      const nb = inkBands(lum, best[0], best[1], yA, yB + 1, 165, 2, isText).filter((b) => b.h >= 8);
+      const nameBand = nb.sort((a, b) => b.h - a.h)[0];
+      if (nameBand) r.nameDy = Math.round(nameBand.c - cy0);
     });
   }
-  return { dx, rows };
+  return { dx, rows, cols: header, leftDx, perks };
 }
 
 function cellRois(profile = getProfile(), align = null) {
@@ -110,13 +195,19 @@ function cellRois(profile = getProfile(), align = null) {
         // Names are taller (caps + slant) than the stat digits.
         const h = field === 'name' && profile.nameCellHeight ? profile.nameCellHeight : profile.cellHeight;
         let x = column.x; let c = cy;
+        const lx = column.x + (align?.leftDx || 0); // left block (ult, name) position for this layout
         if (field === 'name') {
-          c = cy + (a.nameDy || 0);
-          if (a.nameX != null) x = Math.max(column.x - 12, Math.min(column.x + 60, a.nameX - 4));
-        } else if (STAT_FIELDS.includes(field)) { c = cy + (a.statDy || 0); x = column.x + (align?.dx || 0); }
-        else c = cy + (a.statDy || 0);
+          c = cy + (a.nameDy || 0); x = lx;
+          // Drives/emblems can push a name ~70 px right of where it starts on a plain row.
+          if (a.nameX != null) x = Math.max(lx - 40, Math.min(lx + 110, a.nameX - 4));
+        } else if (STAT_FIELDS.includes(field)) {
+          c = cy + (Math.abs(a.statDy || 0) >= 3 ? a.statDy : 0); // ignore 1-2 px wiggle
+          x = align?.cols?.[field] != null ? Math.round(align.cols[field] - column.w / 2) : column.x + (align?.dx || 0);
+        }
+        else { c = cy + (Math.abs(a.statDy || 0) >= 3 ? a.statDy : 0); x = lx; }
         // A name that starts later keeps its right edge (don't run into the elims column).
-        const w = field === 'name' ? Math.max(80, column.x + column.w - x) : column.w;
+        const right = field === 'name' && a.nameRight != null ? Math.min(lx + column.w, a.nameRight) : lx + column.w;
+        const w = field === 'name' ? Math.max(60, right - x) : column.w;
         cells.push({ side: team.id, row, field, column, roi: { x, y: c - Math.round(h / 2), w, h } });
       }
     });
@@ -285,4 +376,4 @@ function applySweep(board, consensus, reads, now = Date.now()) {
   return changed;
 }
 
-module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, alignBoard, inkBands, statOffset, parseCell, cleanDigits, glyphCount, plausibleRead, ringFill, discFill, isReadyDisc, READY_DISC_FILL, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
+module.exports = { PROFILES, STAT_FIELDS, ALL_FIELDS, getProfile, cellRois, alignBoard, headerColumns, inkBands, statOffset, parseCell, cleanDigits, glyphCount, plausibleRead, ringFill, discFill, isReadyDisc, READY_DISC_FILL, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep };
