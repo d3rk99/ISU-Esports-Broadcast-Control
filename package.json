@@ -21,7 +21,7 @@
     "package:companion": "cd companion-module && corepack yarn package",
     "ndi:install": "npm install --no-save @stagetimerio/grandiose@^0.2.0 --foreground-scripts && npx --yes @electron/rebuild -f -o @stagetimerio/grandiose",
     "display-client": "electron electron/displays/display-client-main.cjs",
-    "package:display-client": "electron-builder --config electron-builder.display-client.json --win portable"
+    "package:display-client": "electron-builder --config electron-builder.display-client.json --win nsis portable"
   },
   "build": {
     "appId": "edu.isu.esports.broadcastcontrol",

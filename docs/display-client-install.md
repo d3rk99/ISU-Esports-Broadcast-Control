@@ -6,14 +6,17 @@ The controller decides what it shows: **Game mirror** (this PC's player monitor)
 ## Install
 
 1. Install the **NDI Runtime** (free from ndi.video) on the station PC.
-2. Copy `ISU Display Client-Portable-<version>-x64.exe` to the PC and run it (`npm run package:display-client` builds it).
+2. Run `ISU Display Client-Setup-<version>-x64.exe` on the PC (`npm run package:display-client` builds it; a portable exe is built too).
+   It installs for the current user, starts right away, and **starts with Windows** from then on.
+   It has **no taskbar button**: it lives in the tray's hidden icons (the ^ arrow next to the clock), orange monitor icon.
 3. Press **Ctrl+Alt+S** (or double-click the tray icon) and set:
    - **Station**: 1-10 (must match the STATION column in the roster for player cards).
    - **Controller PC**: IP of the PC running ISU Broadcast Control. Port stays 3178.
    - **Display key**: only if one is set on the controller's Displays page.
    - **OBS PC for NDI**: only if the feed is not found by itself (networks that block mDNS). Put the OBS PC's IP.
    - **Player monitor / Audience monitor**: which screen is the game and which gets this window.
-   - **Keep the mouse on the player monitor** (Ctrl+Alt+L toggles) and **Start with Windows** as wanted.
+   - **Keep the mouse on the player monitor** (Ctrl+Alt+L toggles).
+   - **Start with Windows** is on by default; untick it to stop that.
 4. SAVE. The tray tooltip shows the station, mode and connection.
 
 ## Firewall

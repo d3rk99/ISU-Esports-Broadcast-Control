@@ -24,6 +24,12 @@
     "icon": "build/icon.svg",
     "target": [
       {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
         "target": "portable",
         "arch": [
           "x64"
@@ -33,5 +39,13 @@
   },
   "portable": {
     "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "runAfterFinish": true,
+    "createDesktopShortcut": false,
+    "createStartMenuShortcut": true,
+    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
   }
 }

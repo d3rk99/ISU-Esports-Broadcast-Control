@@ -53,7 +53,7 @@ function normalize(raw = {}) {
     playerDisplay: Math.max(1, Math.round(Number(raw.playerDisplay) || 1)),
     stageDisplay: Math.max(1, Math.round(Number(raw.stageDisplay) || 2)),
     cursorLock: raw.cursorLock === true,
-    startWithWindows: raw.startWithWindows === true
+    startWithWindows: raw.startWithWindows !== false // on unless turned off in settings
   };
 }
 function cliConfig() {
@@ -71,8 +71,19 @@ function saveConfig(next) {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
   fs.writeFileSync(`${configPath()}.tmp`, JSON.stringify(config, null, 2));
   fs.renameSync(`${configPath()}.tmp`, configPath());
-  if (process.platform === 'win32') { try { app.setLoginItemSettings({ openAtLogin: config.startWithWindows }); } catch (error) { logLine(`start with Windows failed: ${error.message}`); } }
+  applyStartWithWindows();
   return config;
+}
+
+// Start with Windows (on by default). A portable exe runs from a temp copy, so register the
+// real exe (PORTABLE_EXECUTABLE_FILE); --startup tells us we were started by Windows.
+function applyStartWithWindows() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const exe = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  try {
+    app.setLoginItemSettings({ openAtLogin: config.startWithWindows, path: exe, args: ['--startup'], name: 'ISU Display Client' });
+    logLine(`start with Windows: ${config.startWithWindows ? 'on' : 'off'} (${exe})`);
+  } catch (error) { logLine(`start with Windows failed: ${error.message}`); }
 }
 
 // ---- displays ----------------------------------------------------------------------------
@@ -150,26 +161,40 @@ function createWindow() {
   const d = displayAt(config.stageDisplay, displays().length > 1 ? 1 : 0);
   win = new BrowserWindow({
     ...d.bounds, frame: false, fullscreen: true, autoHideMenuBar: true, backgroundColor: '#000000',
+    skipTaskbar: true, // lives in the tray (hidden icons) only
     title: `ISU Display ${config.station}`,
     webPreferences: { preload: path.join(__dirname, 'display-client-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   win.loadFile(path.join(__dirname, 'client', 'index.html'));
   win.webContents.on('did-finish-load', () => { win.webContents.send('display:mode', mode); win.webContents.send('display:link', link); win.webContents.send('display:ndi-status', ndiState); });
   win.on('closed', () => { win = null; });
+  // Windows can re-add a taskbar button after fullscreen/display changes: keep it off.
+  win.on('show', () => win?.setSkipTaskbar(true));
+  win.on('enter-full-screen', () => win?.setSkipTaskbar(true));
 }
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
     width: 560, height: 720, title: 'ISU Display Client - Settings', autoHideMenuBar: true, backgroundColor: '#0b0d10',
+    icon: trayIcon(), // shows on the taskbar only while settings are open
     webPreferences: { preload: path.join(__dirname, 'display-client-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   settingsWin.loadFile(path.join(__dirname, 'client', 'settings.html'));
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 function trayIcon() {
-  const px = Buffer.alloc(16 * 16 * 4);
-  for (let i = 0; i < 256; i += 1) { px[i * 4] = 32; px[i * 4 + 1] = 121; px[i * 4 + 2] = 244; px[i * 4 + 3] = 255; }
-  return nativeImage.createFromBitmap(px, { width: 16, height: 16 });
+  // 32x32 ISU-orange rounded tile with a white monitor glyph (readable in the hidden-icons tray).
+  const N = 32; const px = Buffer.alloc(N * N * 4);
+  for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) {
+    const o = (y * N + x) * 4;
+    const corner = Math.max(0, Math.abs(x - 15.5) - 11.5) ** 2 + Math.max(0, Math.abs(y - 15.5) - 11.5) ** 2;
+    if (corner > 16) continue; // transparent rounded corners
+    const screenEdge = x >= 7 && x <= 24 && y >= 8 && y <= 19 && !(x >= 9 && x <= 22 && y >= 10 && y <= 17);
+    const stand = (x >= 14 && x <= 17 && y >= 20 && y <= 22) || (x >= 11 && x <= 20 && y >= 23 && y <= 24);
+    const white = screenEdge || stand;
+    px[o] = white ? 255 : 32; px[o + 1] = white ? 255 : 121; px[o + 2] = white ? 255 : 244; px[o + 3] = 255; // BGRA
+  }
+  return nativeImage.createFromBitmap(px, { width: N, height: N });
 }
 function updateTray() {
   if (!tray) return;
@@ -216,6 +241,7 @@ else {
     config = loadConfig();
     logLine(`config ${JSON.stringify({ ...config, key: config.key ? '(set)' : '' })} displays ${screen.getAllDisplays().length}`);
     createWindow();
+    applyStartWithWindows();
     try { tray = new Tray(trayIcon()); tray.on('double-click', openSettings); updateTray(); } catch (error) { logLine(`tray failed: ${error.message}`); }
     try {
       if (!globalShortcut.register('Control+Alt+S', openSettings)) logLine('Ctrl+Alt+S is taken by another app');
