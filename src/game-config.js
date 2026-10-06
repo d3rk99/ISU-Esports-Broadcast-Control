@@ -471,9 +471,9 @@ export function createBundledCharacterArt(gameKey) {
   return {};
 }
 
-// High-res transparent hero art (up to 1800px, Overwatch wiki; sources in hero-art-hd/index.json).
+// High-res transparent hero cutouts (up to 1800px, Overwatch wiki, backgrounds removed; sources in hero-art-hd/index.json).
 // Heroes without one fall back to the original 340x655 art in heroes/.
-const OVERWATCH_HD_ART = new Set(["ana", "ashe", "baptiste", "bastion", "brigitte", "cassidy", "domina", "doomfist", "dva", "echo", "freja", "genji", "hanzo", "hazard", "illari", "junker-queen", "junkrat", "juno", "kiriko", "lifeweaver", "lucio", "mauga", "mei", "mercy", "mizuki", "moira", "orisa", "pharah", "ramattra", "reaper", "reinhardt", "roadhog", "shion", "sigma", "sojourn", "soldier-76", "sombra", "symmetra", "torbjorn", "tracer", "vendetta", "venture", "widowmaker", "winston", "wuyang", "zarya", "zenyatta"]);
+const OVERWATCH_HD_ART = new Set(["ana", "anran", "ashe", "baptiste", "bastion", "brigitte", "cassidy", "domina", "doomfist", "dva", "echo", "emre", "freja", "genji", "hanzo", "hazard", "illari", "jetpack-cat", "junker-queen", "junkrat", "juno", "kiriko", "lifeweaver", "lucio", "mauga", "mei", "mercy", "mizuki", "moira", "orisa", "pharah", "ramattra", "reaper", "reinhardt", "roadhog", "shion", "sierra", "sigma", "sojourn", "soldier-76", "sombra", "symmetra", "torbjorn", "tracer", "vendetta", "venture", "widowmaker", "winston", "wuyang", "zarya", "zenyatta"]);
 
 function createOverwatchCharacterArt() {
   return Object.fromEntries(Object.entries(OVERWATCH_HERO_ART).map(([hero, filename]) => {
