@@ -53,13 +53,14 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .player .copy { position: relative; align-self: center; display: grid; gap: 1.5vh; padding-right: 5vw; min-width: 0; max-width: 100%; }
 .player .copy small { color: var(--team); font-size: 2.6vh; letter-spacing: .35em; text-transform: uppercase; }
 /* One line always; station.js shrinks --name-size when the name is wider than the column. */
-.player .copy strong { font-size: var(--name-size, 13vh); font-style: italic; line-height: .9; text-transform: uppercase; white-space: nowrap; overflow: visible; padding-right: .12em; }
-.player .copy span { color: #c9d4e0; font-size: 3.2vh; letter-spacing: .12em; text-transform: uppercase; }
-.player .copy em { color: #8fa0b2; font-size: 1.9vh; font-style: normal; letter-spacing: .3em; margin-top: 1vh; }
-.stats { display: grid; grid-template-columns: repeat(3, auto); gap: 1.4vh 4vw; justify-content: start; }
+.player .copy strong { -webkit-text-stroke: .45vh #05070a; paint-order: stroke fill; text-shadow: 0 .6vh 2vh rgba(0,0,0,.8); font-size: var(--name-size, 13vh); font-style: italic; line-height: .9; text-transform: uppercase; white-space: nowrap; overflow: visible; padding-right: .12em; }
+.player .copy span { color: #e3eaf1; text-shadow: 0 .3vh 1vh rgba(0,0,0,.9), 0 0 .4vh #000; font-size: 3.2vh; letter-spacing: .12em; text-transform: uppercase; }
+.player .copy em { color: #c9d4e0; text-shadow: 0 .3vh 1vh rgba(0,0,0,.9); font-size: 2.2vh; font-style: normal; letter-spacing: .3em; margin-top: 1vh; }
+/* Bigger stats with a dark outline + shadow so they read over car/hero art. */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); gap: 2vh 4.5vw; justify-content: start; }
 .stats div { display: grid; gap: .4vh; }
-.stats b { font-size: 6vh; font-variant-numeric: tabular-nums; }
-.stats i { color: #8fa0b2; font-size: 1.9vh; font-style: normal; letter-spacing: .25em; }
+.stats b { font-size: 9.5vh; line-height: .95; font-variant-numeric: tabular-nums; -webkit-text-stroke: .35vh #05070a; paint-order: stroke fill; text-shadow: 0 .5vh 1.6vh rgba(0,0,0,.85), 0 0 .6vh rgba(0,0,0,.9); }
+.stats i { color: #c9d4e0; font-size: 2.4vh; font-style: normal; font-weight: 900; letter-spacing: .25em; -webkit-text-stroke: .18vh #05070a; paint-order: stroke fill; text-shadow: 0 .3vh 1vh rgba(0,0,0,.9); }
 #st[data-preset="player"] .portrait { animation: from-left 700ms cubic-bezier(.2,.82,.18,1) both; }
 #st[data-preset="player"] .copy > * { animation: from-right 600ms cubic-bezier(.2,.82,.18,1) both; }
 #st[data-preset="player"] .copy > :nth-child(2) { animation-delay: 80ms; }
@@ -107,6 +108,6 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:
 .boost[hidden] { display: none; }
 .boost i { position: relative; height: 1.4vh; background: rgba(255,255,255,.12); transform: skewX(-20deg); overflow: hidden; }
 .boost i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--boost, 0%); background: linear-gradient(90deg, #ffb020, #ff6a00); box-shadow: 0 0 1.5vh #ff8a00; transition: width 300ms ease; }
-.boost b { font-size: 3.4vh; font-variant-numeric: tabular-nums; }
+.boost b { -webkit-text-stroke: .25vh #05070a; paint-order: stroke fill; text-shadow: 0 .3vh 1vh rgba(0,0,0,.9); font-size: 4.6vh; font-variant-numeric: tabular-nums; }
 .boost small { color: #8fa0b2; font-size: 1.7vh; letter-spacing: .25em; }
 .portrait.is-demolished { filter: grayscale(1) brightness(.6); }
