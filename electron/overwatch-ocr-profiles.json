@@ -45,7 +45,8 @@
     "allowedChars": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _",
     "shear": 0.21,
     "note": "names are italic (BigNoodleTooOblique); shear straightens them before OCR. threshold 185 (only pixels brighter than this are text): names are pure white, but a bright team colour behind them (teal ~120-140) sat right on the old 120 cut-off and turned the name box to noise",
-    "threshold": 185
+    "threshold": 185,
+    "lang": "ow"
    },
    "elims": {
     "label": "Eliminations",

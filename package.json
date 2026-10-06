@@ -52,7 +52,8 @@
       "node_modules/webidl-conversions/**/*",
       "node_modules/whatwg-url/**/*",
       "node_modules/zlibjs/**/*",
-      "node_modules/@stagetimerio/grandiose/dist/**/*"
+      "node_modules/@stagetimerio/grandiose/dist/**/*",
+      "electron/ocr-models/**/*"
     ],
     "win": {
       "icon": "build/icon.svg",

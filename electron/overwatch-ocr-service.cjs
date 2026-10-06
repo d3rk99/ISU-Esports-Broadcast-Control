@@ -212,7 +212,7 @@ class OverwatchOcrService {
     if (glyphs === 0) return null;
     const attempt = async (preprocess, mode) => {
       const crop = this.capture.crop(frame, cell.roi, preprocess);
-      const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind, fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}`, pageMode: mode });
+      const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind, fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}`, pageMode: mode, ...(cell.column.lang ? { lang: cell.column.lang } : {}) });
       if (result.confidence < MIN_CONFIDENCE[kind]) return null;
       return plausibleRead(cell.field, parseCell(cell.field, result.text), glyphs);
     };
@@ -236,7 +236,7 @@ class OverwatchOcrService {
     const align = this.settings.autoAlign !== false && lum ? alignBoard(lum, profile, typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null) : null;
     for (const cell of cellRois(profile, { ...(align || {}), boxScale: this.settings.boxScale / 100 })) {
       const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}), ...(cell.column.threshold ? { threshold: cell.column.threshold } : {}) });
-      const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
+      const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}`, ...(cell.column.lang ? { lang: cell.column.lang } : {}) });
       cells.push({
         side: cell.side, row: cell.row, field: cell.field, roi: cell.roi,
         rawDataUrl: crop.rawDataUrl || '', processedDataUrl: crop.processedDataUrl || '',

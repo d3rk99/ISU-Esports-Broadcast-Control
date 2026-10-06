@@ -607,3 +607,24 @@ test('Overwatch OCR service: BOARD VIEW setting - forced "player" works even whe
   assert.notEqual(auto.lastAlign.view, 'player');
   assert.notEqual(auto.board.teams.away.players[0].damage, 8715);
 });
+
+// Trained name model (electron/ocr-models/ow.traineddata, BigNoodleTooOblique): the 20 real name
+// cells from Derk's two live boards (crops preprocessed like the live read). Stock English got
+// 10/20 here (D3RK99 read as D3IRK39, OOLAKACHOZ26, MSTRLUCARID...).
+test('Overwatch OCR: trained name model reads the real gamertags (numbers too)', { timeout: 240000 }, async () => {
+  const dir = path.join(__dirname, 'fixtures', 'ow-names');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.png')).sort();
+  const ocr = new TesseractOcrEngine();
+  const results = [];
+  try {
+    for (const f of files) {
+      const truth = fs.readFileSync(path.join(dir, f.replace('.png', '.gt.txt')), 'utf8').trim();
+      const r = await ocr.recognize(fs.readFileSync(path.join(dir, f)), { allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 _', kind: 'text', fieldId: `ow-name-test-${f}`, lang: 'ow' });
+      results.push([truth, r.text.trim()]);
+    }
+  } finally { await ocr.close(); }
+  const right = results.filter(([t, g]) => t === g).length;
+  console.log(`trained names: ${right}/${results.length}`, results.filter(([t, g]) => t !== g).map(([t, g]) => `${g}≠${t}`).join(' '));
+  assert.ok(right >= 16, `at least 16/20 real names exact (got ${right})`);
+  for (const t of ['D3RK99', 'OOLAKACHO26', 'BINGUS457', 'MSTRLUCARIO']) assert.ok(results.some(([a, b]) => a === t && b === t), `${t} read exactly`);
+});

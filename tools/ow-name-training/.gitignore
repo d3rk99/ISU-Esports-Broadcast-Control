@@ -1,0 +1,8 @@
+fonts/
+base/
+out/
+lstmf/
+ckpt/
+eng_best.traineddata
+*.txt
+!README.txt

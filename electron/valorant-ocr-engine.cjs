@@ -6,6 +6,14 @@ function isRecoverableWorkerPipeError(error) {
   return error?.code === 'EPIPE' || /\bEPIPE\b|broken pipe/i.test(String(error?.message || error || ''));
 }
 
+// Extra trained models shipped with the app (electron/ocr-models/<code>.traineddata). 'ow' =
+// Overwatch scoreboard names (BigNoodleTooOblique, fine-tuned from tessdata_best eng, see
+// electron/ocr-models/README.md). Missing file = fall back to English.
+const CUSTOM_LANG_DIR = path.join(__dirname, 'ocr-models');
+function customLangAvailable(code) {
+  try { return require('node:fs').existsSync(path.join(unpackedPath(CUSTOM_LANG_DIR), `${code}.traineddata`)); } catch { return false; }
+}
+
 function unpackedPath(value) {
   return String(value || '').replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
 }
@@ -19,17 +27,19 @@ class TesseractOcrEngine {
     this.observerCursor = 0;
   }
 
-  async getWorker(key = 'default') {
+  async getWorker(key = 'default', lang = 'eng') {
+    const custom = lang !== 'eng' && customLangAvailable(lang);
+    key = custom ? `${lang}:${key}` : key;
     if (!this.workerPromises.has(key)) {
-      const langPath = unpackedPath(englishData.langPath);
+      const langPath = custom ? unpackedPath(CUSTOM_LANG_DIR) : unpackedPath(englishData.langPath);
       const workerPath = unpackedPath(require.resolve('tesseract.js/src/worker-script/node/index.js'));
       const corePath = unpackedPath(path.dirname(require.resolve('tesseract.js-core/package.json')));
-      const workerPromise = this.createWorkerImpl(englishData.code || 'eng', OEM.LSTM_ONLY, {
+      const workerPromise = this.createWorkerImpl(custom ? lang : (englishData.code || 'eng'), OEM.LSTM_ONLY, {
         langPath,
         workerPath,
         corePath,
         cacheMethod: 'none',
-        gzip: englishData.gzip !== false,
+        gzip: custom ? false : englishData.gzip !== false,
         logger: () => {}
       }).catch((error) => {
         this.workerPromises.delete(key);
@@ -50,10 +60,10 @@ class TesseractOcrEngine {
     return next;
   }
 
-  async recognizeNow(image, { allowedChars = '0123456789:', kind = 'score', fieldId = 'default', pageMode = 'line' } = {}) {
+  async recognizeNow(image, { allowedChars = '0123456789:', kind = 'score', fieldId = 'default', pageMode = 'line', lang = 'eng' } = {}) {
     const startedAt = Date.now();
     try {
-      const worker = await this.getWorker(fieldId);
+      const worker = await this.getWorker(fieldId, lang);
       await worker.setParameters({
         tessedit_char_whitelist: allowedChars,
         tessedit_pageseg_mode: pageMode === 'char' ? PSM.SINGLE_CHAR : PSM.SINGLE_LINE,
@@ -68,7 +78,7 @@ class TesseractOcrEngine {
         kind
       };
     } catch (error) {
-      if (isRecoverableWorkerPipeError(error)) this.workerPromises.delete(fieldId);
+      if (isRecoverableWorkerPipeError(error)) { this.workerPromises.delete(fieldId); this.workerPromises.delete(`${lang}:${fieldId}`); }
       throw error;
     }
   }
@@ -92,4 +102,4 @@ class TesseractOcrEngine {
   }
 }
 
-module.exports = { TesseractOcrEngine, isRecoverableWorkerPipeError, unpackedPath };
+module.exports = { TesseractOcrEngine, isRecoverableWorkerPipeError, unpackedPath, customLangAvailable, CUSTOM_LANG_DIR };
