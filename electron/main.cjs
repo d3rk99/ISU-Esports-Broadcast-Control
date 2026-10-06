@@ -886,6 +886,11 @@ function startOverlayServer() {
       serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
       return;
     }
+    // Audience display preset pages (OBS browser sources -> NDI "ISU Stage NN").
+    if (requestUrl.pathname.startsWith('/displays/')) {
+      serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
+      return;
+    }
     writeJson(response, 404, { error: 'Not found' });
   });
 
