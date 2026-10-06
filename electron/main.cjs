@@ -13,6 +13,7 @@ const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
+const { WebSocketServer } = require('ws');
 const { DisplayManager } = require('./displays/display-manager.cjs');
 const { ObsClient, setupStageScenes, stageStatus: obsStageStatus } = require('./displays/obs-displays.cjs');
 
@@ -887,11 +888,19 @@ function startOverlayServer() {
       return;
     }
     // Audience display preset pages (OBS browser sources -> NDI "ISU Stage NN").
-    if (requestUrl.pathname.startsWith('/displays/')) {
+    if (requestUrl.pathname.startsWith('/displays/') || requestUrl.pathname.startsWith('/shared/')) {
       serveFile(response, safeFilePath(staticRoot, requestUrl.pathname));
       return;
     }
     writeJson(response, 404, { error: 'Not found' });
+  });
+
+  // Live state over WebSocket too (see overlay-events.cjs: OBS allows only 6 SSE pages).
+  const overlaySockets = new WebSocketServer({ noServer: true, maxPayload: 4096 });
+  overlayServer.on('upgrade', (request, socket, head) => {
+    const pathname = new URL(request.url, `http://${OVERLAY_HOST}:${OVERLAY_PORT}`).pathname;
+    if (pathname !== '/ws') { socket.destroy(); return; }
+    overlaySockets.handleUpgrade(request, socket, head, (ws) => overlayClients.addSocket(ws, broadcastState));
   });
 
   return new Promise((resolve, reject) => {

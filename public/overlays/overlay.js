@@ -1339,10 +1339,8 @@
     } catch {
       render(FALLBACK);
     }
-    const events = new EventSource('/events');
-    events.onmessage = (event) => {
-      try { render(JSON.parse(event.data)); } catch {}
-    };
+    if (window.isuLiveState) window.isuLiveState(render);
+    else { const events = new EventSource('/events'); events.onmessage = (event) => { try { render(JSON.parse(event.data)); } catch {} }; }
   }
 
   document.addEventListener('DOMContentLoaded', start);

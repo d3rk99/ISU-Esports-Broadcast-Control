@@ -85,3 +85,27 @@ test('overlay events: disconnected viewers are removed', async (t) => {
   await wait(100);
   assert.equal(hub.size, 0);
 });
+
+test('overlay event hub: WebSocket clients get the initial state and every publish', async () => {
+  const http = require('node:http');
+  const WebSocket = require('ws');
+  const { OverlayEventHub } = require('../electron/overlay-events.cjs');
+  const hub = new OverlayEventHub({ heartbeatMs: 0 });
+  const server = http.createServer();
+  const wss = new WebSocket.WebSocketServer({ noServer: true });
+  server.on('upgrade', (req, socket, head) => wss.handleUpgrade(req, socket, head, (ws) => hub.addSocket(ws, { n: 0 })));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const clients = await Promise.all(Array.from({ length: 10 }, () => new Promise((resolve) => {
+    const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/ws`); const got = [];
+    ws.on('message', (m) => got.push(JSON.parse(String(m)).n)); ws.on('open', () => resolve({ ws, got }));
+  })));
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(hub.size, 10);
+  hub.publish({ n: 1 });
+  await new Promise((r) => setTimeout(r, 100));
+  for (const c of clients) assert.deepEqual(c.got, [0, 1]);
+  for (const c of clients) c.ws.close();
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(hub.size, 0);
+  hub.close(); server.close();
+});

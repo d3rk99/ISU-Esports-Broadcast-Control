@@ -1,6 +1,9 @@
 'use strict';
 
-// Server-Sent Events hub for OBS overlays (/events).
+// Live-state hub for OBS overlays: Server-Sent Events (/events) and WebSocket (/ws).
+// Pages use the WebSocket first: OBS's browser sources share one Chromium, which allows
+// only 6 open HTTP connections per server, so a 7th SSE page (e.g. stage display 7)
+// would wait forever. WebSockets don't count against that limit.
 // - Backpressure: a viewer that stops reading (background tab, sleeping laptop, frozen
 //   browser source) would otherwise buffer every full-state message forever. Once a
 //   client has more than MAX_BUFFERED_BYTES waiting, it is dropped; EventSource
@@ -16,12 +19,38 @@ class OverlayEventHub {
     this.heartbeatMs = heartbeatMs;
     this.onDrop = onDrop;
     this.clients = new Set();
+    this.sockets = new Set();
     this.dropped = 0;
     this.heartbeatTimer = null;
   }
 
   get size() {
-    return this.clients.size;
+    return this.clients.size + this.sockets.size;
+  }
+
+  // Takes over an accepted WebSocket and sends the initial state.
+  addSocket(socket, initialState) {
+    this.sockets.add(socket);
+    const remove = () => this.sockets.delete(socket);
+    socket.on('close', remove);
+    socket.on('error', remove);
+    socket.on('message', () => {}); // pages only listen
+    try { socket.send(JSON.stringify(initialState)); } catch { remove(); }
+    this.ensureHeartbeat();
+  }
+
+  sendSockets(text) {
+    for (const socket of this.sockets) {
+      if (socket.readyState !== 1) { this.sockets.delete(socket); continue; }
+      if (socket.bufferedAmount > this.maxBufferedBytes) {
+        this.sockets.delete(socket);
+        this.dropped += 1;
+        this.onDrop({ buffered: socket.bufferedAmount, dropped: this.dropped });
+        try { socket.terminate(); } catch {}
+        continue;
+      }
+      socket.send(text);
+    }
   }
 
   // Takes over an HTTP response as an SSE stream and sends the initial state.
@@ -57,11 +86,14 @@ class OverlayEventHub {
   }
 
   publish(state) {
-    this.send(`data: ${JSON.stringify(state)}\n\n`);
+    const json = JSON.stringify(state);
+    this.send(`data: ${json}\n\n`);
+    this.sendSockets(json);
   }
 
   heartbeat() {
     this.send(': ping\n\n');
+    for (const socket of this.sockets) { try { socket.ping(); } catch {} }
   }
 
   drop(client) {
@@ -84,6 +116,10 @@ class OverlayEventHub {
       try { client.end(); } catch {}
     }
     this.clients.clear();
+    for (const socket of this.sockets) {
+      try { socket.close(1001, 'closing'); } catch {}
+    }
+    this.sockets.clear();
   }
 }
 

@@ -104,8 +104,8 @@
 
   async function start() {
     try { render(await fetch('/api/state', { cache: 'no-store' }).then((r) => r.json())); } catch {}
-    const events = new EventSource('/events');
-    events.onmessage = (e) => { try { render(JSON.parse(e.data)); } catch {} };
+    if (window.isuLiveState) window.isuLiveState(render);
+    else { const events = new EventSource('/events'); events.onmessage = (event) => { try { render(JSON.parse(event.data)); } catch {} }; }
   }
   window.__station = { render, station };
   start();
