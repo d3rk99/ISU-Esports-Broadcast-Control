@@ -226,7 +226,14 @@ function cellRois(profile = getProfile(), align = null) {
         // A name that starts later keeps its right edge (don't run into the elims column).
         const right = field === 'name' && a.nameRight != null ? Math.min(lx + column.w, a.nameRight) : lx + column.w;
         const w = field === 'name' ? Math.max(60, right - x) : column.w;
-        cells.push({ side: team.id, row, field, column, roi: { x, y: c - Math.round(h / 2), w, h } });
+        // Box size: number boxes grow around their centre (boxScale, e.g. 1.08 = 8% bigger).
+        // Names keep their measured box: growing it pulls in the rank emblem / perk icons and
+        // name reads got worse in tests (100% 10/20, 110% 4/20 on the real boards).
+        const k = field === 'name' ? 1 : Math.max(0.8, Math.min(1.3, Number(align?.boxScale ?? profile.boxScale ?? 1)));
+        const gw = Math.round(w * k) - w; const gh = Math.round(h * k) - h;
+        const bx = x - Math.floor(gw / 2);
+        const bw = w + gw;
+        cells.push({ side: team.id, row, field, column, roi: { x: bx, y: c - Math.round(h / 2) - Math.floor(gh / 2), w: bw, h: h + gh } });
       }
     });
   }

@@ -29,7 +29,9 @@ function normalizeSettings(s = {}) {
     // Board view: 'auto' (find it from the header bar), 'spectator' (Observer, board centred),
     // 'player' (testing from inside a lobby: your own stat card is on the right and the board
     // sits ~280 px left).
-    view: ['auto', 'spectator', 'player'].includes(s.view) ? s.view : 'auto'
+    view: ['auto', 'spectator', 'player'].includes(s.view) ? s.view : 'auto',
+    // OCR box size in % (100 = profile size). Bigger boxes give tesseract more margin.
+    boxScale: Math.max(80, Math.min(130, Math.round(Number(s.boxScale) || 108)))
   };
 }
 
@@ -148,7 +150,7 @@ class OverwatchOcrService {
         Object.assign(align, viewFallback(profile, this.settings.view));
       }
       this.lastAlign = align;
-      const cells = cellRois(profile, align);
+      const cells = cellRois(profile, { ...(align || {}), boxScale: this.settings.boxScale / 100 });
       // Read cells in parallel across the OCR engine's worker pool (one CPU core per worker).
       this.ocr.observerConcurrency = this.settings.workers;
       const reads = new Array(cells.length);
@@ -232,7 +234,7 @@ class OverwatchOcrService {
     const lum = typeof this.capture.luminance === 'function' ? (x, y) => this.capture.luminance(frame, x, y) : null;
     const cells = [];
     const align = this.settings.autoAlign !== false && lum ? alignBoard(lum, profile, typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null) : null;
-    for (const cell of cellRois(profile, align)) {
+    for (const cell of cellRois(profile, { ...(align || {}), boxScale: this.settings.boxScale / 100 })) {
       const crop = this.capture.crop(frame, cell.roi, { ...profile.preprocess, allowedChars: cell.column.allowedChars, ...(cell.column.shear ? { shear: cell.column.shear } : {}), ...(cell.column.threshold ? { threshold: cell.column.threshold } : {}) });
       const result = await this.ocr.recognize(crop.image, { allowedChars: cell.column.allowedChars, kind: cell.field === 'name' ? 'text' : 'score', fieldId: `overwatch-${cell.side}-${cell.row}-${cell.field}` });
       cells.push({
