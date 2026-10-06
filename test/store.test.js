@@ -102,7 +102,7 @@ test('character choices and shared artwork library are game specific', () => {
   const overwatch = createGameState('overwatch');
   for (const hero of GAME_CONFIGS.overwatch.characters) {
     assert.ok(overwatch.characterArt[hero], `${hero} is missing hero art`);
-    assert.ok(overwatch.characterArt[hero].url.startsWith('/assets/overwatch/heroes/'));
+    assert.match(overwatch.characterArt[hero].url, /^\/assets\/overwatch\/(heroes|hero-art-hd)\//);
   }
   for (const map of GAME_CONFIGS.overwatch.maps) {
     assert.ok(overwatch.mapArt[map], `${map} is missing map art`);
