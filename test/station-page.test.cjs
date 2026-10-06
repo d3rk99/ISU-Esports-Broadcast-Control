@@ -72,3 +72,20 @@ test('station player card (Rocket League): no live match = no stats, boost hidde
   assert.equal(page.$('player-boost').hidden, true);
   assert.equal(page.$('player-hero-img').getAttribute('src'), '/user-assets/fennec.png');
 });
+
+test('station player card: Varsity and JV on stage together (each station finds its player in either roster)', async () => {
+  const mk = (handle, station) => ({ handle, name: '', role: 'Striker', character: 'Octane', stageStation: station });
+  const state = { selectedGame: 'rocketleague', activeRoster: 'varsity', displays: { stations: { 2: { preset: 'player' }, 5: { preset: 'player' } } },
+    games: { rocketleague: { teams: [{ name: 'IDAHO STATE' }, { name: 'BOISE STATE' }], match: {}, mapRows: [], rocketLeague: { live: { players: [] } },
+      rosters: { varsity: [mk('VARS1', 1), mk('VARS2', 2), mk('VARS3', 3)], jv: [mk('JV1', 4), mk('JV2', 5), mk('JV3', 6)] }, awayRosters: { varsity: [], jv: [] } } } };
+  for (const [station, expected] of [[2, 'VARS2'], [5, 'JV2']]) {
+    const page = loadStation(station, state);
+    page.render(state);
+    await new Promise((r) => setTimeout(r, 20));
+    assert.equal(page.$('player-handle').textContent, expected, `station ${station}`);
+  }
+  // JV open in the controller: still finds Varsity at 2
+  const jvOpen = { ...state, activeRoster: 'jv' };
+  const page = loadStation(2, jvOpen); page.render(jvOpen); await new Promise((r) => setTimeout(r, 20));
+  assert.equal(page.$('player-handle').textContent, 'VARS2');
+});

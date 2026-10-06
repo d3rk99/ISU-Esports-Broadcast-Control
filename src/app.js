@@ -1354,13 +1354,31 @@ function renderRosters(config) {
   </section>`;
 }
 
+// station number -> who else sits there (e.g. "JV · BOB"), across home/away x varsity/jv.
+function stationOwners(game, self) {
+  const out = new Map();
+  for (const [sideLabel, rosters] of [['', game.rosters], ['AWAY ', game.awayRosters]]) {
+    for (const key of ['varsity', 'jv']) {
+      for (const p of rosters?.[key] || []) {
+        const n = Math.round(Number(p?.stageStation) || 0);
+        if (p === self || !(n >= 1 && n <= 10) || out.has(n)) continue;
+        out.set(n, `${sideLabel}${key === 'jv' ? 'JV' : 'VARSITY'}${p.handle ? ` ${p.handle}` : ''}`);
+      }
+    }
+  }
+  return out;
+}
+
 function renderPlayerEditor(player, index, config, game) {
   const selectedArt = game.characterArt[player.character] || {};
   const isOverwatch = state.selectedGame === 'overwatch';
   const isRocketLeague = state.selectedGame === 'rocketleague';
+  // Varsity and JV can share the stage: show which stations another roster already uses.
+  const takenBy = stationOwners(game, player);
   const stationOptions = ['<option value="">Off</option>', ...Array.from({ length: 10 }, (_item, stationIndex) => {
     const station = stationIndex + 1;
-    return `<option value="${station}" ${Number(player.stageStation) === station ? 'selected' : ''}>${String(station).padStart(2, '0')}</option>`;
+    const owner = takenBy.get(station);
+    return `<option value="${station}" ${Number(player.stageStation) === station ? 'selected' : ''}>${String(station).padStart(2, '0')}${owner ? ` · ${escapeHtml(owner)}` : ''}</option>`;
   })].join('');
   const imageTile = (type, label, value, filename, character = '') => `<div class="roster-asset-tile">
     <div class="asset-thumb ${value ? 'has-image' : ''}">${value ? `<img src="${escapeHtml(displayAssetUrl(value))}" alt="">` : `<span>${type === 'playerImage' ? 'PLAYER' : escapeHtml(config.characterLabel).toUpperCase()}</span>`}</div>

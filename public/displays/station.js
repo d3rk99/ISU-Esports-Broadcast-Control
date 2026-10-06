@@ -38,10 +38,16 @@
     if (url) { const img = document.createElement('img'); img.src = url; img.alt = ''; node.append(img); } else node.textContent = team?.shortName || '';
   }
 
+  // The player sitting at this station. Varsity and JV can be on stage at the same time (e.g.
+  // Varsity at 1-3, JV at 4-6), so every roster is searched; the roster open in the controller
+  // wins if two players claim the same station.
   function stationPlayer(game, rosterKey) {
-    for (const [side, team, roster] of [['home', game.teams?.[0], game.rosters?.[rosterKey]], ['away', game.teams?.[1], game.awayRosters?.[rosterKey]]]) {
-      const player = (roster || []).find((p) => Math.round(Number(p?.stageStation) || 0) === station);
-      if (player) return { side, team: team || {}, player };
+    const keys = [rosterKey, ...['varsity', 'jv'].filter((k) => k !== rosterKey)];
+    for (const key of keys) {
+      for (const [side, team, roster] of [['home', game.teams?.[0], game.rosters?.[key]], ['away', game.teams?.[1], game.awayRosters?.[key]]]) {
+        const player = (roster || []).find((p) => Math.round(Number(p?.stageStation) || 0) === station);
+        if (player) return { side, team: team || {}, player, roster: key };
+      }
     }
     return null;
   }
@@ -199,7 +205,9 @@
     logo('banner-logo', team);
     setText('banner-kicker', team.shortName || (sideIndex ? 'AWAY' : 'HOME'));
     setText('banner-name', team.name || '');
-    const roster = (sideIndex ? game.awayRosters?.[rosterKey] : game.rosters?.[rosterKey]) || [];
+    // Banner lists the roster of the player at this station (Varsity or JV), else the open one.
+    const bannerKey = found?.roster || rosterKey;
+    const roster = (sideIndex ? game.awayRosters?.[bannerKey] : game.rosters?.[bannerKey]) || [];
     $('banner-roster').replaceChildren(...roster.filter((p) => p?.handle).slice(0, 5).map((p) => {
       const d = document.createElement('div'); const i = document.createElement('i');
       i.textContent = (p.role || '').toUpperCase(); d.append(i, document.createTextNode(p.handle)); return d;
