@@ -30,7 +30,8 @@ function alignSummary(align) {
     if (r.nameDy) bits.push(`name ${r.nameDy > 0 ? '+' : ''}${r.nameDy}`);
     return bits.length ? `${side === 'home' ? 'TOP' : 'BOT'} ${Number(row) + 1}: ${bits.join(', ')}` : '';
   }).filter(Boolean);
-  return `<p class="ow-ocr-status">AUTO-ALIGN · stat columns ${align.dx ? `${align.dx > 0 ? '+' : ''}${align.dx} px` : 'in place'}${rows.length ? ` · ${rows.join(' · ')}` : ' · every row in place'}</p>`;
+  const layout = `${align.view === 'player' ? 'PLAYER VIEW (own stat card)' : align.view === 'spectator' ? 'SPECTATOR VIEW' : 'LAYOUT NOT FOUND'}${align.forced ? ' (forced)' : ''}${align.perks ? ' · PERKS' : ''}${align.leftDx ? ` · board ${align.leftDx > 0 ? '+' : ''}${align.leftDx} px` : ''}`;
+  return `<p class="ow-ocr-status">AUTO-ALIGN · ${layout} · stat columns ${align.cols ? `from labels E${align.cols.elims}…MIT${align.cols.mitigation}` : align.dx ? `${align.dx > 0 ? '+' : ''}${align.dx} px` : 'in place'}${rows.length ? ` · ${rows.join(' · ')}` : ' · every row in place'}</p>`;
 }
 
 export function renderOverwatchDebugCapture(debug) {
@@ -75,6 +76,7 @@ export function renderOverwatchOcrPanel(ocr = emptyOverwatchOcr(), teams = [], g
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-stat-cards ${game.overwatchShowStatCards ? 'checked' : ''}><i></i><span><b>PLAYER STAT CARDS (EXPERIMENTAL)</b><small>Bottom-left / bottom-right cards on the scoreboard overlay</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-hero-autofill ${game.overwatchHeroAutofill === false ? '' : 'checked'}><i></i><span><b>AUTO-FILL ROSTER FROM OCR</b><small>Matches gamertags at ≥90% similarity: hero + role follow the game; empty roster slots get filled from the board</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-ow-ocr="autoAlign" ${s.autoAlign === false ? '' : 'checked'}><i></i><span><b>AUTO-ALIGN BOXES</b><small>Follows names pushed up by competitive Drives and columns nudged by icons; DEBUG CAPTURE shows what moved</small></span></label>
+      <label class="field"><span>BOARD VIEW</span><select data-ow-ocr="view">${[['auto', 'Auto-detect'], ['spectator', 'Spectator (Observer)'], ['player', 'Testing: in the lobby (own stat card)']].map(([v, l]) => `<option value="${v}" ${(s.view || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select><small>Auto finds it from the column labels; pick one to force it</small></label>
       <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-ow-ocr="windowName" value="${esc(s.windowName || 'Overwatch')}"></label>
       <label class="field"><span>READ EVERY (MS)</span><input type="number" min="200" max="5000" step="50" data-ow-ocr="intervalMs" value="${Number(s.intervalMs) || 500}"></label>
       <label class="field"><span>CPU CORES (OCR WORKERS)</span><input type="number" min="1" max="16" step="1" data-ow-ocr="workers" value="${Number(s.workers) || 4}"><small>More = faster reads; default is half your cores</small></label>

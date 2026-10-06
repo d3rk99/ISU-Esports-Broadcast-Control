@@ -9,7 +9,7 @@
 // scores keep working; OCR only fills the player stats.
 const os = require('node:os');
 const { HeroMatcher } = require('./overwatch-hero-match.cjs');
-const { getProfile, cellRois, alignBoard, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
+const { STAT_FIELDS, getProfile, cellRois, alignBoard, parseCell, glyphCount, plausibleRead, ringFill, isReadyDisc, resolveUltimate, OverwatchConsensus, emptyBoard, applySweep } = require('./overwatch-ocr-parse.cjs');
 
 // Default OCR workers: half the CPU cores, 2..8 (each Tesseract worker is one thread).
 const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
@@ -25,8 +25,19 @@ function normalizeSettings(s = {}) {
     profileId: String(s.profileId || DEFAULTS.profileId),
     intervalMs: Math.max(200, Math.min(5000, Math.round(Number(s.intervalMs) || DEFAULTS.intervalMs))),
     workers: Math.max(1, Math.min(16, Math.round(Number(s.workers) || DEFAULTS.workers))),
-    autoAlign: s.autoAlign !== false // follow rows/names that drives & icons push around
+    autoAlign: s.autoAlign !== false, // follow rows/names that drives & icons push around
+    // Board view: 'auto' (find it from the header bar), 'spectator' (Observer, board centred),
+    // 'player' (testing from inside a lobby: your own stat card is on the right and the board
+    // sits ~280 px left).
+    view: ['auto', 'spectator', 'player'].includes(s.view) ? s.view : 'auto'
   };
+}
+
+// Known layouts when the header bar can't be read (offsets from Derk's screenshots 2026-10-06).
+function viewFallback(profile, view) {
+  const base = Object.fromEntries(STAT_FIELDS.map((f) => [f, Math.round(profile.columns[f].x + profile.columns[f].w / 2)]));
+  if (view === 'player') return { view, leftDx: -282, cols: Object.fromEntries(Object.entries(base).map(([f, x]) => [f, x - 183])), forced: true };
+  return { view, leftDx: 0, cols: null, forced: true };
 }
 
 class OverwatchOcrService {
@@ -132,6 +143,10 @@ class OverwatchOcrService {
       // columns) and move the boxes there. A clean board gives ~0 shifts.
       const align = this.settings.autoAlign !== false && typeof this.capture.luminance === 'function'
         ? alignBoard((x, y) => this.capture.luminance(frame, x, y), profile, typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null) : null;
+      if (align && this.settings.view !== 'auto' && align.view !== this.settings.view) {
+        // Forced view but the header wasn't read: use that view's known offsets.
+        Object.assign(align, viewFallback(profile, this.settings.view));
+      }
       this.lastAlign = align;
       const cells = cellRois(profile, align);
       // Read cells in parallel across the OCR engine's worker pool (one CPU core per worker).
@@ -169,7 +184,8 @@ class OverwatchOcrService {
       const filtered = overrides.size ? reads.filter((r) => !(r.field === 'name' && overrides.has(`${r.side}:${r.row}`))) : reads;
       const changed = applySweep(this.board, this.consensus, filtered, this.now());
       const seen = reads.filter((r) => r.value !== null).length;
-      this.setStatus(seen ? 'reading' : 'no-board', seen ? `Reading ${seen}/${reads.length} cells` : 'Window found but no scoreboard visible (is Tab open on this spectator?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
+      const layout = align ? ` · ${align.view === 'player' ? 'player view (own stat card)' : align.view === 'spectator' ? 'spectator view' : 'layout not found, default boxes'}${align.perks ? ' · perks' : ''}` : '';
+      this.setStatus(seen ? 'reading' : 'no-board', seen ? `Reading ${seen}/${reads.length} cells${layout}` : 'Window found but no scoreboard visible (is Tab open on this spectator?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
       if (changed) this.onState(this.snapshot());
       return changed;
     } finally { this.running = false; }

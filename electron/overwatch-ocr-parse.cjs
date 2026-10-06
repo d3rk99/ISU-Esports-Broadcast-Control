@@ -74,25 +74,38 @@ function statOffset(lum, profile, statDy = {}) {
 function headerColumns(lum, profile = getProfile()) {
   const cols = STAT_FIELDS.filter((f) => profile.columns[f]);
   const firstRow = Math.min(...profile.teams.flatMap((t) => t.rowCenters));
-  const x0 = Math.min(...cols.map((f) => profile.columns[f].x)) - 90; const x1 = Math.max(...cols.map((f) => profile.columns[f].x + profile.columns[f].w)) + 110;
+  // Wide search: the whole board can sit ~280 px further left (player view, own stat card on
+  // the right) or ~50 px right (perks). The label run is matched by spacing, not position.
+  const x0 = Math.max(0, Math.min(...cols.map((f) => profile.columns[f].x)) - (profile.align?.headerLeft ?? 360)); const x1 = Math.max(...cols.map((f) => profile.columns[f].x + profile.columns[f].w)) + 110;
   // The bar: rows above the first player row whose middle is light.
   const barRows = [];
   for (let y = firstRow - 75; y < firstRow - 25; y += 1) {
-    let light = 0; let n = 0;
-    for (let x = x0; x < x1; x += 4) { n += 1; if (lum(x, y) >= 180) light += 1; }
-    if (light / n >= 0.7) barRows.push(y);
+    // Light along the widest stretch: the bar is ~750-1000 px long wherever the board sits.
+    let run = 0; let best = 0;
+    for (let x = x0; x < x1; x += 4) { if (lum(x, y) >= 180) { run += 4; if (run > best) best = run; } else if (run && lum(x + 4, y) < 180) run = 0; }
+    if (best >= 400) barRows.push(y);
   }
   if (barRows.length < 8) return null;
+  // Rows through the label text break the light run; the bar is everything between its first
+  // and last light row (filled in, as long as it stays bar-sized).
+  if (barRows.at(-1) - barRows[0] <= 45) { const a = barRows[0]; const b = barRows.at(-1); barRows.length = 0; for (let y = a; y <= b; y += 1) barRows.push(y); }
   // Left end of the bar (the board's left edge moves with the layout too: with perks the
   // whole left block - portrait, ult ring, name - sits ~50 px further left).
   const midY = barRows[Math.floor(barRows.length / 2)];
   let barLeft = null;
-  for (let x = Math.max(0, x0 - 520); x < x0; x += 1) {
+  for (let x = 0; x < Math.min(x1, x0 + 500); x += 1) {
     let light = 0; for (let k = 0; k < 120; k += 4) if (lum(x + k, midY) >= 180) light += 1;
     if (light >= 28) { barLeft = x; break; }
   }
+  // Only inside the bar: its top and bottom rows must be light there (beyond the bar's end the
+  // screen is dark, which would look like one huge label).
+  const top = barRows[0]; const bottom = barRows.at(-1);
+  // A column is inside the bar when most of the bar's rows there are light-or-label (the label
+  // is dark text ON the light bar, so its top/bottom edges stay light); past the bar's end the
+  // whole column is dark.
+  const inBar = (x) => lum(x, top + 1) >= 180 || lum(x, bottom - 1) >= 180;
   const dark = new Int32Array(x1 - x0);
-  for (const y of barRows) for (let x = x0; x < x1; x += 1) if (lum(x, y) < 110) dark[x - x0] += 1;
+  for (const y of barRows) for (let x = x0; x < x1; x += 1) if (lum(x, y) < 110 && inBar(x)) dark[x - x0] += 1;
   const blobs = []; let start = -1;
   for (let i = 0; i <= dark.length; i += 1) {
     const on = i < dark.length && dark[i] > 1;
@@ -121,7 +134,7 @@ function headerColumns(lum, profile = getProfile()) {
   const out = Object.fromEntries(cols.map((f, i) => [f, Math.round(best.run[i])]));
   // leftDx: how far the left block moved vs the profile (profile.barLeft = bar's left end there).
   out.leftDx = barLeft != null && profile.barLeft ? barLeft - profile.barLeft : 0;
-  if (Math.abs(out.leftDx) > 120) out.leftDx = 0;
+  if (Math.abs(out.leftDx) > 400) out.leftDx = 0;
   return out;
 }
 
@@ -148,7 +161,9 @@ function alignBoard(lum, profile = getProfile(), rgb = null) {
   // Perks add a column of white icons between the name and E: then the name must stop well
   // before E or the icons get read as letters. Perks are on when E moved right of the profile.
   const elimsMid = header?.elims ?? (columns.elims ? columns.elims.x + columns.elims.w / 2 + dx : null);
-  const perks = header && columns.elims ? header.elims - (columns.elims.x + columns.elims.w / 2) >= 30 : false;
+  // Perks = the gap between the board's left edge and E grew (~+100 px). Measured from the
+  // left edge so it also works when the whole board sits left (player view with own stat card).
+  const perks = header && columns.elims ? header.elims - leftDx - (columns.elims.x + columns.elims.w / 2) >= 50 : false;
   const nameRight = elimsMid != null ? elimsMid - (perks ? (profile.align?.perkGap ?? 140) : (profile.align?.nameGap ?? 23)) : null;
   // White text = bright and not coloured (rank emblems / Drives in front of the name are coloured).
   const isText = (x, y) => { if (lum(x, y) < 165) return false; if (!rgb) return true; const [r, g, b] = rgb(x, y); return Math.max(r, g, b) - Math.min(r, g, b) < 70; };
@@ -183,7 +198,10 @@ function alignBoard(lum, profile = getProfile(), rgb = null) {
       if (nameBand) r.nameDy = Math.round(nameBand.c - cy0);
     });
   }
-  return { dx, rows, cols: header, leftDx, perks };
+  // Spectator board sits at the profile spot; in a lobby you play in, your own stat card takes
+  // the right side and the whole board moves ~280 px left.
+  const view = header ? (leftDx - (perks ? -50 : 0) <= -150 ? 'player' : 'spectator') : 'unknown';
+  return { dx, rows, cols: header, leftDx, perks, view };
 }
 
 function cellRois(profile = getProfile(), align = null) {

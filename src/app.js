@@ -2701,7 +2701,7 @@ root.addEventListener('change', async (event) => {
     const value = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
     const result = await window.isuDesktop?.configureOverwatchOcr({ [key]: value });
     if (result) overwatchOcr = { ...overwatchOcr, settings: result.settings, status: result.status };
-    toast(key === 'enabled' ? (value ? 'Overwatch scoreboard OCR on' : 'Overwatch scoreboard OCR off') : key === 'autoAlign' ? (value ? 'OCR auto-align on' : 'OCR auto-align off: fixed boxes') : 'Overwatch OCR settings saved');
+    toast(key === 'enabled' ? (value ? 'Overwatch scoreboard OCR on' : 'Overwatch scoreboard OCR off') : key === 'autoAlign' ? (value ? 'OCR auto-align on' : 'OCR auto-align off: fixed boxes') : key === 'view' ? `OCR board view: ${value}` : 'Overwatch OCR settings saved');
     render();
     return;
   }

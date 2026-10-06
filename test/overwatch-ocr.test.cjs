@@ -534,3 +534,76 @@ test('Overwatch OCR service: real perks board - stats read right, never a wrong 
   // Ult READY discs for the three home players that have it.
   assert.deepEqual([0, 2, 4].map((r) => service.board.teams.home.players[r].ultimate), ['READY', 'READY', 'READY']);
 });
+
+// Real board from inside a lobby (Derk 2026-10-06, Lijiang): perks on, AND his own stat card
+// on the right, so the whole board sits ~280 px left. Fixture = x 200-1299, y 140-939.
+const PLAYER_VIEW = { file: path.join(__dirname, 'fixtures', 'ow-board-player-view.png'), x: 200, y: 140 };
+const pvImg = readGrayPng(PLAYER_VIEW.file);
+const pvAt = (x, y) => { const lx = x - PLAYER_VIEW.x; const ly = y - PLAYER_VIEW.y; return lx < 0 || ly < 0 || lx >= pvImg.width || ly >= pvImg.height ? 0 : pvImg.data[ly * pvImg.width + lx]; };
+// [elims, assists, deaths, damage, healing, mitigation] as shown on the board
+const PV_EXPECTED = {
+  home: [[8, 8, 4, 5382, 1179, 3928], [7, 1, 5, 4673, 645, 30], [6, 0, 7, 4123, 782, 33], [6, 1, 7, 4060, 3469, 0], [7, 7, 4, 3764, 6072, 586]],
+  away: [[16, 0, 4, 8715, 0, 11086], [14, 0, 5, 6142, 388, 0], [14, 1, 4, 6875, 0, 0], [12, 7, 1, 3251, 5803, 494], [0, 16, 2, 0, 9912, 0]]
+};
+
+test('Overwatch OCR: player view (own stat card) found: board ~280 px left, stats from the labels', () => {
+  const { alignBoard, headerColumns } = require('../electron/overwatch-ocr-parse.cjs');
+  const cols = headerColumns(pvAt, getProfile());
+  assert.deepEqual([cols.elims, cols.assists, cols.deaths, cols.damage, cols.healing, cols.mitigation], [738, 788, 839, 919, 1011, 1103]);
+  assert.ok(Math.abs(cols.leftDx + 282) <= 2, `left block ~282 px left (got ${cols.leftDx})`);
+  const a = alignBoard(pvAt, getProfile());
+  assert.equal(a.view, 'player'); assert.equal(a.perks, true);
+  // the trimmed spectator fixture has no header bar, so its layout is unknown (profile spots)
+  assert.equal(alignBoard(sample, getProfile()).view, 'unknown');
+  assert.equal(alignBoard(perksAt, getProfile()).view, 'spectator');
+});
+
+test('Overwatch OCR service: real player-view board - most stats read, never a wrong number', { timeout: 240000 }, async () => {
+  const capture = {
+    capture: async () => ({ width: 1920, height: 1080 }),
+    crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(pvAt, roi, pre.scale || 4, pre.threshold && pre.threshold !== 120 ? 255 - pre.threshold : 120, 20, pre.shear || 0) }),
+    luminance: (_f, x, y) => pvAt(x, y)
+  };
+  const ocr = new TesseractOcrEngine();
+  const service = new OverwatchOcrService({ capture, ocr });
+  try { for (let i = 0; i < 3; i += 1) await service.sweep(); } finally { await ocr.close(); }
+  const fields = ['elims', 'assists', 'deaths', 'damage', 'healing', 'mitigation'];
+  let right = 0; const wrong = [];
+  for (const side of ['home', 'away']) PV_EXPECTED[side].forEach((row, i) => fields.forEach((f, k) => {
+    const got = service.board.teams[side].players[i][f];
+    if (got === row[k]) right += 1; else if (got !== null) wrong.push(`${side}${i + 1} ${f}: ${got} (board ${row[k]})`);
+    else if (process.env.OW_SHOW_MISSES) console.log('miss', side, i + 1, f, 'board', row[k]);
+  }));
+  console.log(`player-view board: ${right}/60 stat cells read`);
+  assert.deepEqual(wrong, [], 'a missed cell is ok (stays empty), a wrong number is not');
+  assert.ok(right >= 48, `at least 48/60 stat cells read (got ${right})`);
+  assert.equal(service.board.teams.home.players[0].ultimate, 'READY');
+  assert.equal(service.board.teams.home.players[1].ultimate, 82);
+});
+
+test('Overwatch OCR service: BOARD VIEW setting - forced "player" works even when the header bar is hidden', { timeout: 240000 }, async () => {
+  // Black out the header bar so auto-detect can't see the labels.
+  const hidden = (x, y) => (y >= 150 && y <= 195 ? 15 : pvAt(x, y));
+  const run = async (view) => {
+    const capture = {
+      capture: async () => ({ width: 1920, height: 1080 }),
+      crop: (_f, roi, pre = {}) => ({ image: cellImageFrom(hidden, roi, pre.scale || 4, pre.threshold && pre.threshold !== 120 ? 255 - pre.threshold : 120, 20, pre.shear || 0) }),
+      luminance: (_f, x, y) => hidden(x, y)
+    };
+    const ocr = new TesseractOcrEngine();
+    const service = new OverwatchOcrService({ capture, ocr });
+    service.configure({ view });
+    try { for (let i = 0; i < 2; i += 1) await service.sweep(); } finally { await ocr.close(); }
+    return service;
+  };
+  const forced = await run('player');
+  assert.equal(forced.lastAlign.view, 'player');
+  assert.match(forced.status.message, /player view/);
+  const p = forced.board.teams.away.players;
+  assert.deepEqual([p[0].elims, p[0].damage, p[1].elims, p[1].damage], [16, 8715, 14, 6142], 'stats read with the forced player layout');
+  const auto = await run('auto');
+  // Without labels, auto uses the spectator boxes, which sit on the wrong columns of this
+  // board (away1 damage box lands on its mitigation 11086): that's why the setting exists.
+  assert.notEqual(auto.lastAlign.view, 'player');
+  assert.notEqual(auto.board.teams.away.players[0].damage, 8715);
+});
