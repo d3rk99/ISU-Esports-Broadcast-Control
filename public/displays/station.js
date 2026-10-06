@@ -95,6 +95,17 @@
     probe.onerror = () => { if (portraitUrl === url) console.warn(`[station] player portrait did not load: ${url}`); };
     probe.src = url;
   }
+  // Gamertag on one line: start at 13vh and shrink just enough to fit the text column.
+  function fitName() {
+    const el = $('player-handle'); const box = el?.parentElement; if (!el || !box) return;
+    const max = window.innerHeight * 0.13; const min = window.innerHeight * 0.04;
+    el.style.setProperty('--name-size', `${max}px`);
+    const room = box.clientWidth - (parseFloat(getComputedStyle(box).paddingRight) || 0);
+    const need = el.scrollWidth;
+    if (room > 0 && need > room) el.style.setProperty('--name-size', `${Math.max(min, Math.floor(max * room / need * 0.98))}px`);
+  }
+  window.addEventListener('resize', fitName);
+  document.fonts?.ready?.then(fitName);
   let lastPreset = '';
   function render(state) {
     lastState = state;
@@ -126,6 +137,7 @@
     setText('player-team', found?.team?.name || team.name || '');
     const handle = player?.handle || player?.name || `STATION ${pad(station)}`;
     setText('player-handle', handle);
+    fitName();
     setText('player-initials', handle.slice(0, 2).toUpperCase());
     setText('player-station', pad(station));
     const live = player?.handle ? bestByTag(game.overwatchOcr?.live?.teams?.[found.side]?.players, player.handle) : null;
