@@ -81,6 +81,20 @@
   }
   let lastState = null;
   window.addEventListener('resize', () => { if (lastState) render(lastState); });
+  // Player portrait: only hide the initials once the picture has really loaded. If it fails
+  // (wrong host, file missing on this controller) the initials stay and the reason is logged.
+  let portraitUrl = null; let portraitOk = false;
+  function showPortrait(url) {
+    const el = $('player-portrait');
+    if (url === portraitUrl) { el.classList.toggle('has-image', portraitOk); return; }
+    portraitUrl = url; portraitOk = false;
+    el.classList.remove('has-image'); el.style.backgroundImage = '';
+    if (!url) return;
+    const probe = new Image();
+    probe.onload = () => { if (portraitUrl !== url) return; portraitOk = true; el.style.backgroundImage = `url("${url}")`; el.classList.add('has-image'); };
+    probe.onerror = () => { if (portraitUrl === url) console.warn(`[station] player portrait did not load: ${url}`); };
+    probe.src = url;
+  }
   let lastPreset = '';
   function render(state) {
     lastState = state;
@@ -117,9 +131,7 @@
     const live = player?.handle ? bestByTag(game.overwatchOcr?.live?.teams?.[found.side]?.players, player.handle) : null;
     const hero = live?.hero || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
     setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, hero].filter(Boolean).join(' · '));
-    const portrait = safeUrl(player?.playerImage);
-    $('player-portrait').classList.toggle('has-image', Boolean(portrait));
-    $('player-portrait').style.backgroundImage = portrait ? `url("${portrait}")` : '';
+    showPortrait(safeUrl(player?.playerImage));
     placeHero(safeUrl(hero ? game.characterArt?.[hero]?.url : ''));
     const saved = game.overwatchLastMapStats?.[station];
     const stats = saved?.stats || live;
