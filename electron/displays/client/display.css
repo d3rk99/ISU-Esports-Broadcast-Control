@@ -1,0 +1,12 @@
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #000; color: #f4f7fb; font-family: Arial, Helvetica, sans-serif; cursor: none; }
+#mirror, #ndi { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: contain; background: #000; display: none; }
+body.mode-mirror.live #mirror { display: block; }
+body.mode-ndi.live #ndi { display: block; }
+body.live #wait { display: none; }
+#wait { position: fixed; inset: 0; display: grid; place-content: center; justify-items: center; gap: 2vh; background: radial-gradient(circle at 50% 110%, rgba(244,121,32,.28), transparent 55%), #05070a; }
+#wait small { color: #f47920; font-size: 2.4vh; font-weight: 900; letter-spacing: .4em; }
+#wait h1 { margin: 0; font-size: 15vh; font-style: italic; font-weight: 900; letter-spacing: .03em; }
+#wait p { margin: 0; color: #9fb0c2; font-size: 2.6vh; letter-spacing: .08em; }
+/* Small corner badge only while something is wrong (not connected / no feed). */
+#badge { position: fixed; right: 1.2vw; bottom: 1.2vh; padding: .6vh 1vw; border-radius: 4px; background: rgba(150,20,20,.8); font-size: 1.6vh; font-weight: 700; letter-spacing: .05em; display: none; }
+#badge.show { display: block; }

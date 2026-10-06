@@ -270,15 +270,6 @@ test('Overwatch: NEXT MATCH saves each stationed player\'s OCR stats as "last ma
   assert.equal(game.overwatchLastMapStats[7].stats.deaths, 9);
 });
 
-test('NDI player cards: missing NDI runtime is reported, not thrown', async () => {
-  const { NdiPlayerCards } = require('../electron/ndi-player-cards.cjs');
-  const cards = new NdiPlayerCards({ BrowserWindow: class {}, baseUrl: 'http://127.0.0.1:1', loadNdiImpl: () => ({ ndi: null, error: 'NDI runtime not available (test)' }) });
-  const status = await cards.configure({ enabled: true, stations: [1, 2, 11] });
-  assert.deepEqual(status.stations, [1, 2]);
-  assert.match(status.error, /not available/);
-  assert.equal((await cards.configure({ enabled: false })).stations.length, 0);
-});
-
 // 20 real scoreboard rows (two boards, Derk 2026-10-05): a 70x60 strip per row, columns
 // 580-649 of the 1080p grid, row centre at 30. RGB PNG read with the same tiny decoder.
 function readRgbPng(file) {

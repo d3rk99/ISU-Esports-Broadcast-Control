@@ -2,7 +2,8 @@ import './styles.css';
 import { normalizeLoadout, updateCarArt } from './rl-loadout.js';
 import { syncRosterSides } from './rl-roster-sync.js';
 import { requestCarRender } from './rl-auto-car.js';
-import { patchStageStatus } from './stage-status-view.js';
+import { renderDisplaysView } from './displays-view.js';
+import { applyDisplayPreset } from './display-presets.js';
 import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
@@ -29,7 +30,6 @@ if (savedValorantOcrSettings && typeof savedValorantOcrSettings === 'object') {
   };
 }
 let history = [];
-let stageKeyDraft = '';
 let saveTimer;
 let livePublishTimer;
 let liveRenderTimer;
@@ -64,42 +64,8 @@ let companionSettings = {
   ...(window.isuDesktop?.savedCompanionSettings || {})
 };
 let companionStatus = { enabled: companionSettings.enabled, listening: false, port: companionSettings.port, clients: 0, error: '' };
-let stageDisplayStatus = { enabled: false, port: 3178, onlineCount: 0, stations: [] };
-let ndiCardStatus = { enabled: false, stations: [], outputs: [], error: '' };
-window.isuDesktop?.getNdiCardStatus?.().then((status) => { ndiCardStatus = status || ndiCardStatus; }).catch(() => {});
-setInterval(() => {
-  if (state.activeView !== 'stage' || !window.isuDesktop?.getNdiCardStatus) return;
-  window.isuDesktop.getNdiCardStatus().then((status) => { ndiCardStatus = status || ndiCardStatus; render(); }).catch(() => {});
-}, 2000);
-
-// Stations that have a roster player assigned (STATION column) in the selected game.
-function assignedPlayerStations() {
-  const game = current();
-  const all = [...(game.rosters?.[state.activeRoster] || []), ...(game.awayRosters?.[state.activeRoster] || [])];
-  return [...new Set(all.map((p) => Math.round(Number(p?.stageStation) || 0)).filter((n) => n >= 1 && n <= 10))].sort((a, b) => a - b);
-}
-
-function renderNdiCardPanel() {
-  const st = ndiCardStatus || {};
-  const assigned = assignedPlayerStations();
-  const outputs = new Map((st.outputs || []).map((o) => [o.station, o]));
-  const rows = Array.from({ length: 10 }, (_v, i) => {
-    const n = i + 1; const o = outputs.get(n);
-    const on = (st.stations || []).includes(n);
-    const label = !on ? 'off' : o?.error ? `error: ${o.error}` : o ? `${o.frames} frames · ${o.connections} viewer${o.connections === 1 ? '' : 's'}` : 'starting';
-    return `<label class="ndi-row ${on ? 'on' : ''} ${o?.error ? 'bad' : ''}"><input type="checkbox" data-ndi-station="${n}" ${on ? 'checked' : ''}><b>${String(n).padStart(2, '0')}</b><span>${assigned.includes(n) ? 'player assigned' : 'no player'}</span><small>${escapeHtml(label)}</small></label>`;
-  }).join('');
-  return `<article class="panel ndi-card-panel" data-key="ndi-card-panel">
-    <div class="panel-title"><span class="section-number">NDI</span><div><h2>NDI player cards</h2><p>One 1920×1080 NDI source per station, <b>ISU Player Card 01-10</b>: headshot + name from the roster (STATION column), hero art, and last-map stats from the Overwatch OCR. Set a station to <b>Player Card</b> to show it.</p></div></div>
-    <div class="ndi-card-controls">
-      <label class="rl-enable-toggle"><input type="checkbox" data-ndi-enabled ${st.enabled ? 'checked' : ''}><i></i><span><b>SEND NDI PLAYER CARDS</b><small>${st.ndiVersion ? escapeHtml(st.ndiVersion) : 'NDI 6 runtime'}</small></span></label>
-      <button data-action="ndi-use-assigned">USE STATIONS WITH PLAYERS (${assigned.length})</button>
-    </div>
-    ${st.error ? `<p class="ow-ocr-status is-bad">${escapeHtml(st.error)}</p>` : ''}
-    <div class="ndi-rows">${rows}</div>
-  </article>`;
-}
-let stagePresets = [];
+let displayStatus = { port: 3178, onlineCount: 0, stations: [] };
+let obsDisplays = { config: {}, status: null, error: '', message: '' };
 const overlayBaseUrl = window.isuDesktop?.overlayBaseUrl || 'http://127.0.0.1:3174';
 const ROCKET_LEAGUE_EVENT_BADGE_MS = 5500;
 const ROCKET_LEAGUE_EVENT_FADE_MS = 850;
@@ -224,7 +190,7 @@ function renderSidebar(config) {
     ['maps', 'Map Pool'],
     ['roster', 'Rosters'],
     ['outputs', 'OBS Outputs'],
-    ['stage', 'Stage Displays']
+    ['stage', 'Displays']
   ];
   return `
     <aside class="sidebar">
@@ -262,7 +228,7 @@ function renderTopbar(config) {
     maps: ['Map Pool', `Plan and record the ${config.name} series`],
     roster: ['Team Rosters', 'Manage Home and Away Varsity/JV lineups'],
     outputs: ['OBS Outputs', 'Browser-source graphics and live asset status'],
-    stage: ['Stage Displays', 'Control audience-facing station monitors over LAN'],
+    stage: ['Displays', 'Audience displays: game mirror or NDI presets from OBS'],
     settings: ['Workspace Settings', 'Defaults, data, and application information']
   };
   const [title, subtitle] = labels[state.activeView];
@@ -283,281 +249,9 @@ function renderView(config) {
   if (state.activeView === 'maps') return renderMaps(config);
   if (state.activeView === 'roster') return renderRosters(config);
   if (state.activeView === 'outputs') return renderOutputs();
-  if (state.activeView === 'stage') return renderStageDisplays();
+  if (state.activeView === 'stage') return renderDisplaysView(state, { displayStatus, obsDisplays });
   if (state.activeView === 'settings') return renderSettings();
   return renderControl(config);
-}
-
-function stageModeLabel(mode = '') {
-  return ({
-    gameplay: 'Gameplay Mirror',
-    wall: 'Wall / Span',
-    graphic: 'Mirror Graphic',
-    individual: 'Individual',
-    playercard: 'Player Card (NDI)',
-    blackout: 'Blackout',
-    hold: 'Hold Graphic',
-    offline: 'Offline'
-  })[mode] || String(mode || 'Unknown').toUpperCase();
-}
-
-function renderStageModeButtons(scope, station = '') {
-  const modes = [
-    ['gameplay', 'Gameplay'],
-    ['wall', 'Wall'],
-    ['individual', 'Individual'],
-    ['playercard', 'Player Card'],
-    ['blackout', 'Blackout']
-  ];
-  return modes.map(([mode, label]) => `<button data-action="${scope === 'global' ? 'stage-global-mode' : 'stage-station-mode'}" data-stage-mode="${mode}" ${station ? `data-station="${station}"` : ''}>${label}</button>`).join('');
-}
-
-function stageStationList() {
-  const byStation = new Map((stageDisplayStatus.stations || []).map((station) => [Number(station.station), station]));
-  return Array.from({ length: 11 }, (_item, index) => byStation.get(index + 1) || {
-    station: index + 1,
-    online: false,
-    mode: 'offline',
-    hostname: '',
-    clientVersion: '',
-    lastSeen: null
-  });
-}
-
-function stageReadinessText(readiness = {}) {
-  const online = Number(readiness.online || 0);
-  const ready = Number(readiness.ready || 0);
-  if (!online) return 'No online stations';
-  return `${ready} of ${online} online stations ready`;
-}
-
-function stagePresetModeLabel(mode = '') {
-  if (mode === 'wall') return 'Wall / Span';
-  if (mode === 'graphic') return 'Mirror Graphic';
-  if (mode === 'individual') return 'Individual';
-  return stageModeLabel(mode);
-}
-
-function stageTargetText(pending = {}) {
-  if (!pending?.targetStations?.length) return '&mdash;';
-  const targets = pending.targetStations.map(Number).sort((a, b) => a - b);
-  if (targets.length === 10) return pending.wallGroup === 'mirror-5' ? '1-5 and 6-10 mirrored' : '1-10';
-  return `${targets[0]}-${targets[targets.length - 1]}`;
-}
-
-function stageAssignmentText(mode = '') {
-  const assignment = stageDisplayStatus.modeAssignments?.[mode];
-  if (!assignment?.preset) {
-    return mode === 'wall' ? 'No Wall preset assigned' : 'No Mirror Graphic preset assigned';
-  }
-  const title = assignment.title || assignment.preset;
-  if (mode !== 'wall') return escapeHtml(title);
-  const total = Number(assignment.wallTotal || 10);
-  const group = assignment.wallGroup || '10';
-  const layout = total === 5
-    ? (group === '1-5' ? 'screens 1-5' : group === '6-10' ? 'screens 6-10' : 'mirrored 5-screen')
-    : '10-screen wall';
-  return `${escapeHtml(title)} &middot; ${layout}`;
-}
-
-function stagePresetActionButtons(preset) {
-  const name = escapeHtml(preset.name);
-  const layout = preset.layout || 'any';
-  const button = (action, label, mode, extra = '') => `<button data-action="${action}" data-preset="${name}" data-stage-mode="${mode}" ${extra}>${label}</button>`;
-  if (layout === 'wall-10') {
-    return [
-      button('stage-assign-mode-preset', 'Use for Wall', 'wall', 'data-wall-total="10" data-wall-group="10"'),
-      button('stage-play-preset', 'Play Now', 'wall', 'data-wall-total="10" data-wall-group="10"')
-    ].join('');
-  }
-  if (layout === 'wall-5') {
-    return [
-      button('stage-assign-mode-preset', 'Use Wall 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
-      button('stage-assign-mode-preset', 'Use Wall 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
-      button('stage-assign-mode-preset', 'Use Mirrored', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
-      button('stage-play-preset', 'Play 1-5', 'wall', 'data-wall-total="5" data-wall-group="1-5"'),
-      button('stage-play-preset', 'Play 6-10', 'wall', 'data-wall-total="5" data-wall-group="6-10"'),
-      button('stage-play-preset', 'Play Mirror', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
-    ].join('');
-  }
-  if (layout === 'mirror') {
-    return [
-      button('stage-assign-mode-preset', 'Use for Graphic', 'graphic'),
-      button('stage-play-preset', 'Play Now', 'graphic')
-    ].join('');
-  }
-  return [
-    button('stage-assign-mode-preset', 'Use for Graphic', 'graphic'),
-    button('stage-assign-mode-preset', 'Use Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
-    button('stage-assign-mode-preset', 'Use Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"'),
-    button('stage-play-preset', 'Play Mirror', 'graphic'),
-    button('stage-play-preset', 'Play Wall 10', 'wall', 'data-wall-total="10" data-wall-group="10"'),
-    button('stage-play-preset', 'Play Mirror 5s', 'wall', 'data-wall-total="5" data-wall-group="mirror-5"')
-  ].join('');
-}
-
-function buildStageIndividualAssignments(game = current(), config = GAME_CONFIGS[state.selectedGame]) {
-  const assignments = {};
-  const collections = [
-    { side: 'home', teamIndex: 0, roster: game.rosters?.[state.activeRoster] || [] },
-    { side: 'away', teamIndex: 1, roster: game.awayRosters?.[state.activeRoster] || [] }
-  ];
-  for (const collection of collections) {
-    const team = game.teams[collection.teamIndex] || {};
-    collection.roster.forEach((player, index) => {
-      const station = Math.round(Number(player.stageStation) || 0);
-      if (station < 1 || station > 10) return;
-      const selectedArt = game.characterArt?.[player.character] || {};
-      const characterImage = state.selectedGame === 'overwatch'
-        ? selectedArt.url
-        : player.characterImage || selectedArt.url || '';
-      assignments[station] = {
-        station,
-        game: state.selectedGame,
-        roster: state.activeRoster,
-        side: collection.side,
-        teamName: team.name || '',
-        teamShortName: team.shortName || '',
-        teamColor: team.color || '#f47920',
-        teamSecondaryColor: team.secondaryColorEnabled ? (team.secondaryColor || team.color) : (team.color || '#f47920'),
-        teamLogo: team.logoImage ? displayAssetUrl(team.logoImage) : '',
-        playerIndex: index,
-        handle: player.handle || player.name || `Player ${index + 1}`,
-        name: player.name || '',
-        role: player.role || '',
-        character: player.character || '',
-        characterLabel: config.characterLabel || 'Character',
-        portrait: player.playerImage ? displayAssetUrl(player.playerImage) : '',
-        characterImage: characterImage ? displayAssetUrl(characterImage) : ''
-      };
-    });
-  }
-  return assignments;
-}
-
-function renderStageDisplays() {
-  const stations = stageStationList();
-  const baseUrl = `${overlayBaseUrl}/api/stage/status`;
-  const pending = stageDisplayStatus.pendingPreset;
-  const readiness = pending?.readiness || {};
-  const warnings = Array.isArray(stageDisplayStatus.warnings) ? stageDisplayStatus.warnings : [];
-  const clientUpdate = stageDisplayStatus.clientUpdate || {};
-  const outdatedCount = stations.filter((station) => station.online && station.outdated).length;
-  const presets = stagePresets.length ? stagePresets : [
-    { name: 'isu-idle', title: 'ISU Idle' },
-    { name: 'starting-soon', title: 'Starting Soon' },
-    { name: 'team-intro', title: 'Team Intro' },
-    { name: 'sponsors', title: 'Sponsors' }
-  ];
-  return `
-    <section class="view-stack stage-display-view">
-      <div class="section-heading"><div><span class="section-number">01</span><div><h2>Stage display clients</h2><p>${Number(stageDisplayStatus.onlineCount || 0)} of 10 stations online &middot; WebSocket port ${Number(stageDisplayStatus.port || 3178)}</p></div></div>
-        <div class="heading-actions"><button class="secondary-button" data-action="stage-clear-previews">CLEAR PREVIEWS</button><button class="secondary-button" data-action="refresh-stage-displays">REFRESH</button></div>
-      </div>
-      ${renderNdiCardPanel()}
-      ${warnings.length ? `<article class="panel stage-warning-panel"><div class="panel-title compact"><div><h2>Stage warnings</h2><p>${warnings.map(escapeHtml).join('<br>')}</p></div></div></article>` : ''}
-      <article class="panel stage-update-panel">
-        <div class="panel-title compact">
-          <div>
-            <h2>Stage client updates</h2>
-            <p>${clientUpdate.available ? `Published client ${escapeHtml(clientUpdate.version || '')} &middot; ${Math.round(Number(clientUpdate.size || 0) / 1024 / 1024)} MB` : `No client update published yet &middot; Expected client ${escapeHtml(stageDisplayStatus.expectedClientVersion || '')}`} &middot; ${outdatedCount} outdated online</p>
-          </div>
-          <div class="heading-actions">
-            <button class="secondary-button" data-action="stage-publish-client-update">PUBLISH BUILD</button>
-            <button class="secondary-button" data-action="stage-send-client-update" data-update-target="outdated" ${clientUpdate.available && outdatedCount ? '' : 'disabled'}>UPDATE OUTDATED</button>
-            <button class="secondary-button" data-action="stage-send-client-update" data-update-target="all" ${clientUpdate.available && Number(stageDisplayStatus.onlineCount || 0) ? '' : 'disabled'}>UPDATE ALL</button>
-          </div>
-        </div>
-      </article>
-      <article class="panel stage-key-panel ${stageDisplayStatus.keyRequired ? '' : 'open'}">
-        <div class="panel-title compact">
-          <div>
-            <h2>Stage key</h2>
-            <p>${stageDisplayStatus.keyRequired
-              ? 'Key required: stations and HTTP/REST calls must send it (station config <code>stageKey</code>, or header <code>X-Stage-Token</code>).'
-              : '<strong>No key set:</strong> anyone on the network can control the stage. Set a key, then enter the same key on every station.'}</p>
-          </div>
-          <div class="heading-actions">
-            <input type="password" id="stage-key-input" value="${escapeHtml(stageKeyDraft)}" placeholder="New stage key" autocomplete="off">
-            <button class="secondary-button" data-action="stage-generate-key">GENERATE KEY</button>
-            <button class="secondary-button" data-action="stage-copy-key">COPY KEY</button>
-            <button class="secondary-button" data-action="stage-set-key">SAVE KEY</button>
-            ${stageDisplayStatus.keyRequired ? '<button class="secondary-button" data-action="stage-clear-key">REMOVE KEY</button>' : ''}
-          </div>
-        </div>
-      </article>
-      <article class="panel stage-api-panel">
-        <div class="panel-title compact"><div><h2>Companion-ready API</h2><p>Use these from HTTP/REST buttons later.${stageDisplayStatus.keyRequired ? ' Add header <code>X-Stage-Token: &lt;stage key&gt;</code> (or <code>?token=</code>).' : ''}</p></div></div>
-        <div class="stage-api-grid">
-          <code>GET ${escapeHtml(baseUrl)}</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/gameplay</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/blackout</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/wall</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/mode/wall/preset/team-intro</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/station/4/mode/graphic</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepare/team-intro</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/prepared/play</code>
-          <code>POST ${escapeHtml(overlayBaseUrl)}/api/stage/preset/team-intro</code>
-        </div>
-      </article>
-      <article class="panel stage-global-panel">
-        <div class="panel-title compact"><div><h2>Global mode</h2><p>Controls stage stations 1-10. Wall uses its assigned preset. Individual is reserved for roster/player station graphics.</p></div></div>
-        <div class="stage-assignment-grid">
-          <section><span>Wall preset</span><strong>${stageAssignmentText('wall')}</strong></section>
-          <section><span>Mirror graphic preset</span><strong>${stageAssignmentText('graphic')}</strong></section>
-        </div>
-        <div class="stage-mode-grid">${renderStageModeButtons('global')}</div>
-      </article>
-      <article class="panel stage-ready-panel ${pending ? 'armed' : ''}">
-        <div class="panel-title compact">
-          <div><h2>Prepared stage cue</h2><p>Preload a preset first, wait for clients to report ready, then fire it in sync.</p></div>
-          <button class="primary-button" data-action="stage-play-prepared" ${pending ? '' : 'disabled'}>FIRE PREPARED</button>
-        </div>
-        <div class="stage-ready-grid">
-          <section><span>Preset</span><strong>${pending ? escapeHtml(pending.title || pending.preset) : 'None prepared'}</strong></section>
-          <section><span>Mode</span><strong>${pending ? escapeHtml(stagePresetModeLabel(pending.mode)) : '&mdash;'}</strong></section>
-          <section><span>Readiness</span><strong>${escapeHtml(stageReadinessText(readiness))}</strong></section>
-          <section><span>Targets</span><strong>${pending ? stageTargetText(pending) : '&mdash;'}</strong></section>
-        </div>
-      </article>
-      <article class="panel stage-preset-panel">
-        <div class="panel-title compact"><div><h2>Stage presets</h2><p>Assign a preset once, then use Global Wall or Mirror Graphic to bring it back reliably.</p></div>
-          <button class="secondary-button" data-action="stage-import-preset">IMPORT GRAPHIC</button>
-        </div>
-        <div class="stage-preset-grid">
-          ${presets.map((preset) => `
-            <section class="stage-preset-card ${preset.source === 'library' ? 'library' : 'builtin'}">
-              <div class="stage-preset-preview">
-                <iframe src="${escapeHtml(overlayBaseUrl)}${escapeHtml(preset.assetPath || `/stage-assets/${encodeURIComponent(preset.name)}/index.html`)}?preview=1" loading="lazy" title="${escapeHtml(preset.title || preset.name)} preview"></iframe>
-              </div>
-              <strong>${escapeHtml(preset.title || preset.name)}</strong>
-              <small>${escapeHtml(preset.category || 'General')} &middot; ${escapeHtml(preset.name)} &middot; ${escapeHtml(preset.layoutLabel || preset.layout || 'any')} &middot; ${escapeHtml(preset.kind || 'html')} &middot; ${preset.width && preset.height ? `${preset.width}x${preset.height} &middot; ` : ''}${escapeHtml(preset.source || 'built-in')}</small>
-              <div class="stage-preset-actions">
-                ${stagePresetActionButtons(preset)}
-                <button data-action="stage-test-preset" data-preset="${escapeHtml(preset.name)}" data-stage-mode="graphic">Test 11: Full graphic</button>
-                <label>Test slice <select data-test-slice>${Array.from({ length: preset.layout === 'wall-5' ? 5 : 10 }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join('')}</select></label>
-                <button data-action="stage-test-preset" data-preset="${escapeHtml(preset.name)}" data-stage-mode="wall" data-wall-total="${preset.layout === 'wall-5' ? 5 : 10}">Test 11: Wall slice</button>
-                ${preset.source === 'library' ? `<button data-action="stage-rename-preset" data-preset="${escapeHtml(preset.name)}">Rename</button><button data-action="stage-category-preset" data-preset="${escapeHtml(preset.name)}">Category</button><button data-action="stage-replace-preset" data-preset="${escapeHtml(preset.name)}">Replace</button><button class="danger" data-action="stage-delete-preset" data-preset="${escapeHtml(preset.name)}">Delete</button>` : ''}
-              </div>
-            </section>`).join('')}
-        </div>
-      </article>
-      <div class="stage-station-grid">
-        ${stations.map((station) => `
-          <article data-station-card="${station.station}" class="stage-station-card ${station.online ? 'online' : 'offline'}">
-            <header><span>${station.station === 11 ? '11 — TEST ONLY' : String(station.station).padStart(2, '0')}</span><strong>${station.online ? 'ONLINE' : 'OFFLINE'}</strong></header>
-            <div class="stage-station-preview ${station.preview ? 'has-preview' : ''}">
-              ${station.preview ? `<img src="${escapeHtml(station.preview)}" alt="Station ${String(station.station).padStart(2, '0')} live preview">` : '<span>NO PREVIEW</span>'}
-            </div>
-            <h3>${escapeHtml(stageModeLabel(station.mode))}</h3>
-            <p>${escapeHtml(station.hostname || 'No client connected')}</p>
-            ${station.outdated ? `<p class="stage-station-warning">Client ${escapeHtml(station.clientVersion)} needs update</p>` : ''}
-            <small>${station.updating ? escapeHtml(station.updateStatus || 'Updating client...') : station.preparing ? 'Preparing preset...' : station.preparedPreset ? `Prepared ${escapeHtml(station.preparedPreset)}` : station.clientVersion ? `Client ${escapeHtml(station.clientVersion)}` : 'Waiting for Stage Display Client'}</small>
-            <div class="stage-station-actions">${renderStageModeButtons('station', station.station)}</div>
-            ${station.online && station.outdated && clientUpdate.available ? `<button class="stage-station-update" data-action="stage-send-client-update" data-update-target="station" data-station="${Number(station.station)}">Update Client</button>` : ''}
-          </article>`).join('')}
-      </div>
-    </section>`;
 }
 
 function renderControl(config) {
@@ -2352,12 +2046,10 @@ async function executeCompanionAction(request = {}) {
 }
 
 window.isuDesktop?.onCompanionAction(executeCompanionAction);
-window.isuDesktop?.onStageDisplayStatus((status) => {
+window.isuDesktop?.onDisplayStatus((status) => {
   if (!status) return;
-  const previous = new Map((stageDisplayStatus.stations || []).map((station) => [station.station, station]));
-  stageDisplayStatus = { ...status, stations: (status.stations || []).map((station) => ({ ...previous.get(station.station), ...station })) };
-  const view = root.querySelector('.stage-display-view');
-  if (state.activeView === 'stage' && view) patchStageStatus(view, renderStageDisplays());
+  displayStatus = status;
+  if (state.activeView === 'stage') render();
 });
 
 root.addEventListener('scroll', (event) => {
@@ -2444,229 +2136,43 @@ root.addEventListener('click', async (event) => {
     } catch (error) { updateSaveStatus(`Car Lab: ${error.message}`); }
     return;
   }
-  if (button.dataset.action === 'refresh-stage-displays') {
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
+  if (button.dataset.action === 'display-mode') {
+    const result = await window.isuDesktop?.setDisplayMode({ station: button.dataset.station, mode: button.dataset.mode });
+    if (result && !result.ok) toast(result.error);
+    return;
+  }
+  if (button.dataset.action === 'display-preset') {
+    const station = button.dataset.station === 'all' ? 'all' : Number(button.dataset.station);
+    const team = button.dataset.team || '';
+    commit(() => { applyDisplayPreset(state, station, button.dataset.preset, team); }, `Displays ${station === 'all' ? 'all' : String(station).padStart(2, '0')}: ${button.dataset.preset}`);
     render();
     return;
   }
-  if (button.dataset.action === 'stage-generate-key') {
-    const input = document.querySelector('#stage-key-input');
-    if (input) {
-      stageKeyDraft = Array.from(crypto.getRandomValues(new Uint8Array(24)), (byte) => byte.toString(16).padStart(2, '0')).join('');
-      input.value = stageKeyDraft;
-      toast('Random key generated. Copy it, then Save Key to activate it.');
-    }
+  if (button.dataset.action === 'display-key-save') {
+    const key = root.querySelector('#display-key-input')?.value || '';
+    await window.isuDesktop?.setDisplayKey({ key });
+    toast(key ? 'Display key saved: clients must use it' : 'Display key cleared');
     return;
   }
-  if (button.dataset.action === 'stage-copy-key') {
+  if (['obs-displays-save', 'obs-displays-setup', 'obs-displays-check'].includes(button.dataset.action)) {
+    const field = (k) => root.querySelector(`[data-obs-cfg="${k}"]`)?.value ?? '';
+    const [resolution, fps] = String(field('format') || '1280x720@30').split('@');
+    obsDisplays.error = ''; obsDisplays.message = button.dataset.action === 'obs-displays-setup' ? 'Setting up OBS…' : button.dataset.action === 'obs-displays-check' ? 'Checking OBS…' : '';
+    render();
     try {
-      const draft = String(document.querySelector('#stage-key-input')?.value || '').trim();
-      const key = draft || (await window.isuDesktop?.getStageKey?.())?.stageKey || '';
-      if (!key) { toast('Generate or enter a stage key first'); return; }
-      if (window.isuDesktop?.copyText) await window.isuDesktop.copyText(key);
-      else await navigator.clipboard.writeText(key);
-      toast(draft ? 'New key copied. Save Key to activate it.' : 'Saved stage key copied');
-    } catch { toast('Could not copy the stage key'); }
-    return;
-  }
-  if (button.dataset.action === 'stage-set-key' || button.dataset.action === 'stage-clear-key') {
-    const clearing = button.dataset.action === 'stage-clear-key';
-    const input = document.querySelector('#stage-key-input');
-    const stageKey = clearing ? '' : String(input?.value || '').trim();
-    if (!clearing && stageKey.length < 8) {
-      toast('Stage key must be at least 8 characters');
-      return;
-    }
-    if (clearing && !window.confirm('Remove the stage key? Anyone on the network will be able to control the stage again.')) return;
-    const result = await window.isuDesktop?.setStageKey?.({ stageKey });
-    if (result?.ok) stageKeyDraft = '';
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? (clearing ? 'Stage key removed' : 'Stage key saved. Stations without it will be refused') : result?.error || 'Could not save stage key');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-clear-previews') {
-    const result = await window.isuDesktop?.clearStagePreviews?.();
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? 'Stage previews cleared' : result?.error || 'Could not clear stage previews');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-publish-client-update') {
-    const result = await window.isuDesktop?.publishStageClientUpdate?.({});
-    if (result?.ok) {
-      stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-      toast(`Published Stage Client ${result.update?.version || ''}`);
-    } else if (result?.error) {
-      toast(result.error);
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-send-client-update') {
-    const target = button.dataset.updateTarget || 'outdated';
-    const result = await window.isuDesktop?.sendStageClientUpdate?.({
-      target,
-      station: button.dataset.station ? Number(button.dataset.station) : null
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Update sent to ${result.sent || 0} station${Number(result.sent || 0) === 1 ? '' : 's'}` : result?.error || 'Could not send client update');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-global-mode') {
-    const mode = button.dataset.stageMode;
-    const result = await window.isuDesktop?.setStageDisplayMode({
-      mode,
-      individualAssignments: mode === 'individual' ? buildStageIndividualAssignments() : undefined
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Stage mode: ${stageModeLabel(result.mode)}` : result?.error || 'Stage mode unavailable');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-station-mode') {
-    const mode = button.dataset.stageMode;
-    const station = Number(button.dataset.station);
-    const result = await window.isuDesktop?.setStageStationMode({
-      station,
-      mode,
-      individualContent: mode === 'individual' ? buildStageIndividualAssignments()[station] : undefined
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Station ${String(result.station).padStart(2, '0')}: ${stageModeLabel(result.mode)}` : result?.error || 'Station unavailable');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-import-preset') {
-    const result = await window.isuDesktop?.importStagePreset?.({});
-    if (result?.ok) {
-      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
-      toast(`Imported stage preset: ${result.preset?.title || result.preset?.name || 'Preset'}`);
-    } else if (result?.error) {
-      toast(result.error);
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-delete-preset') {
-    const presetName = button.dataset.preset || '';
-    const preset = stagePresets.find((item) => item.name === presetName);
-    if (!presetName || !window.confirm(`Delete imported stage preset "${preset?.title || presetName}"?`)) return;
-    const result = await window.isuDesktop?.deleteStagePreset?.({ name: presetName });
-    if (result?.ok) {
-      stagePresets = await window.isuDesktop?.listStagePresets?.() || [];
-      stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-      toast(`Deleted stage preset: ${preset?.title || presetName}`);
-    } else {
-      toast(result?.error || 'Could not delete stage preset');
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-rename-preset') {
-    const presetName = button.dataset.preset || '';
-    const preset = stagePresets.find((item) => item.name === presetName);
-    const title = window.prompt('Preset display name', preset?.title || presetName);
-    if (!title) return;
-    const result = await window.isuDesktop?.updateStagePreset?.({ name: presetName, title });
-    if (result?.ok) {
-      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
-      toast('Preset renamed');
-    } else {
-      toast(result?.error || 'Could not rename preset');
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-category-preset') {
-    const presetName = button.dataset.preset || '';
-    const preset = stagePresets.find((item) => item.name === presetName);
-    const category = window.prompt('Preset category', preset?.category || 'General');
-    if (!category) return;
-    const result = await window.isuDesktop?.updateStagePreset?.({ name: presetName, category });
-    if (result?.ok) {
-      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
-      toast('Preset category updated');
-    } else {
-      toast(result?.error || 'Could not update category');
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-replace-preset') {
-    const presetName = button.dataset.preset || '';
-    const result = await window.isuDesktop?.replaceStagePreset?.({ name: presetName });
-    if (result?.ok) {
-      stagePresets = await window.isuDesktop?.listStagePresets?.() || stagePresets;
-      toast('Preset media replaced');
-    } else if (result?.error) {
-      toast(result.error);
-    }
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-assign-mode-preset') {
-    const result = await window.isuDesktop?.assignStageModePreset?.({
-      preset: button.dataset.preset,
-      mode: button.dataset.stageMode || 'graphic',
-      wallTotal: Number(button.dataset.wallTotal) || 10,
-      wallGroup: button.dataset.wallGroup || ''
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Assigned ${result.title || result.preset} to ${stagePresetModeLabel(result.mode)}` : result?.error || 'Could not assign preset');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-prepare-preset') {
-    const result = await window.isuDesktop?.prepareStagePreset?.({
-      preset: button.dataset.preset,
-      mode: button.dataset.stageMode || 'graphic',
-      wallTotal: Number(button.dataset.wallTotal) || 10,
-      wallGroup: button.dataset.wallGroup || ''
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Prepared: ${result.title || result.preset}` : result?.error || 'Stage preset unavailable');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-play-prepared') {
-    const result = await window.isuDesktop?.playPreparedStagePreset?.({
-      executeAt: (Date.now() / 1000) + 1.0,
-      prepareTimeoutMs: 3500
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Fired prepared preset: ${result.preset}` : result?.error || 'No prepared preset ready');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'stage-test-preset') {
-    const result = await window.isuDesktop?.playStagePreset({
-      preset: button.dataset.preset,
-      mode: button.dataset.stageMode,
-      targetStations: [11],
-      wallTotal: Number(button.dataset.wallTotal) || 1,
-      wallPosition: Number(button.closest('.stage-preset-card')?.querySelector('[data-test-slice]')?.value) || 1
-    });
-    toast(result?.ok ? `Test Station 11: ${result.preset}` : result?.error || 'Test client unavailable');
-    return;
-  }
-  if (button.dataset.action === 'stage-play-preset') {
-    const result = await window.isuDesktop?.playStagePreset({
-      preset: button.dataset.preset,
-      mode: button.dataset.stageMode || 'graphic',
-      wallTotal: Number(button.dataset.wallTotal) || 10,
-      wallGroup: button.dataset.wallGroup || '',
-      executeAt: (Date.now() / 1000) + 1.5
-    });
-    stageDisplayStatus = await window.isuDesktop?.getStageDisplayStatus() || stageDisplayStatus;
-    toast(result?.ok ? `Stage preset: ${result.preset}` : result?.error || 'Stage preset unavailable');
-    render();
-    return;
-  }
-  if (button.dataset.action === 'ndi-use-assigned') {
-    ndiCardStatus = (await window.isuDesktop?.configureNdiCards({ enabled: true, stations: assignedPlayerStations() })) || ndiCardStatus;
-    toast(`NDI player cards on for stations ${assignedPlayerStations().join(', ') || '(none assigned)'}`);
+      obsDisplays.config = (await window.isuDesktop?.saveObsDisplays({ host: field('host'), port: field('port'), password: field('password'), resolution, fps: Number(fps), controllerUrl: field('controllerUrl') })) || obsDisplays.config;
+      if (button.dataset.action === 'obs-displays-setup') {
+        const result = await window.isuDesktop?.setupObsDisplays();
+        if (!result?.ok) throw new Error(result?.error || 'OBS setup failed');
+        obsDisplays.message = `OBS ${result.obsVersion}: ${result.ndiNames.length} NDI feeds (${result.ndiNames[0]} … ${result.ndiNames.at(-1)})${result.log.length ? ` · added ${result.log.length}` : ' · nothing missing'}`;
+      }
+      if (button.dataset.action !== 'obs-displays-save') {
+        const status = await window.isuDesktop?.getObsDisplaysStatus();
+        if (!status?.ok) throw new Error(status?.error || 'Could not read OBS');
+        obsDisplays.status = status;
+        if (button.dataset.action === 'obs-displays-check') obsDisplays.message = '';
+      } else obsDisplays.message = 'Saved';
+    } catch (error) { obsDisplays.error = error.message; obsDisplays.message = ''; }
     render();
     return;
   }
@@ -3066,7 +2572,6 @@ document.addEventListener('mouseleave', endValorantRoiDrag);
 
 root.addEventListener('input', (event) => {
   const target = event.target;
-  if (target.id === 'stage-key-input') stageKeyDraft = target.value;
   if (target.dataset.voRoi) positionValorantRoiBox(target.dataset.voRoi);
 });
 
@@ -3161,14 +2666,9 @@ root.addEventListener('change', async (event) => {
     render();
     return;
   }
-  if (target.dataset.ndiEnabled !== undefined || target.dataset.ndiStation) {
-    const stations = new Set(ndiCardStatus.stations || []);
-    if (target.dataset.ndiStation) { const n = Number(target.dataset.ndiStation); if (target.checked) stations.add(n); else stations.delete(n); }
-    const enabled = target.dataset.ndiEnabled !== undefined ? target.checked : ndiCardStatus.enabled;
-    const list = [...stations].length ? [...stations] : assignedPlayerStations();
-    ndiCardStatus = (await window.isuDesktop?.configureNdiCards({ enabled, stations: list })) || ndiCardStatus;
-    toast(enabled ? `NDI player cards: ${list.length} station(s)` : 'NDI player cards off');
-    render();
+  if (target.dataset.displayPreset) {
+    const n = Number(target.dataset.displayPreset);
+    commit(() => { applyDisplayPreset(state, n, target.value, state.displays?.stations?.[n]?.team || ''); }, `Display ${String(n).padStart(2, '0')}: ${target.value}`);
     return;
   }
   if (target.dataset.owHeroAutofill !== undefined) {
@@ -3358,14 +2858,8 @@ function initialize() {
     companionStatus = status || companionStatus;
     if (state.activeView === 'settings') render();
   });
-  window.isuDesktop?.getStageDisplayStatus().then((status) => {
-    stageDisplayStatus = status || stageDisplayStatus;
-    if (state.activeView === 'stage') render();
-  });
-  window.isuDesktop?.listStagePresets?.().then((presets) => {
-    stagePresets = Array.isArray(presets) ? presets : [];
-    if (state.activeView === 'stage') render();
-  });
+  window.isuDesktop?.getDisplayStatus?.().then((status) => { displayStatus = status || displayStatus; if (state.activeView === 'stage') render(); });
+  window.isuDesktop?.getObsDisplays?.().then((config) => { obsDisplays.config = config || {}; });
   window.isuDesktop?.getNetworkAddresses().then((addresses) => {
     networkAddresses = Array.isArray(addresses) ? addresses : [];
     if ((state.selectedGame === 'rocketleague' && state.activeView === 'control') || state.activeView === 'settings') render();

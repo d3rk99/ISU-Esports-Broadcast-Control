@@ -1,4 +1,5 @@
 import { GAME_CONFIGS, rocketLeagueArenaName } from './game-config.js';
+import { applyDisplayPreset } from './display-presets.js';
 import { tagSimilarity, NAME_MATCH } from './overwatch-ocr-panel.js';
 
 function actionError(message, statusCode = 400) {
@@ -155,6 +156,11 @@ export function applyCompanionAction(state, request = {}) {
     if (!['scoreboard', 'roster', 'map-pool', 'clean'].includes(output)) throw actionError('output must be scoreboard, roster, map-pool, or clean');
     state.activeOutputOverlay = output;
     return { message: `Program output selected: ${output}`, outputChanged: true };
+  }
+  if (action === 'display.preset') {
+    const station = request.station === undefined || request.station === '' || request.station === 'all' ? 'all' : Number(request.station);
+    try { applyDisplayPreset(state, station, String(request.preset || ''), String(request.team || '')); } catch (error) { throw actionError(error.message); }
+    return { message: `Displays ${station === 'all' ? 'all' : `station ${station}`}: ${request.preset}` };
   }
   if (action === 'game.select') {
     if (!GAME_CONFIGS[request.game]) throw actionError(`Unknown game: ${request.game || '(empty)'}`);

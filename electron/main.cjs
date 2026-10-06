@@ -13,8 +13,8 @@ const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
-const { NdiPlayerCards } = require('./ndi-player-cards.cjs');
-const { StageDisplayManager } = require('./stage-displays/stage-display-manager.cjs');
+const { DisplayManager } = require('./displays/display-manager.cjs');
+const { ObsClient, setupStageScenes, stageStatus: obsStageStatus } = require('./displays/obs-displays.cjs');
 
 const isDev = !app.isPackaged;
 const OVERLAY_PORT = 3174;
@@ -30,9 +30,8 @@ let overlayServer;
 let rocketLeagueService;
 let valorantOcrService;
 let overwatchOcrService;
-let ndiPlayerCards;
 let companionApiService;
-let stageDisplayManager;
+let displayManager;
 let companionRequestId = 0;
 let controllerWindow = null;
 const pendingCompanionActions = new Map();
@@ -69,34 +68,10 @@ function findSharedValorantLoadoutTemplateRoot() {
   return '';
 }
 
-function writableStageAssetRoot() {
-  return path.join(app.getPath('userData'), 'stage-assets');
-}
-
-function writableStageClientUpdateRoot() {
-  return path.join(app.getPath('userData'), 'stage-client-updates');
-}
-
-// Shared Stage Display key (stations must send the same key). Stored like the other connection settings.
-function stageKeyPath() {
-  return path.join(app.getPath('userData'), 'stage-key.json');
-}
-
-function readStageKey() {
-  try {
-    return String(JSON.parse(fs.readFileSync(stageKeyPath(), 'utf8')).stageKey || '').trim();
-  } catch {
-    return '';
-  }
-}
-
-function saveStageKey(stageKey = '') {
-  fs.writeFileSync(stageKeyPath(), JSON.stringify({ stageKey: String(stageKey || '').trim() }, null, 2), 'utf8');
-}
-
-function bundledStageAssetRoot() {
-  return path.join(__dirname, '..', 'stage-assets');
-}
+// Display key: display clients must send the same key (blank = open).
+function displayKeyPath() { return path.join(app.getPath('userData'), 'display-key.json'); }
+function readDisplayKey() { try { return String(JSON.parse(fs.readFileSync(displayKeyPath(), 'utf8')).key || '').trim(); } catch { return ''; } }
+function saveDisplayKey(key = '') { fs.writeFileSync(displayKeyPath(), JSON.stringify({ key: String(key || '').trim() }, null, 2), { encoding: 'utf8', mode: 0o600 }); }
 
 function findSharedValorantScoreTemplateRoot() {
   const candidates = [
@@ -866,10 +841,6 @@ function startOverlayServer() {
 
   overlayServer = http.createServer((request, response) => {
     const requestUrl = new URL(request.url, `http://${OVERLAY_HOST}:${OVERLAY_PORT}`);
-    if (requestUrl.pathname.startsWith('/api/stage')) {
-      stageDisplayManager?.handleHttp(request, response, requestUrl);
-      return;
-    }
     if (request.method !== 'GET') {
       writeJson(response, 405, { error: 'Method not allowed' });
       return;
@@ -903,13 +874,6 @@ function startOverlayServer() {
       serveFile(response, safeFilePath(assetRoot, relativePath));
       return;
     }
-    if (requestUrl.pathname.startsWith('/stage-assets/')) {
-      const relativePath = requestUrl.pathname.slice('/stage-assets'.length);
-      const stageAssetPath = stageDisplayManager?.resolveAssetPath(relativePath);
-      if (stageAssetPath) serveFile(response, stageAssetPath);
-      else writeJson(response, 404, { error: 'Stage asset not found' });
-      return;
-    }
     if (requestUrl.pathname.startsWith('/rl-loadout-assets/')) {
       serveRocketLeagueLoadoutAsset(response, requestUrl.pathname.slice('/rl-loadout-assets/'.length));
       return;
@@ -931,54 +895,16 @@ function startOverlayServer() {
   });
 }
 
+// Companion "stage.*" actions drive the display clients (game mirror / NDI).
 async function dispatchCompanionStageAction(action = {}) {
   const actionId = String(action.action || '');
-  if (!stageDisplayManager) throw Object.assign(new Error('Stage Display Manager is not ready'), { statusCode: 503 });
-  if (actionId === 'stage.mode.set') {
-    const result = stageDisplayManager.setGlobalMode(action.mode, action);
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage mode failed'), { statusCode: 400 });
-    return { message: `Stage mode: ${result.mode}` };
+  if (!displayManager) throw Object.assign(new Error('Display manager is not ready'), { statusCode: 503 });
+  if (actionId === 'stage.display.mode') {
+    const result = displayManager.setMode(action.station === undefined || action.station === '' ? 'all' : action.station, String(action.mode || ''), action.source || '');
+    if (!result.ok) throw Object.assign(new Error(result.error), { statusCode: 400 });
+    return { message: `Displays ${action.station || 'all'}: ${result.mode}` };
   }
-  if (actionId === 'stage.station.mode.set') {
-    const result = stageDisplayManager.setStationMode(action.station, action.mode, action);
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Station mode failed'), { statusCode: 400 });
-    return { message: `Station ${String(result.station).padStart(2, '0')}: ${result.mode}` };
-  }
-  if (actionId === 'stage.preset.prepare') {
-    const result = stageDisplayManager.preparePreset(action.preset, action);
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset prepare failed'), { statusCode: 400 });
-    return { message: `Prepared stage preset: ${result.title || result.preset}` };
-  }
-  if (actionId === 'stage.mode.assign_preset') {
-    const result = stageDisplayManager.assignModePreset(action.mode, action.preset, action);
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset assignment failed'), { statusCode: 400 });
-    return { message: `Assigned ${result.title || result.preset} to ${result.mode}` };
-  }
-  if (actionId === 'stage.prepared.play') {
-    const delay = Math.max(0.2, Number(action.executeDelaySeconds) || 1);
-    const result = await stageDisplayManager.playPreparedPreset({
-      ...action,
-      executeAt: (Date.now() / 1000) + delay,
-      prepareTimeoutMs: Number(action.prepareTimeoutMs) || 3500
-    });
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage prepared cue failed'), { statusCode: 409 });
-    return { message: `Fired prepared stage preset: ${result.preset}` };
-  }
-  if (actionId === 'stage.preset.play') {
-    const delay = Math.max(0.2, Number(action.executeDelaySeconds) || 1.5);
-    const result = await stageDisplayManager.playPreset(action.preset, {
-      ...action,
-      executeAt: (Date.now() / 1000) + delay
-    });
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage preset failed'), { statusCode: 400 });
-    return { message: `Stage preset: ${result.preset}` };
-  }
-  if (actionId === 'stage.client.update') {
-    const result = stageDisplayManager.sendClientUpdate(action.target || 'outdated', action.station || null);
-    if (!result.ok) throw Object.assign(new Error(result.error || 'Stage client update failed'), { statusCode: 400 });
-    return { message: `Stage client update sent to ${result.sent || 0} station${Number(result.sent || 0) === 1 ? '' : 's'}` };
-  }
-  throw Object.assign(new Error(`Unknown stage action: ${actionId}`), { statusCode: 404 });
+  throw Object.assign(new Error(`Unknown display action: ${actionId}`), { statusCode: 404 });
 }
 
 function registerIpc() {
@@ -1012,74 +938,46 @@ function registerIpc() {
     return { settings: saved, status };
   });
   ipcMain.handle('companion:get-status', () => companionApiService.getStatus());
-  ipcMain.handle('stage-displays:get-status', () => stageDisplayManager.status());
-  ipcMain.handle('stage-displays:list-presets', () => stageDisplayManager.listPresets());
-  ipcMain.handle('stage-displays:import-preset', async (event, details = {}) => {
-    const parent = BrowserWindow.fromWebContents(event.sender);
-    const result = await dialog.showOpenDialog(parent, {
-      title: 'Import Stage Preset',
-      properties: ['openFile'],
-      filters: [
-        { name: 'Stage graphics', extensions: ['html', 'htm', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov'] }
-      ]
-    });
-    if (result.canceled || !result.filePaths?.[0]) return null;
-    const layoutChoice = await dialog.showMessageBox(parent, {
-      type: 'question',
-      title: 'Stage Preset Layout',
-      message: 'What screen layout is this preset designed for?',
-      detail: 'This controls the buttons shown for the preset in Stage Displays.',
-      buttons: ['5-screen span', '10-screen span', 'Mirror / single screen', 'Cancel'],
-      cancelId: 3,
-      defaultId: 0,
-      noLink: true
-    });
-    if (layoutChoice.response === 3) return null;
-    const layout = layoutChoice.response === 0 ? 'wall-5'
-      : layoutChoice.response === 1 ? 'wall-10'
-        : 'mirror';
-    return stageDisplayManager.importPresetFromFile(result.filePaths[0], { ...details, layout });
+  // Display clients (game mirror / NDI) + OBS display presets.
+  ipcMain.handle('displays:status', () => displayManager.status());
+  ipcMain.handle('displays:set-mode', (_event, d = {}) => displayManager.setMode(d.station ?? 'all', d.mode, d.source || ''));
+  ipcMain.handle('displays:get-key', () => ({ key: displayManager.key || '' }));
+  ipcMain.handle('displays:set-key', (_event, d = {}) => { saveDisplayKey(d.key); return displayManager.setKey(d.key); });
+  const obsPath = () => path.join(app.getPath('userData'), 'obs-displays.json');
+  const readObs = () => { try { return JSON.parse(fs.readFileSync(obsPath(), 'utf8')); } catch { return {}; } };
+  const publicObs = (c = readObs()) => ({ host: c.host || '127.0.0.1', port: Number(c.port) || 4455, hasPassword: Boolean(c.password), resolution: c.resolution || '1280x720', fps: Number(c.fps) || 30, controllerUrl: c.controllerUrl || '' });
+  const withObs = async (fn) => {
+    const c = readObs(); const client = new ObsClient();
+    try { await client.connect({ host: c.host || '127.0.0.1', port: Number(c.port) || 4455, password: c.password || '' }); return await fn(client, c); }
+    finally { client.close(); }
+  };
+  ipcMain.handle('obs-displays:get', () => publicObs());
+  ipcMain.handle('obs-displays:save', (_event, d = {}) => {
+    const prev = readObs();
+    const next = {
+      host: String(d.host || '127.0.0.1').trim().slice(0, 255),
+      port: Math.max(1, Math.min(65535, Math.round(Number(d.port) || 4455))),
+      password: d.clearPassword ? '' : (String(d.password || '') || prev.password || ''),
+      resolution: ['1280x720', '1920x1080'].includes(d.resolution) ? d.resolution : '1280x720',
+      fps: [30, 60].includes(Number(d.fps)) ? Number(d.fps) : 30,
+      controllerUrl: String(d.controllerUrl || '').trim().slice(0, 255)
+    };
+    fs.writeFileSync(obsPath(), JSON.stringify(next, null, 2), { encoding: 'utf8', mode: 0o600 });
+    return publicObs(next);
   });
-  ipcMain.handle('stage-displays:delete-preset', (_event, details = {}) => stageDisplayManager.deletePreset(details.name || details.preset));
-  ipcMain.handle('stage-displays:update-preset', (_event, details = {}) => stageDisplayManager.updatePreset(details.name || details.preset, details));
-  ipcMain.handle('stage-displays:replace-preset', async (event, details = {}) => {
-    const parent = BrowserWindow.fromWebContents(event.sender);
-    const result = await dialog.showOpenDialog(parent, {
-      title: 'Replace Stage Preset Media',
-      properties: ['openFile'],
-      filters: [
-        { name: 'Stage graphics', extensions: ['html', 'htm', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'webm', 'mov'] }
-      ]
-    });
-    if (result.canceled || !result.filePaths?.[0]) return null;
-    return stageDisplayManager.replacePresetFromFile(details.name || details.preset, result.filePaths[0], details);
+  ipcMain.handle('obs-displays:setup', async () => {
+    try {
+      return { ok: true, ...(await withObs((client, c) => {
+        const [width, height] = (c.resolution || '1280x720').split('x').map(Number);
+        const lan = Object.values(os.networkInterfaces()).flat().find((e) => e?.family === 'IPv4' && !e.internal)?.address || '127.0.0.1';
+        return setupStageScenes(client, { controllerUrl: c.controllerUrl || `http://${lan}:${OVERLAY_PORT}`, width, height, fps: Number(c.fps) || 30 });
+      })) };
+    } catch (error) { return { ok: false, error: error.message }; }
   });
-  ipcMain.handle('stage-displays:publish-client-update', async (event, details = {}) => {
-    const parent = BrowserWindow.fromWebContents(event.sender);
-    const result = await dialog.showOpenDialog(parent, {
-      title: 'Publish Stage Display Client Update',
-      properties: ['openFile'],
-      filters: [
-        { name: 'Stage Display Client build', extensions: ['exe'] }
-      ]
-    });
-    if (result.canceled || !result.filePaths?.[0]) return null;
-    return stageDisplayManager.publishClientUpdateFromFile(result.filePaths[0], details);
+  ipcMain.handle('obs-displays:status', async () => {
+    try { return { ok: true, ...(await withObs((client) => obsStageStatus(client))) }; }
+    catch (error) { return { ok: false, error: error.message }; }
   });
-  ipcMain.handle('stage-displays:send-client-update', (_event, details = {}) => stageDisplayManager.sendClientUpdate(details.target || 'outdated', details.station || null));
-  ipcMain.handle('stage-displays:clear-previews', () => stageDisplayManager.clearStationPreviews());
-  ipcMain.handle('stage-displays:get-key', () => ({ stageKey: stageDisplayManager.token || '' }));
-  ipcMain.handle('stage-displays:set-key', (_event, details = {}) => {
-    const stageKey = String(details.stageKey || '').trim();
-    saveStageKey(stageKey);
-    return stageDisplayManager.setToken(stageKey);
-  });
-  ipcMain.handle('stage-displays:set-global-mode', (_event, details = {}) => stageDisplayManager.setGlobalMode(details.mode, details));
-  ipcMain.handle('stage-displays:set-station-mode', (_event, details = {}) => stageDisplayManager.setStationMode(details.station, details.mode, details));
-  ipcMain.handle('stage-displays:assign-mode-preset', (_event, details = {}) => stageDisplayManager.assignModePreset(details.mode, details.preset, details));
-  ipcMain.handle('stage-displays:prepare-preset', (_event, details = {}) => stageDisplayManager.preparePreset(details.preset, details));
-  ipcMain.handle('stage-displays:play-prepared', (_event, details = {}) => stageDisplayManager.playPreparedPreset(details));
-  ipcMain.handle('stage-displays:play-preset', (_event, details = {}) => stageDisplayManager.playPreset(details.preset, details));
   ipcMain.on('companion:action-result', (_event, result = {}) => {
     const pending = pendingCompanionActions.get(String(result.id));
     if (!pending) return;
@@ -1140,13 +1038,6 @@ function registerIpc() {
   });
   ipcMain.handle('overwatch-ocr:clear', () => { overwatchOcrService.clear(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('overwatch-ocr:set-name', (_event, details = {}) => overwatchOcrService.setPlayerName(details));
-  // NDI player cards: settings persist in userData; outputs are (re)built on change.
-  ipcMain.handle('ndi-cards:status', () => ndiPlayerCards.status());
-  ipcMain.handle('ndi-cards:configure', async (_event, settings = {}) => {
-    const saved = { enabled: Boolean(settings.enabled), stations: Array.isArray(settings.stations) ? settings.stations : [] };
-    fs.writeFileSync(path.join(app.getPath('userData'), 'ndi-player-cards.json'), JSON.stringify(saved, null, 2), 'utf8');
-    return ndiPlayerCards.configure(saved);
-  });
   ipcMain.handle('overwatch-ocr:debug-capture', () => overwatchOcrService.debugCapture());
   ipcMain.handle('overwatch-ocr:test-read', async () => { await overwatchOcrService.sweep(); return overwatchOcrService.snapshot(); });
   ipcMain.handle('assets:pick-image', async (event, details = {}) => {
@@ -1331,39 +1222,20 @@ function createWindow() {
 app.whenReady().then(async () => {
   companionApiService = new CompanionApiService({
     getState: () => broadcastState,
-    getStageStatus: () => stageDisplayManager?.status() || {},
+    getStageStatus: () => displayManager?.status() || {},
     dispatchAction: dispatchCompanionAction,
     dispatchStageAction: dispatchCompanionStageAction,
     onDiagnostic: recordDiagnostic
   });
-  let stageStatusTimer = null;
-  let latestStageStatus = null;
-  let previewRecipient = null;
-  const sentStagePreviews = new Map();
-  stageDisplayManager = new StageDisplayManager({
-    assetRoot: writableStageAssetRoot(),
-    bundledAssetRoot: bundledStageAssetRoot(),
-    updateRoot: writableStageClientUpdateRoot(),
-    token: readStageKey(),
+  let displayStatusTimer = null;
+  displayManager = new DisplayManager({
+    key: readDisplayKey(),
     onStatus: (status) => {
-      latestStageStatus = status;
-      if (stageStatusTimer) return;
-      stageStatusTimer = setTimeout(() => {
-        stageStatusTimer = null;
+      if (displayStatusTimer) return;
+      displayStatusTimer = setTimeout(() => {
+        displayStatusTimer = null;
         const controller = getControllerWindow();
-        if (controller && !controller.isDestroyed()) {
-          if (previewRecipient !== controller.webContents) {
-            sentStagePreviews.clear();
-            previewRecipient = controller.webContents;
-          }
-          const stations = latestStageStatus.stations.map((station) => {
-            const { preview, ...metadata } = station;
-            if (sentStagePreviews.get(station.station) === preview) return metadata;
-            sentStagePreviews.set(station.station, preview);
-            return { ...metadata, preview };
-          });
-          controller.webContents.send('stage-displays:status', { ...latestStageStatus, stations });
-        }
+        if (controller && !controller.isDestroyed()) controller.webContents.send('displays:status', displayManager.status());
         companionApiService?.publish(broadcastState);
       }, 100);
     }
@@ -1405,16 +1277,12 @@ app.whenReady().then(async () => {
     onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('overwatch-ocr:status', status); }
   });
   overwatchOcrService.configure(readOverwatchOcrSettings());
-  ndiPlayerCards = new NdiPlayerCards({ BrowserWindow, baseUrl: `http://${OVERLAY_HOST}:${OVERLAY_PORT}`, log: (m) => console.log(m) });
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
-  await stageDisplayManager.start();
+  await displayManager.start();
+  if (displayManager.error) recordDiagnostic('displays', displayManager.error);
   try {
     await startOverlayServer();
-    try {
-      const savedNdi = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'ndi-player-cards.json'), 'utf8'));
-      if (savedNdi?.enabled) await ndiPlayerCards.configure(savedNdi);
-    } catch {}
   } catch (error) {
     dialog.showErrorBox('Overlay server could not start', `Port ${OVERLAY_PORT} is unavailable. Close any other copy of ISU Esports Broadcast Control and reopen the app.\n\n${error.message}`);
   }
@@ -1435,8 +1303,7 @@ app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
   valorantOcrService?.shutdown();
   overwatchOcrService?.shutdown();
-  ndiPlayerCards?.shutdown();
-  stageDisplayManager?.shutdown();
+  displayManager?.stop();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();
 });

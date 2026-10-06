@@ -60,7 +60,7 @@ Start here when onboarding a new developer or another AI coding task:
 - `docs/developer-handoff.md` - project map, ports, build commands, subsystem notes, and repo hygiene
 - `docs/rocket-league-car-renderer.md` - current Rocket League render lab behavior and limitations
 - `docs/rocket-league-loadout-assets.md` - local asset pack path, hash, layout, and why the 7.56 GB zip is not in git
-- `docs/stage-display-client-install.md` - stage display client install and station setup
+- `docs/display-client-install.md` - display client (game mirror / NDI) install and station setup
 - `docs/valorant-observer3-ocr-plan.md` - Valorant Observer 3 OCR design notes
 
 ## Large asset packs

@@ -539,59 +539,6 @@ input[type="range"]:focus { border-color: #35353a; }
 .vo-frame > .vo-scoreboard-row-box { position: absolute; z-index: 1; border: 1px dashed #8ee8ff; background: rgba(40, 190, 255, .04); box-shadow: inset 0 0 18px rgba(40, 190, 255, .14); cursor: move; pointer-events: auto; touch-action: none; user-select: none; }
 .vo-frame > .vo-scoreboard-row-box.active { box-shadow: 0 0 0 1px #fff, inset 0 0 18px rgba(40, 190, 255, .22); }
 
-.stage-display-view { --stage-accent: #2d8cff; }
-.stage-api-panel, .stage-global-panel, .stage-ready-panel, .stage-preset-panel, .stage-warning-panel, .stage-update-panel { margin-bottom: 13px; overflow: hidden; border-top: 2px solid var(--stage-accent); }
-.stage-warning-panel { border-top-color: #ffce47; background: linear-gradient(180deg, rgba(255, 206, 71, .08), rgba(17, 17, 19, .98)); }
-.stage-warning-panel .panel-title p { color: #ffdf7a; line-height: 1.7; }
-.stage-update-panel { border-top-color: #65cd6f; }
-.stage-api-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 17px 16px; }
-.stage-api-grid code { min-width: 0; padding: 10px 11px; overflow: hidden; border: 1px solid #303038; color: #9dc7ff; background: #0b0d11; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-mode-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 0 17px 16px; }
-.stage-mode-grid button, .stage-station-actions button { min-height: 34px; border: 1px solid #34343a; color: #dfe8f7; background: linear-gradient(180deg, #191b20, #111318); font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.stage-mode-grid button:hover, .stage-station-actions button:hover { border-color: var(--stage-accent); color: #fff; background: #10233e; }
-.stage-assignment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 17px 12px; }
-.stage-assignment-grid section { min-width: 0; padding: 10px 11px; border: 1px solid #303038; background: #0b0d11; }
-.stage-assignment-grid span { display: block; margin-bottom: 5px; color: #6f7684; font-size: 8px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
-.stage-assignment-grid strong { display: block; overflow: hidden; color: #f4f6fb; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-ready-panel { border-top-color: #545a66; }
-.stage-ready-panel.armed { border-top-color: #65cd6f; box-shadow: inset 0 0 0 1px rgba(101, 205, 111, .08); }
-.stage-ready-panel .panel-title { padding: 15px 17px 11px; margin: 0; }
-.stage-ready-grid { display: grid; grid-template-columns: 1.4fr .9fr 1.2fr .8fr; gap: 8px; padding: 0 17px 16px; }
-.stage-ready-grid section { min-width: 0; padding: 10px 11px; border: 1px solid #303038; background: #0b0d11; }
-.stage-ready-grid span { display: block; margin-bottom: 5px; color: #6f7684; font-size: 8px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
-.stage-ready-grid strong { display: block; overflow: hidden; color: #f4f6fb; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-preset-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 0 17px 16px; }
-.stage-preset-card { min-width: 0; padding: 12px; border: 1px solid #303038; background: linear-gradient(180deg, #17191f, #0e1014); }
-.stage-preset-card.library { border-color: rgba(101, 205, 111, .5); box-shadow: inset 0 0 0 1px rgba(101, 205, 111, .08); }
-.stage-preset-preview { width: 100%; aspect-ratio: 16 / 9; margin-bottom: 10px; overflow: hidden; border: 1px solid #282c34; background: #050608; }
-.stage-preset-preview iframe { width: 100%; height: 100%; border: 0; pointer-events: none; transform: scale(.999); transform-origin: center; }
-.stage-preset-card strong { display: block; margin-bottom: 4px; color: #f4f6fb; font-size: 12px; }
-.stage-preset-card small { display: block; min-height: 14px; margin-bottom: 10px; overflow: hidden; color: #6f7684; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-preset-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.stage-preset-card button { min-height: 28px; border: 1px solid #34343a; color: #dfe8f7; background: #111318; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.stage-preset-card button[data-action="stage-prepare-preset"], .stage-preset-card button[data-action="stage-assign-mode-preset"] { border-color: rgba(101, 205, 111, .42); color: #dfffe5; background: #101812; }
-.stage-preset-card button.danger { grid-column: 1 / -1; border-color: rgba(255, 82, 82, .55); color: #ffb9b9; background: #1b0f10; }
-.stage-preset-card button:hover { border-color: var(--stage-accent); color: #fff; background: #10233e; }
-.stage-station-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-.stage-station-card { min-width: 0; padding: 13px; border: 1px solid #303038; border-top: 3px solid #555963; background: linear-gradient(180deg, #17181b, #101114); box-shadow: 0 16px 34px rgba(0,0,0,.2); }
-.stage-station-card.online { border-top-color: #65cd6f; }
-.stage-station-card.offline { opacity: .72; }
-.stage-station-card header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
-.stage-station-card header span { display: grid; place-items: center; width: 32px; height: 28px; border: 1px solid #3b3f48; color: #f4f6fb; background: #0b0d10; font-size: 13px; font-weight: 900; }
-.stage-station-card header strong { color: #777780; font-size: 9px; letter-spacing: .12em; }
-.stage-station-card.online header strong { color: #85e790; }
-.stage-station-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 16 / 9; margin: 0 0 10px; overflow: hidden; border: 1px solid #2a2f38; background: #050608; box-shadow: inset 0 0 0 1px rgba(255,255,255,.02); }
-.stage-station-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.stage-station-preview span { color: #4f5662; font-size: 9px; font-weight: 900; letter-spacing: .13em; }
-.stage-station-preview.has-preview { border-color: rgba(45, 140, 255, .42); }
-.stage-station-card h3 { margin: 0 0 5px; color: #f4f4f7; font-size: 13px; }
-.stage-station-card p { min-height: 16px; margin: 0; overflow: hidden; color: #8d94a2; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.stage-station-card .stage-station-warning { min-height: 0; margin: 4px 0 0; color: #ffdf7a; font-size: 9px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.stage-station-card small { display: block; min-height: 15px; margin-top: 5px; color: #5f6570; font-size: 9px; }
-.stage-station-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
-.stage-station-actions button { min-height: 26px; font-size: 8px; }
-.stage-station-update { width: 100%; min-height: 28px; margin-top: 7px; border: 1px solid rgba(255, 206, 71, .55); color: #ffdf7a; background: #17140b; font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
-.stage-station-update:hover { border-color: #ffce47; color: #fff4be; background: #241d0a; }
 .vo-frame > .vo-scoreboard-row-box.away { border-color: #ff6b76; background: rgba(255, 70, 85, .08); box-shadow: inset 0 0 18px rgba(255, 70, 85, .18); }
 .vo-frame > .vo-scoreboard-row-box span { position: absolute; left: -1px; top: -14px; padding: 2px 4px; color: #dff8ff; background: rgba(0, 0, 0, .8); font-size: 8px; font-style: normal; font-weight: 900; letter-spacing: .08em; white-space: nowrap; }
 .vo-frame > .vo-scoreboard-row-box.away span { color: #ffdce0; }
@@ -708,20 +655,7 @@ input[type="range"]:focus { border-color: #35353a; }
 .field > small, .team-fields label > small { display: block; margin-top: 5px; color: #6f6f78; font-size: 10px; line-height: 1.4; }
 
 /* ---- Stage Displays: match the rest of the controller ---------------------------- */
-.stage-display-view .panel .panel-title { justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 15px 17px 13px; margin: 0; }
-.stage-display-view .panel .panel-title h2 { margin: 0; font-size: 15px; }
-.stage-display-view .heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 /* One accent for every stage card; colour only carries meaning (warning / armed cue). */
-.stage-api-panel, .stage-global-panel, .stage-preset-panel, .stage-update-panel, .stage-key-panel { border-top: 2px solid #3a3a42; }
-.stage-update-panel { border-top-color: #3a3a42; }
-.stage-key-panel { margin-bottom: 13px; overflow: hidden; }
-.stage-key-panel .heading-actions input {
-  width: 220px; height: 37px; padding: 0 12px; border: 1px solid #3a3a40; border-radius: 2px;
-  color: var(--text); background: #0b0b0d; font: inherit; font-size: 12px;
-}
-.stage-key-panel .heading-actions input:focus { outline: none; border-color: var(--orange); }
-.stage-key-panel code { padding: 1px 5px; color: #9dc7ff; background: #0b0d11; }
-.stage-key-panel.open { border-top-color: #ffce47; }
 
 /* Overwatch scoreboard OCR panel */
 .ow-ocr-panel { margin-top: 16px; }
@@ -752,8 +686,6 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-dbg-cell img.proc { background: #fff; }
 .ow-dbg-cell small { color: #cfd8e1; word-break: break-all; }
 /* NDI player cards panel (Stage page) */
-.ndi-card-panel { margin-bottom: 16px; }
-.ndi-card-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .ndi-rows { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
 .ndi-row { display: grid; grid-template-columns: auto auto 1fr; gap: 2px 8px; align-items: center; padding: 8px 10px; background: #11161c; border: 1px solid #2c3540; font-size: 12px; cursor: pointer; }
 .ndi-row b { font-size: 16px; }
@@ -766,3 +698,30 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-ocr-name-input:hover, .ow-ocr-name-input:focus { border-color: #46515c; background: #0d1217; }
 .ow-ocr-name-input.is-manual { color: #ffd37a; border-color: #6b5320; }
 .ow-dbg-cell button { justify-self: start; padding: 3px 8px; font-size: 11px; }
+
+/* Displays view (display clients + NDI presets + OBS) */
+.disp-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.disp-station { display: grid; gap: 8px; padding: 12px; border: 1px solid #262a31; border-radius: 8px; background: #111317; }
+.disp-station header { display: flex; align-items: center; gap: 8px; }
+.disp-station header b { font-size: 20px; font-style: italic; }
+.disp-station header span { flex: 1; overflow: hidden; color: #8a94a3; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.disp-dot { width: 10px; height: 10px; border-radius: 50%; background: #444; }
+.disp-dot.ok { background: #2fd27a; } .disp-dot.warn { background: #ffce47; } .disp-dot.bad { background: #ff5a5a; }
+.disp-health { font-size: 11px; color: #8a94a3; } .disp-health.ok { color: #6ee7a8; } .disp-health.warn { color: #ffdf7a; } .disp-health.bad { color: #ff8a8a; }
+.disp-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.disp-modes button, .disp-banner-teams button, .obs-actions button { padding: 7px 6px; border: 1px solid #2c323b; border-radius: 6px; background: #181b21; color: #cfd6df; font-size: 11px; font-weight: 800; letter-spacing: .06em; cursor: pointer; }
+.disp-modes button.active { border-color: #2d8cff; background: #12305a; color: #fff; }
+.disp-preset { display: grid; gap: 4px; font-size: 10px; color: #8a94a3; letter-spacing: .1em; }
+.disp-preset select { padding: 6px; border: 1px solid #2c323b; border-radius: 6px; background: #0d0f12; color: #fff; }
+.disp-feed { font-size: 10px; color: #6b7686; } .disp-feed.ok { color: #6ee7a8; } .disp-feed.bad { color: #ff8a8a; }
+.disp-preset-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.disp-preset-btn { display: grid; gap: 4px; padding: 12px; border: 1px solid #2c323b; border-radius: 8px; background: #15181d; color: #e9eef4; text-align: left; cursor: pointer; }
+.disp-preset-btn b { font-size: 13px; } .disp-preset-btn small { color: #8a94a3; font-size: 10px; line-height: 1.35; }
+.disp-preset-btn.active { border-color: #f47920; background: #2a1708; }
+.disp-banner-teams { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #8a94a3; font-size: 11px; }
+.obs-connect { display: grid; grid-template-columns: 2fr 1fr 2fr 1.4fr 2.4fr; gap: 10px; }
+.obs-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.obs-actions input { flex: 1; padding: 8px; border: 1px solid #2c323b; border-radius: 6px; background: #0d0f12; color: #fff; }
+.obs-actions button.primary { border-color: #f47920; background: #f47920; color: #101012; }
+.displays-view .bad { color: #ff8a8a; }
+@media (max-width: 1200px) { .disp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .disp-preset-grid { grid-template-columns: repeat(3, 1fr); } .obs-connect { grid-template-columns: 1fr 1fr; } }

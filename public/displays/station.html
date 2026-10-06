@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ISU Display Station</title>
+    <link rel="stylesheet" href="./station.css" />
+  </head>
+  <!-- One audience display, rendered by an OBS Browser Source and sent as NDI "ISU Stage NN".
+       URL: /displays/station.html?station=N
+       The preset comes from controller state.displays.stations[N] = { preset }.
+       Presets: idle | intro | player | banner | score | black -->
+  <body>
+    <main id="st" data-preset="idle">
+      <div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
+
+      <section class="scene idle" data-scene="idle">
+        <small>IDAHO STATE ESPORTS</small>
+        <h1 id="idle-title">STATION 01</h1>
+        <span id="idle-event"></span>
+      </section>
+
+      <section class="scene intro" data-scene="intro">
+        <div class="team home"><div class="logo" id="intro-home-logo"></div><strong id="intro-home-name"></strong></div>
+        <div class="vs">VS</div>
+        <div class="team away"><div class="logo" id="intro-away-logo"></div><strong id="intro-away-name"></strong></div>
+        <footer id="intro-event"></footer>
+      </section>
+
+      <section class="scene player" data-scene="player">
+        <div class="hero-art" id="player-hero-art" aria-hidden="true"></div>
+        <div class="portrait" id="player-portrait"><b id="player-initials"></b></div>
+        <div class="copy">
+          <small id="player-team"></small>
+          <strong id="player-handle"></strong>
+          <span id="player-meta"></span>
+          <em id="player-stats-label"></em>
+          <div class="stats" id="player-stats"></div>
+        </div>
+        <div class="station-tag" id="player-station"></div>
+      </section>
+
+      <!-- The banner is ONE wide canvas (5 screens) drawn on every station of that side and
+           shifted so each station shows its own 1/5 slice. -->
+      <section class="scene banner" data-scene="banner">
+        <div class="banner-canvas" id="banner-canvas">
+          <div class="banner-logo" id="banner-logo"></div>
+          <div class="banner-copy"><small id="banner-kicker"></small><strong id="banner-name"></strong></div>
+          <div class="banner-roster" id="banner-roster"></div>
+        </div>
+      </section>
+
+      <section class="scene score" data-scene="score">
+        <div class="side"><div class="logo" id="score-home-logo"></div><b id="score-home"></b></div>
+        <div class="mid"><small>SERIES</small><span id="score-map"></span></div>
+        <div class="side"><b id="score-away"></b><div class="logo" id="score-away-logo"></div></div>
+      </section>
+
+      <div class="black" aria-hidden="true"></div>
+    </main>
+    <script src="./station.js" defer></script>
+  </body>
+</html>

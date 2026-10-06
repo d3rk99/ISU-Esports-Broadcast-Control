@@ -8,7 +8,7 @@ This project is a local-first Electron broadcast control app for Idaho State Esp
 - Game defaults/config: `src/game-config.js`
 - OBS overlays: `public/overlays/`
 - Companion module: `companion-module/`
-- Stage Display Manager and Client: `electron/stage-displays/`
+- Display system (manager, client, OBS setup): `electron/displays/`, preset pages `public/displays/`, controller page `src/displays-view.js` + `src/display-presets.js`
 - Rocket League car renderer lab: `src/rl-car-lab.js`, `src/rl-car-renderer.js`
 - Valorant OCR service: `electron/valorant-ocr-service.cjs`, `electron/valorant-ocr-engine.cjs`, `electron/valorant-capture.cjs`
 
@@ -27,7 +27,7 @@ Packaged builds:
 npm run package:dir
 npm run package
 npm run package:bridge
-npm run package:stage-client
+npm run package:display-client
 npm run package:companion
 ```
 
@@ -98,20 +98,19 @@ Known limits:
 - Wheels need more validation for orientation, scale, and tire/rim material separation.
 - Some original Unreal material graphs are more complex than diffuse/normal/mask and may need body-specific tuning.
 
-## Stage Display System Notes
+## Display System Notes
 
-The Stage Display subsystem is separate from game telemetry. It supports:
+Rebuilt from scratch 2026-10-06 around NDI. Install guide: `docs/display-client-install.md`.
 
-- Gameplay mirror mode
-- Wall/span presets
-- Mirror graphic presets
-- Individual station content
-- Blackout
-- Client update push
-- Station previews
-- Cursor lock option
-
-Install instructions are in `docs/stage-display-client-install.md`.
+- **Display client** (one per station PC, `npm run display-client`, packaged with `npm run package:display-client`): full screen on the audience monitor, two modes only, chosen by the controller:
+  - **Game mirror**: shows that PC's player monitor.
+  - **NDI**: shows an NDI feed, by default `ISU Stage NN` for its station.
+  Keeps reconnecting to the controller; an NDI feed keeps playing if the controller drops. Settings: Ctrl+Alt+S. Cursor lock (mouse stays on the player monitor, Windows): Ctrl+Alt+L.
+- **Controller** (Displays page): flip any/all stations between mirror and NDI, pick NDI presets per station or all, set up OBS, optional display key. Port 3178, WebSocket `/display`.
+- **Presets** (`src/display-presets.js`, stored in `state.displays.stations[N]`): idle, team intro, player cards (the roster player whose STATION is N), team banners (one canvas across 5 screens: 1-5 home, 6-10 away, or force a team), series score, black.
+- **OBS** draws the presets: 10 scenes, each a Browser Source of `/displays/station.html?station=N` with a DistroAV NDI filter `ISU Stage NN`. SET UP OBS on the Displays page makes them (needs OBS 31.1+, DistroAV, WebSocket server on). Pages update live from the controller; OBS never reloads.
+- **Companion**: `Displays: Game mirror / NDI` and `Displays: NDI preset` actions, feedbacks, and `display_N_*` variables.
+- Preview the preset pages offline: `scripts/display-preview.cjs`.
 
 ## Valorant OCR Notes
 

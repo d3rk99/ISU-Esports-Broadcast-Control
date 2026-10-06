@@ -131,44 +131,19 @@ function buildCompanionVariables(state = {}) {
   return variables;
 }
 
-function buildStageVariables(status = {}) {
-  const pending = status.pendingPreset || {};
-  const readiness = pending.readiness || {};
-  const update = status.clientUpdate || {};
-  const assignments = status.modeAssignments || {};
-  const wallAssignment = assignments.wall || {};
-  const graphicAssignment = assignments.graphic || {};
-  const variables = {
-    stage_enabled: Boolean(status.enabled),
-    stage_online_count: Number(status.onlineCount) || 0,
-    stage_expected_client_version: scalar(status.expectedClientVersion),
-    stage_update_available: Boolean(update.available),
-    stage_update_version: scalar(update.version),
-    stage_update_size: Number(update.size) || 0,
-    stage_pending_preset: scalar(pending.preset),
-    stage_pending_mode: scalar(pending.mode),
-    stage_pending_ready_count: Number(readiness.ready) || 0,
-    stage_pending_online_count: Number(readiness.online) || 0,
-    stage_pending_all_ready: Boolean(readiness.allReady),
-    stage_wall_preset: scalar(wallAssignment.preset),
-    stage_wall_preset_title: scalar(wallAssignment.title || wallAssignment.preset),
-    stage_wall_total: Number(wallAssignment.wallTotal) || 10,
-    stage_wall_group: scalar(wallAssignment.wallGroup || '10'),
-    stage_graphic_preset: scalar(graphicAssignment.preset),
-    stage_graphic_preset_title: scalar(graphicAssignment.title || graphicAssignment.preset)
-  };
+// Display clients: online count + per-station mode (mirror/ndi) and NDI state, plus the OBS
+// preset each station's feed is showing (from the controller state).
+function buildStageVariables(status = {}, state = {}) {
+  const variables = { display_online_count: Number(status.onlineCount) || 0 };
   const stations = Array.isArray(status.stations) ? status.stations : [];
+  const presets = state?.displays?.stations || {};
   for (let index = 1; index <= 10; index += 1) {
     const station = stations.find((item) => Number(item.station) === index) || {};
-    variables[`stage_station_${index}_online`] = Boolean(station.online);
-    variables[`stage_station_${index}_mode`] = scalar(station.mode, 'offline');
-    variables[`stage_station_${index}_hostname`] = scalar(station.hostname);
-    variables[`stage_station_${index}_client_version`] = scalar(station.clientVersion);
-    variables[`stage_station_${index}_outdated`] = Boolean(station.outdated);
-    variables[`stage_station_${index}_updating`] = Boolean(station.updating);
-    variables[`stage_station_${index}_update_status`] = scalar(station.updateStatus);
-    variables[`stage_station_${index}_preset`] = scalar(station.preset);
-    variables[`stage_station_${index}_ready`] = Boolean(station.ready);
+    variables[`display_${index}_online`] = Boolean(station.online);
+    variables[`display_${index}_mode`] = scalar(station.online ? station.mode : 'offline', 'offline');
+    variables[`display_${index}_receiving`] = Boolean(station.online && (station.mode === 'mirror' || station.state === 'receiving'));
+    variables[`display_${index}_hostname`] = scalar(station.hostname);
+    variables[`display_${index}_preset`] = scalar(presets[index]?.preset, 'idle');
   }
   return variables;
 }
@@ -196,13 +171,8 @@ function buildCompanionCapabilities(state = {}) {
   ];
   if (gameKey === 'valorant') actions.push({ id: 'veto.reset', label: 'Reset VALORANT veto selections', parameters: ['game?'] });
   actions.push(
-    { id: 'stage.mode.set', label: 'Stage Displays: Set global mode', parameters: ['mode'] },
-    { id: 'stage.station.mode.set', label: 'Stage Displays: Set one station mode', parameters: ['station', 'mode'] },
-    { id: 'stage.mode.assign_preset', label: 'Stage Displays: Assign preset to mode', parameters: ['preset', 'mode', 'wallTotal?', 'wallGroup?'] },
-    { id: 'stage.preset.prepare', label: 'Stage Displays: Prepare preset', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },
-    { id: 'stage.prepared.play', label: 'Stage Displays: Fire prepared preset', parameters: ['executeDelaySeconds?'] },
-    { id: 'stage.preset.play', label: 'Stage Displays: Play preset now', parameters: ['preset', 'mode?', 'wallTotal?', 'wallGroup?'] },
-    { id: 'stage.client.update', label: 'Stage Displays: Send client update', parameters: ['target', 'station?'] }
+    { id: 'stage.display.mode', label: 'Displays: game mirror or NDI', parameters: ['mode', 'station?', 'source?'] },
+    { id: 'display.preset', label: 'Displays: NDI preset (idle, intro, player, banner, score, black)', parameters: ['preset', 'station?', 'team?'] }
   );
   return {
     apiVersion: 1,
@@ -329,7 +299,7 @@ class CompanionApiService {
       this.publishTimer = null;
       const variables = {
         ...buildCompanionVariables(this.pendingState || {}),
-        ...buildStageVariables(this.getStageStatus() || {})
+        ...buildStageVariables(this.getStageStatus() || {}, this.getState() || {})
       };
       const payload = `event: variables\ndata: ${JSON.stringify(variables)}\n\n`;
       this.pendingState = null;
@@ -368,7 +338,7 @@ class CompanionApiService {
     if (request.method === 'GET' && requestUrl.pathname === '/api/companion/variables') {
       sendJson(response, 200, {
         ...buildCompanionVariables(state),
-        ...buildStageVariables(this.getStageStatus() || {})
+        ...buildStageVariables(this.getStageStatus() || {}, this.getState() || {})
       });
       return;
     }
@@ -389,7 +359,7 @@ class CompanionApiService {
       });
       response.write(`event: variables\ndata: ${JSON.stringify({
         ...buildCompanionVariables(state),
-        ...buildStageVariables(this.getStageStatus() || {})
+        ...buildStageVariables(this.getStageStatus() || {}, this.getState() || {})
       })}\n\n`);
       this.clients.add(response);
       this.status.clients = this.clients.size;
@@ -414,7 +384,7 @@ class CompanionApiService {
           ...result,
           variables: {
             ...buildCompanionVariables(this.getState() || state),
-            ...buildStageVariables(this.getStageStatus() || {})
+            ...buildStageVariables(this.getStageStatus() || {}, this.getState() || {})
           }
         });
       } catch (error) {

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <title>ISU Display Client - Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <header><small>ISU DISPLAY CLIENT</small><h1>Station setup</h1><span id="meta"></span></header>
+  <form id="form">
+    <label>Station<select name="station"></select></label>
+    <div class="pair">
+      <label>Controller PC (IP or name)<input name="controller" spellcheck="false" placeholder="192.168.1.20"></label>
+      <label>Port<input name="port" type="number" min="1" max="65535"></label>
+    </div>
+    <label>Display key<input name="key" type="password" autocomplete="off" placeholder="Same as the controller (blank if none)"></label>
+    <label>OBS PC for NDI (optional)<input name="ndiHost" spellcheck="false" placeholder="Only if NDI can't find the feed by itself"></label>
+    <div class="pair">
+      <label>Player monitor (game mirror)<select name="playerDisplay"></select></label>
+      <label>Audience monitor (this window)<select name="stageDisplay"></select></label>
+    </div>
+    <label class="check"><input name="cursorLock" type="checkbox"><span>Keep the mouse on the player monitor (Ctrl+Alt+L)</span></label>
+    <label class="check"><input name="startWithWindows" type="checkbox"><span>Start with Windows</span></label>
+    <footer><span id="saved"></span><button type="submit">SAVE</button></footer>
+  </form>
+  <script src="settings.js"></script>
+</body>
+</html>

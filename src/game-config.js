@@ -709,6 +709,7 @@ export function createGameState(gameKey) {
 export function createInitialState() {
   return {
     version: 4,
+    displays: { stations: Object.fromEntries(Array.from({ length: 10 }, (_v, n) => [n + 1, { preset: 'idle', team: '' }])) },
     selectedGame: 'overwatch',
     activeView: 'control',
     activeRoster: 'varsity',

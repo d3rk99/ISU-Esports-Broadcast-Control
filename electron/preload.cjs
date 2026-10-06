@@ -1,6 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('isuDesktop', {
+  getDisplayStatus: () => ipcRenderer.invoke('displays:status'),
+  setDisplayMode: (details) => ipcRenderer.invoke('displays:set-mode', details),
+  getDisplayKey: () => ipcRenderer.invoke('displays:get-key'),
+  setDisplayKey: (details) => ipcRenderer.invoke('displays:set-key', details),
+  getObsDisplays: () => ipcRenderer.invoke('obs-displays:get'),
+  saveObsDisplays: (details) => ipcRenderer.invoke('obs-displays:save', details),
+  setupObsDisplays: () => ipcRenderer.invoke('obs-displays:setup'),
+  getObsDisplaysStatus: () => ipcRenderer.invoke('obs-displays:status'),
   platform: process.platform,
   versions: Object.freeze({ electron: process.versions.electron }),
   savedRocketLeagueConnection: ipcRenderer.sendSync('rocket-league:get-saved-connection-sync'),
@@ -17,23 +25,6 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   getNetworkAddresses: () => ipcRenderer.invoke('network:get-addresses'),
   configureCompanion: (settings) => ipcRenderer.invoke('companion:configure', settings),
   getCompanionStatus: () => ipcRenderer.invoke('companion:get-status'),
-  getStageDisplayStatus: () => ipcRenderer.invoke('stage-displays:get-status'),
-  listStagePresets: () => ipcRenderer.invoke('stage-displays:list-presets'),
-  importStagePreset: (details) => ipcRenderer.invoke('stage-displays:import-preset', details),
-  deleteStagePreset: (details) => ipcRenderer.invoke('stage-displays:delete-preset', details),
-  updateStagePreset: (details) => ipcRenderer.invoke('stage-displays:update-preset', details),
-  replaceStagePreset: (details) => ipcRenderer.invoke('stage-displays:replace-preset', details),
-  publishStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:publish-client-update', details),
-  sendStageClientUpdate: (details) => ipcRenderer.invoke('stage-displays:send-client-update', details),
-  clearStagePreviews: () => ipcRenderer.invoke('stage-displays:clear-previews'),
-  getStageKey: () => ipcRenderer.invoke('stage-displays:get-key'),
-  setStageKey: (details) => ipcRenderer.invoke('stage-displays:set-key', details),
-  setStageDisplayMode: (details) => ipcRenderer.invoke('stage-displays:set-global-mode', details),
-  setStageStationMode: (details) => ipcRenderer.invoke('stage-displays:set-station-mode', details),
-  assignStageModePreset: (details) => ipcRenderer.invoke('stage-displays:assign-mode-preset', details),
-  prepareStagePreset: (details) => ipcRenderer.invoke('stage-displays:prepare-preset', details),
-  playPreparedStagePreset: (details) => ipcRenderer.invoke('stage-displays:play-prepared', details),
-  playStagePreset: (details) => ipcRenderer.invoke('stage-displays:play-preset', details),
   pickImage: (details) => ipcRenderer.invoke('assets:pick-image', details),
   openOverlayPreview: (details) => ipcRenderer.invoke('overlay:preview', details),
   openOverlayOutput: (details) => ipcRenderer.invoke('overlay:open-output', details),
@@ -67,8 +58,6 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   setOverwatchOcrName: (details) => ipcRenderer.invoke('overwatch-ocr:set-name', details),
   testOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:test-read'),
   debugCaptureOverwatchOcr: () => ipcRenderer.invoke('overwatch-ocr:debug-capture'),
-  getNdiCardStatus: () => ipcRenderer.invoke('ndi-cards:status'),
-  configureNdiCards: (settings) => ipcRenderer.invoke('ndi-cards:configure', settings),
   onOverwatchOcrState: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('overwatch-ocr:state', listener);
@@ -99,10 +88,10 @@ contextBridge.exposeInMainWorld('isuDesktop', {
     ipcRenderer.on('valorant-ocr:status', listener);
     return () => ipcRenderer.removeListener('valorant-ocr:status', listener);
   },
-  onStageDisplayStatus: (callback) => {
+  onDisplayStatus: (callback) => {
     const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('stage-displays:status', listener);
-    return () => ipcRenderer.removeListener('stage-displays:status', listener);
+    ipcRenderer.on('displays:status', listener);
+    return () => ipcRenderer.removeListener('displays:status', listener);
   },
   onCompanionAction: (callback) => {
     const listener = async (_event, payload = {}) => {

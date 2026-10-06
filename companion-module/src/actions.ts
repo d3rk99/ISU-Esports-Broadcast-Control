@@ -3,8 +3,8 @@ import type ModuleInstance from './main.js'
 type Team = 'home' | 'away'
 type Operation = 'increment' | 'decrement'
 type ProgramOutput = 'scoreboard' | 'roster' | 'map-pool' | 'clean'
-type StageMode = 'gameplay' | 'wall' | 'graphic' | 'individual' | 'playercard' | 'hold' | 'blackout'
-type StageUpdateTarget = 'outdated' | 'all' | 'station'
+type DisplayMode = 'mirror' | 'ndi'
+type DisplayPreset = 'idle' | 'intro' | 'player' | 'banner' | 'score' | 'black'
 
 export type ActionsSchema = {
 	series_score_adjust: { options: { team: Team; operation: Operation; amount: number } }
@@ -21,13 +21,8 @@ export type ActionsSchema = {
 	reset_maps: { options: Record<string, never> }
 	reset_valorant_veto: { options: Record<string, never> }
 	select_program_output: { options: { output: ProgramOutput } }
-	stage_global_mode: { options: { mode: StageMode } }
-	stage_station_mode: { options: { station: string; mode: StageMode } }
-	stage_assign_mode_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
-	stage_prepare_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string } }
-	stage_fire_prepared: { options: { executeDelaySeconds: number } }
-	stage_play_preset: { options: { preset: string; mode: StageMode; wallTotal: string; wallGroup: string; executeDelaySeconds: number } }
-	stage_client_update: { options: { target: StageUpdateTarget; station: string } }
+	display_mode: { options: { station: string; mode: DisplayMode } }
+	display_preset: { options: { station: string; preset: DisplayPreset; team: '' | 'home' | 'away' } }
 }
 
 const TEAM_CHOICES = [
@@ -50,27 +45,26 @@ const PROGRAM_OUTPUT_CHOICES = [
 	{ id: 'clean', label: 'Clean' },
 ]
 
-const STAGE_MODE_CHOICES = [
-	{ id: 'gameplay', label: 'Gameplay Mirror' },
-	{ id: 'wall', label: 'Wall / Span' },
-	{ id: 'graphic', label: 'Mirror Graphic' },
-	{ id: 'individual', label: 'Individual' },
-	{ id: 'playercard', label: 'Player Card (NDI)' },
-	{ id: 'hold', label: 'Hold Graphic' },
-	{ id: 'blackout', label: 'Blackout' },
+const DISPLAY_MODE_CHOICES = [
+	{ id: 'mirror', label: 'Game mirror' },
+	{ id: 'ndi', label: 'NDI feed' },
 ]
 
-const STATION_CHOICES = Array.from({ length: 10 }, (_item, index) => ({
-	id: String(index + 1),
-	label: `Station ${String(index + 1).padStart(2, '0')}`,
-}))
+const DISPLAY_PRESET_CHOICES = [
+	{ id: 'idle', label: 'Idle' },
+	{ id: 'intro', label: 'Team intro' },
+	{ id: 'player', label: 'Player cards' },
+	{ id: 'banner', label: 'Team banners' },
+	{ id: 'score', label: 'Series score' },
+	{ id: 'black', label: 'Black' },
+]
 
-const WALL_GROUP_CHOICES = [
-	{ id: '', label: 'All / default' },
-	{ id: '1-5', label: 'Stations 1-5' },
-	{ id: '6-10', label: 'Stations 6-10' },
-	{ id: 'mirror-5', label: 'Mirror 1-5 and 6-10' },
-	{ id: '10', label: '10-screen span' },
+const STATION_CHOICES = [
+	{ id: '', label: 'All stations' },
+	...Array.from({ length: 10 }, (_item, index) => ({
+		id: String(index + 1),
+		label: `Station ${String(index + 1).padStart(2, '0')}`,
+	})),
 ]
 
 export function UpdateActions(self: ModuleInstance): void {
@@ -220,109 +214,38 @@ export function UpdateActions(self: ModuleInstance): void {
 			],
 			callback: async (event) => self.sendControlAction({ action: 'output.select', output: event.options.output }),
 		},
-		stage_global_mode: {
-			name: 'Stage Displays: Set global mode',
-			options: [{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'blackout', choices: STAGE_MODE_CHOICES }],
-			callback: async (event) => self.sendControlAction({ action: 'stage.mode.set', mode: event.options.mode }),
-		},
-		stage_station_mode: {
-			name: 'Stage Displays: Set station mode',
+		display_mode: {
+			name: 'Displays: Game mirror / NDI',
 			options: [
-				{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES },
-				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'blackout', choices: STAGE_MODE_CHOICES },
+				{ id: 'station', type: 'dropdown', label: 'Station', default: '', choices: STATION_CHOICES },
+				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'ndi', choices: DISPLAY_MODE_CHOICES },
 			],
 			callback: async (event) =>
-				self.sendControlAction({
-					action: 'stage.station.mode.set',
-					station: event.options.station,
-					mode: event.options.mode,
-				}),
+				self.sendControlAction({ action: 'stage.display.mode', station: event.options.station, mode: event.options.mode }),
 		},
-		stage_assign_mode_preset: {
-			name: 'Stage Displays: Assign preset to mode',
+		display_preset: {
+			name: 'Displays: NDI preset',
 			options: [
-				{ id: 'preset', type: 'textinput', label: 'Preset name', default: 'starting-soon', useVariables: true },
-				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'wall', choices: STAGE_MODE_CHOICES },
-				{ id: 'wallTotal', type: 'textinput', label: 'Wall total', default: '10', useVariables: true },
-				{ id: 'wallGroup', type: 'dropdown', label: 'Wall group', default: '10', choices: WALL_GROUP_CHOICES },
-			],
-			callback: async (event) =>
-				self.sendControlAction({
-					action: 'stage.mode.assign_preset',
-					preset: event.options.preset,
-					mode: event.options.mode,
-					wallTotal: event.options.wallTotal,
-					wallGroup: event.options.wallGroup,
-				}),
-		},
-		stage_prepare_preset: {
-			name: 'Stage Displays: Prepare preset',
-			options: [
-				{ id: 'preset', type: 'textinput', label: 'Preset name', default: 'starting-soon', useVariables: true },
-				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'graphic', choices: STAGE_MODE_CHOICES },
-				{ id: 'wallTotal', type: 'textinput', label: 'Wall total', default: '10', useVariables: true },
-				{ id: 'wallGroup', type: 'dropdown', label: 'Wall group', default: '', choices: WALL_GROUP_CHOICES },
-			],
-			callback: async (event) =>
-				self.sendControlAction({
-					action: 'stage.preset.prepare',
-					preset: event.options.preset,
-					mode: event.options.mode,
-					wallTotal: event.options.wallTotal,
-					wallGroup: event.options.wallGroup,
-				}),
-		},
-		stage_fire_prepared: {
-			name: 'Stage Displays: Fire prepared preset',
-			options: [
-				{ id: 'executeDelaySeconds', type: 'number', label: 'Sync delay seconds', default: 1, min: 0.2, max: 10, step: 0.1 },
-			],
-			callback: async (event) =>
-				self.sendControlAction({
-					action: 'stage.prepared.play',
-					executeDelaySeconds: event.options.executeDelaySeconds,
-				}),
-		},
-		stage_play_preset: {
-			name: 'Stage Displays: Play preset',
-			options: [
-				{ id: 'preset', type: 'textinput', label: 'Preset name', default: 'starting-soon', useVariables: true },
-				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'graphic', choices: STAGE_MODE_CHOICES },
-				{ id: 'wallTotal', type: 'textinput', label: 'Wall total', default: '10', useVariables: true },
-				{ id: 'wallGroup', type: 'dropdown', label: 'Wall group', default: '', choices: WALL_GROUP_CHOICES },
-				{ id: 'executeDelaySeconds', type: 'number', label: 'Sync delay seconds', default: 1.5, min: 0.2, max: 10, step: 0.1 },
-			],
-			callback: async (event) =>
-				self.sendControlAction({
-					action: 'stage.preset.play',
-					preset: event.options.preset,
-					mode: event.options.mode,
-					wallTotal: event.options.wallTotal,
-					wallGroup: event.options.wallGroup,
-					executeDelaySeconds: event.options.executeDelaySeconds,
-				}),
-		},
-		stage_client_update: {
-			name: 'Stage Displays: Send client update',
-			options: [
+				{ id: 'station', type: 'dropdown', label: 'Station', default: '', choices: STATION_CHOICES },
+				{ id: 'preset', type: 'dropdown', label: 'Preset', default: 'idle', choices: DISPLAY_PRESET_CHOICES },
 				{
-					id: 'target',
+					id: 'team',
 					type: 'dropdown',
-					label: 'Target',
-					default: 'outdated',
+					label: 'Team (banners)',
+					default: '',
 					choices: [
-						{ id: 'outdated', label: 'Outdated online clients' },
-						{ id: 'all', label: 'All online clients' },
-						{ id: 'station', label: 'One station' },
+						{ id: '', label: 'Automatic (1-5 home, 6-10 away)' },
+						{ id: 'home', label: 'Home' },
+						{ id: 'away', label: 'Away' },
 					],
 				},
-				{ id: 'station', type: 'dropdown', label: 'Station if one station', default: '1', choices: STATION_CHOICES },
 			],
 			callback: async (event) =>
 				self.sendControlAction({
-					action: 'stage.client.update',
-					target: event.options.target,
-					station: event.options.target === 'station' ? event.options.station : '',
+					action: 'display.preset',
+					station: event.options.station,
+					preset: event.options.preset,
+					team: event.options.team,
 				}),
 		},
 	})

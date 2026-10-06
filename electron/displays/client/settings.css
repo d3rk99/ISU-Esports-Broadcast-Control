@@ -1,0 +1,14 @@
+body { margin: 0; padding: 22px 26px; background: #0b0d10; color: #e9eef4; font: 14px "Segoe UI", Arial, sans-serif; }
+header small { color: #f47920; font-weight: 800; letter-spacing: .25em; font-size: 11px; }
+header h1 { margin: 4px 0; font-size: 26px; }
+header span { color: #8796a6; font-size: 12px; }
+form { display: grid; gap: 14px; margin-top: 18px; }
+label { display: grid; gap: 6px; color: #aeb9c5; font-size: 12px; font-weight: 600; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pair label:nth-child(2) input[type=number] { width: 100%; }
+input, select { box-sizing: border-box; width: 100%; padding: 9px 10px; border: 1px solid #333c47; border-radius: 6px; background: #12161b; color: #fff; font: inherit; }
+.check { display: flex; align-items: center; gap: 10px; color: #dbe3ea; font-weight: 500; }
+.check input { width: 18px; height: 18px; }
+footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+footer span { color: #6ee7a8; }
+button { padding: 10px 26px; border: 0; border-radius: 6px; background: #f47920; color: #101012; font-weight: 800; letter-spacing: .1em; cursor: pointer; }

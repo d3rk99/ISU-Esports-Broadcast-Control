@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; media-src 'self' blob: mediastream:">
+  <title>ISU Display</title>
+  <link rel="stylesheet" href="display.css">
+</head>
+<body class="mode-ndi">
+  <video id="mirror" autoplay muted playsinline></video>
+  <canvas id="ndi" width="1280" height="720"></canvas>
+  <main id="wait">
+    <small id="wait-eyebrow">IDAHO STATE ESPORTS</small>
+    <h1 id="wait-title">STATION</h1>
+    <p id="wait-detail">Starting…</p>
+  </main>
+  <div id="badge"></div>
+  <script src="display.js"></script>
+</body>
+</html>

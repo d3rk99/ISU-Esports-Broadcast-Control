@@ -6,11 +6,9 @@ export type FeedbacksSchema = {
 	selected_game: { type: 'boolean'; options: { game: string } }
 	program_output_selected: { type: 'boolean'; options: { output: string } }
 	team_leading: { type: 'boolean'; options: { team: 'home' | 'away'; scoreType: 'series' | 'detail' } }
-	stage_station_online: { type: 'boolean'; options: { station: string } }
-	stage_station_mode: { type: 'boolean'; options: { station: string; mode: string } }
-	stage_station_outdated: { type: 'boolean'; options: { station: string } }
-	stage_station_updating: { type: 'boolean'; options: { station: string } }
-	stage_prepared_ready: { type: 'boolean'; options: Record<string, never> }
+	display_online: { type: 'boolean'; options: { station: string } }
+	display_mode: { type: 'boolean'; options: { station: string; mode: string } }
+	display_preset: { type: 'boolean'; options: { station: string; preset: string } }
 }
 
 const GAME_CHOICES = [
@@ -32,17 +30,6 @@ const STATION_CHOICES = Array.from({ length: 10 }, (_item, index) => ({
 	id: String(index + 1),
 	label: `Station ${String(index + 1).padStart(2, '0')}`,
 }))
-
-const STAGE_MODE_CHOICES = [
-	{ id: 'gameplay', label: 'Gameplay Mirror' },
-	{ id: 'wall', label: 'Wall / Span' },
-	{ id: 'graphic', label: 'Mirror Graphic' },
-	{ id: 'individual', label: 'Individual' },
-	{ id: 'playercard', label: 'Player Card (NDI)' },
-	{ id: 'hold', label: 'Hold Graphic' },
-	{ id: 'blackout', label: 'Blackout' },
-	{ id: 'offline', label: 'Offline' },
-]
 
 export function UpdateFeedbacks(self: ModuleInstance): void {
 	self.setFeedbackDefinitions({
@@ -110,44 +97,32 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 				return own > opponent
 			},
 		},
-		stage_station_online: {
-			name: 'Stage station is online',
+		display_online: {
+			name: 'Display station is online and showing a picture',
 			type: 'boolean',
 			defaultStyle: { bgcolor: 0x2e7d32, color: 0xffffff },
 			options: [{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES }],
-			callback: (feedback) => self.getVariableValue(`stage_station_${feedback.options.station}_online`) === true,
+			callback: (feedback) => self.getVariableValue(`display_${feedback.options.station}_receiving`) === true,
 		},
-		stage_station_mode: {
-			name: 'Stage station is in mode',
+		display_mode: {
+			name: 'Display station is in mode',
 			type: 'boolean',
 			defaultStyle: { bgcolor: 0x2d8cff, color: 0xffffff },
 			options: [
 				{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES },
-				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'gameplay', choices: STAGE_MODE_CHOICES },
+				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'ndi', choices: [{ id: 'mirror', label: 'Game mirror' }, { id: 'ndi', label: 'NDI' }] },
 			],
-			callback: (feedback) =>
-				self.getVariableValue(`stage_station_${feedback.options.station}_mode`) === feedback.options.mode,
+			callback: (feedback) => self.getVariableValue(`display_${feedback.options.station}_mode`) === feedback.options.mode,
 		},
-		stage_station_outdated: {
-			name: 'Stage station needs update',
-			type: 'boolean',
-			defaultStyle: { bgcolor: 0xffce47, color: 0x101012 },
-			options: [{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES }],
-			callback: (feedback) => self.getVariableValue(`stage_station_${feedback.options.station}_outdated`) === true,
-		},
-		stage_station_updating: {
-			name: 'Stage station is updating',
+		display_preset: {
+			name: 'Display station NDI preset is',
 			type: 'boolean',
 			defaultStyle: { bgcolor: 0xf47920, color: 0x101012 },
-			options: [{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES }],
-			callback: (feedback) => self.getVariableValue(`stage_station_${feedback.options.station}_updating`) === true,
-		},
-		stage_prepared_ready: {
-			name: 'Stage prepared cue is ready on all online stations',
-			type: 'boolean',
-			defaultStyle: { bgcolor: 0x2e7d32, color: 0xffffff },
-			options: [],
-			callback: () => self.getVariableValue('stage_pending_all_ready') === true,
+			options: [
+				{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES },
+				{ id: 'preset', type: 'textinput', label: 'Preset (idle, intro, player, banner, score, black)', default: 'idle' },
+			],
+			callback: (feedback) => self.getVariableValue(`display_${feedback.options.station}_preset`) === feedback.options.preset,
 		},
 	})
 }
