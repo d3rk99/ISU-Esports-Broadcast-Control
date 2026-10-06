@@ -12,3 +12,4 @@ input, select { box-sizing: border-box; width: 100%; padding: 9px 10px; border: 
 footer { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
 footer span { color: #6ee7a8; }
 button { padding: 10px 26px; border: 0; border-radius: 6px; background: #f47920; color: #101012; font-weight: 800; letter-spacing: .1em; cursor: pointer; }
+.ndi-note { margin: 4px 0 0; color: #6b7686; font-size: 11px; }

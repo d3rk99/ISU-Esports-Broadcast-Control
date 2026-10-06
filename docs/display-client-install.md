@@ -5,7 +5,7 @@ The controller decides what it shows: **Game mirror** (this PC's player monitor)
 
 ## Install
 
-1. Install the **NDI Runtime** (free from ndi.video) on the station PC.
+1. Nothing to install first: the **NDI runtime is included** in the Display Client (no separate NDI Runtime needed).
 2. Run `ISU Display Client-Setup-<version>-x64.exe` on the PC (`npm run package:display-client` builds it; a portable exe is built too).
    It installs for the current user, starts right away, and **starts with Windows** from then on.
    It has **no taskbar button**: it lives in the tray's hidden icons (the ^ arrow next to the clock), orange monitor icon.
@@ -18,6 +18,19 @@ The controller decides what it shows: **Game mirror** (this PC's player monitor)
    - **Keep the mouse on the player monitor** (Ctrl+Alt+L toggles).
    - **Start with Windows** is on by default; untick it to stop that.
 4. SAVE. The tray tooltip shows the station, mode and connection.
+
+## Building the installer (once, on a Windows PC)
+
+```
+npm install
+npm run ndi:install
+npm run package:display-client
+```
+
+`ndi:install` downloads the NDI SDK and builds the NDI addon for Electron, which puts
+`Processing.NDI.Lib.x64.dll` next to it. The build then copies that DLL into the app and refuses
+to finish if it's missing (`scripts/check-ndi-bundle.cjs`), so a build without NDI can't ship.
+NDI license notes are in `electron/displays/NDI-LICENSE.txt` and shown by the installer.
 
 ## Firewall
 

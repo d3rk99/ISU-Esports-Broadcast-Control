@@ -1,0 +1,13 @@
+ISU Display Client
+==================
+
+This application includes the NDI(R) runtime library (Processing.NDI.Lib.x64.dll), so the NDI
+Runtime does not need to be installed separately.
+
+NDI(R) is a registered trademark of Vizrt NDI AB. More information: https://ndi.video
+
+Use of the NDI runtime included in this application is subject to the NDI SDK License Agreement
+(https://ndi.video/ndi-sdk-license-agreement/ and https://downloads.ndi.tv/SDK/NDI_SDK/NDI%20License%20Agreement.pdf).
+By installing this application you agree that you will not modify, reverse engineer, decompile
+or disassemble the NDI library or any other NDI product included in it, and that the NDI
+library is provided "as is" without warranty of any kind.

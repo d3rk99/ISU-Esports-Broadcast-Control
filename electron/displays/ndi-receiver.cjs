@@ -5,7 +5,7 @@
 
 function loadNdi() {
   try { return { ndi: require('@stagetimerio/grandiose'), error: '' }; }
-  catch (error) { return { ndi: null, error: `NDI runtime missing on this PC (${error.code || error.message}). Run "npm run ndi:install".` }; }
+  catch (error) { return { ndi: null, error: `NDI library could not load (${error.code || error.message}). This build is missing the bundled NDI runtime: rebuild with "npm run ndi:install" first, or install the NDI Runtime from ndi.video.` }; }
 }
 
 const matches = (sourceName, wanted) => sourceName === wanted || sourceName.endsWith(`(${wanted})`);

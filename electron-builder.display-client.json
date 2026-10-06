@@ -11,6 +11,7 @@
     "electron/displays/cursor-lock.cjs",
     "electron/displays/client/**/*",
     "package.json",
+    "electron/displays/NDI-LICENSE.txt",
     "node_modules/ws/**/*",
     "node_modules/@stagetimerio/grandiose/dist/**/*"
   ],
@@ -46,6 +47,8 @@
     "runAfterFinish": true,
     "createDesktopShortcut": false,
     "createStartMenuShortcut": true,
-    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
-  }
+    "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+    "license": "electron/displays/NDI-LICENSE.txt"
+  },
+  "afterPack": "scripts/check-ndi-bundle.cjs"
 }
