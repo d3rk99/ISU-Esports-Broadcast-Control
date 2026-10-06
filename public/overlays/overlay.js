@@ -818,6 +818,20 @@
         }
       }
     });
+    // Hero bans for this map (set in match controls): hero icon on the inside of each strip.
+    const bans = activeMap?.heroBans || {};
+    for (const side of ['home', 'away']) {
+      const el = $(`#ow-${side}-ban`); if (!el) continue;
+      const hero = String(bans[side] || '');
+      el.hidden = !hero;
+      if (!hero) continue;
+      const slug = hero.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      const img = el.querySelector('img');
+      const url = `/assets/overwatch/hero-icons/${slug}.png`;
+      if (img.getAttribute('src') !== url) img.src = url;
+      img.alt = `${hero} banned`;
+      el.title = `${hero} banned`;
+    }
     setText('#ow-map-label', `MAP ${(game.activeMap || 0) + 1} · FIRST TO ${mapsToWin}`);
     setText('#ow-map-name', (live.map || activeMap?.map || 'MAP TBD').toUpperCase());
     setText('#ow-mode-label', spec.label);

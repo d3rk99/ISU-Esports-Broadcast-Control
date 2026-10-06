@@ -734,3 +734,16 @@ input[type="range"]:focus { border-color: #35353a; }
 .disp-group-modes button { padding: 8px 14px; }
 .disp-group .disp-grid { margin-bottom: 10px; }
 .disp-group .disp-preset-grid .disp-preset-btn small { display: none; }
+
+/* Overwatch hero bans (match controls) */
+.ow-bans { margin-bottom: 13px; }
+.ow-bans .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ow-ban-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ow-ban-pick { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid #262a31; border-radius: 6px; background: #111317; }
+.ow-ban-icon { position: relative; display: grid; place-items: center; flex: 0 0 56px; height: 56px; border: 2px solid #3a3f48; border-radius: 4px; background: #0b0d10; overflow: hidden; color: #5b6573; font-size: 20px; }
+.ow-ban-icon.has-hero { border-color: #e2333b; }
+.ow-ban-icon img { width: 100%; height: 100%; object-fit: cover; }
+.ow-ban-icon.has-hero::after { content: ""; position: absolute; left: -20%; top: 50%; width: 140%; height: 3px; background: #e2333b; transform: rotate(-45deg); }
+.ow-ban-copy { display: grid; gap: 6px; flex: 1; min-width: 0; }
+.ow-ban-copy b { font-size: 11px; letter-spacing: .14em; color: #aeb9c5; }
+.ow-ban-copy select { width: 100%; padding: 7px; border: 1px solid #2c323b; border-radius: 6px; background: #0d0f12; color: #fff; }

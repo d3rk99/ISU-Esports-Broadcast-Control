@@ -49,3 +49,17 @@ test('display presets: station groups 1-5 and 6-10', async () => {
   assert.equal(state.displays.stations[6].preset, 'banner');
   assert.equal(state.displays.stations[5].preset, 'player', '1-5 untouched');
 });
+
+test('Overwatch hero bans: per map, per team, via Companion; unknown hero rejected', () => {
+  const state = createInitialState();
+  state.selectedGame = 'overwatch';
+  const game = state.games.overwatch;
+  game.activeMap = 1;
+  applyCompanionAction(state, { action: 'overwatch.ban', team: 'home', hero: 'tracer' });
+  applyCompanionAction(state, { action: 'overwatch.ban', team: 'away', hero: 'Soldier: 76' });
+  assert.deepEqual(game.mapRows[1].heroBans, { home: 'Tracer', away: 'Soldier: 76' });
+  assert.equal(game.mapRows[0].heroBans, undefined, 'other maps keep their own bans');
+  applyCompanionAction(state, { action: 'overwatch.ban', team: 'home', hero: '' });
+  assert.equal(game.mapRows[1].heroBans.home, '');
+  assert.throws(() => applyCompanionAction(state, { action: 'overwatch.ban', team: 'home', hero: 'Pikachu' }), /Unknown hero/);
+});

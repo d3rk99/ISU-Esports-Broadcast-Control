@@ -157,6 +157,19 @@ export function applyCompanionAction(state, request = {}) {
     state.activeOutputOverlay = output;
     return { message: `Program output selected: ${output}`, outputChanged: true };
   }
+  if (action === 'overwatch.ban') {
+    // Hero ban for the active map: side home|away, hero = exact controller hero name ('' clears).
+    const game = state.games.overwatch;
+    const side = String(request.team || request.side || '');
+    if (!['home', 'away'].includes(side)) throw actionError('team must be home or away');
+    const hero = String(request.hero || '').trim();
+    const match = hero ? GAME_CONFIGS.overwatch.characters.find((h) => h.toLowerCase() === hero.toLowerCase()) : '';
+    if (hero && !match) throw actionError(`Unknown hero: ${hero}`);
+    const row = game.mapRows[game.activeMap];
+    if (!row) throw actionError('No active map');
+    row.heroBans = { ...(row.heroBans || {}), [side]: match };
+    return { message: match ? `${side} ban: ${match}` : `${side} ban cleared` };
+  }
   if (action === 'display.preset') {
     const station = request.station === undefined || request.station === '' ? 'all' : String(request.station);
     try { applyDisplayPreset(state, station, String(request.preset || ''), String(request.team || '')); } catch (error) { throw actionError(error.message); }

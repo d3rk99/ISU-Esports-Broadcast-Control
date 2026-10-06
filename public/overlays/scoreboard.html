@@ -53,19 +53,29 @@
       <!-- Overwatch: thin top-centre bar that sits ABOVE the spectator hero rows (y 60-110) and the
            objective meter. Fed by game.overwatch.live when an OCR lab writes it, else by the manual
            controller / Companion values (see docs/overwatch-hud.md). -->
+      <!-- Overwatch: the spectator HUD shows each team's five hero/health icons along the top
+           (home left of the centre timer, away right). Each team's name + logo sits in a strip right
+           ABOVE its hero row, and that map's hero ban (hero icon) sits on the inside, next to the
+           centre. Positions are CSS variables (--ow-row-*) so they can be lined up with the live HUD. -->
       <section id="ow-scorecard" class="ow-scorecard" data-mode="control" aria-label="Overwatch scorecard" hidden>
-        <div class="ow-panel ow-logo ow-logo--home" id="ow-home-logo">ISU</div>
-        <div class="ow-panel ow-name ow-name--home"><strong id="ow-home-name">IDAHO STATE</strong><span class="ow-side" id="ow-home-side"></span></div>
-        <div class="ow-panel ow-score ow-score--home"><strong id="ow-home-score">0</strong></div>
+        <div class="ow-team ow-team--home">
+          <div class="ow-panel ow-logo ow-logo--home" id="ow-home-logo">ISU</div>
+          <div class="ow-panel ow-name ow-name--home"><strong id="ow-home-name">IDAHO STATE</strong><span class="ow-side" id="ow-home-side"></span></div>
+          <div class="ow-panel ow-score ow-score--home"><strong id="ow-home-score">0</strong></div>
+          <div class="ow-ban ow-ban--home" id="ow-home-ban" hidden><img alt=""><small>BAN</small></div>
+        </div>
         <div class="ow-panel ow-core">
           <div class="ow-core-top"><span class="ow-series-dots" id="ow-home-series"></span><small id="ow-map-label">MAP 1</small><span class="ow-series-dots" id="ow-away-series"></span></div>
           <strong id="ow-map-name">BUSAN</strong>
           <div class="ow-progress"><span class="ow-progress-pips ow-progress-pips--home" id="ow-home-progress"></span><em id="ow-mode-label">CONTROL</em><span class="ow-progress-pips ow-progress-pips--away" id="ow-away-progress"></span></div>
         </div>
-        <div class="ow-panel ow-score ow-score--away"><strong id="ow-away-score">0</strong></div>
-        <div class="ow-panel ow-name ow-name--away"><strong id="ow-away-name">OPPONENT</strong><span class="ow-side" id="ow-away-side"></span></div>
-        <div class="ow-panel ow-logo ow-logo--away" id="ow-away-logo">OPP</div>
-            </section>
+        <div class="ow-team ow-team--away">
+          <div class="ow-ban ow-ban--away" id="ow-away-ban" hidden><img alt=""><small>BAN</small></div>
+          <div class="ow-panel ow-score ow-score--away"><strong id="ow-away-score">0</strong></div>
+          <div class="ow-panel ow-name ow-name--away"><strong id="ow-away-name">OPPONENT</strong><span class="ow-side" id="ow-away-side"></span></div>
+          <div class="ow-panel ow-logo ow-logo--away" id="ow-away-logo">OPP</div>
+        </div>
+      </section>
       <section class="ow-players ow-players--home" id="ow-home-players" aria-label="Overwatch home player stats" hidden></section>
       <section class="ow-players ow-players--away" id="ow-away-players" aria-label="Overwatch away player stats" hidden></section>
 

@@ -292,6 +292,7 @@ function renderControl(config) {
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
       ${state.selectedGame === 'valorant' ? renderValorantOcrPanel(game) : ''}
+      ${state.selectedGame === 'overwatch' ? renderOverwatchBans(game, config) : ''}
       ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams, game) : ''}
       <div class="lower-grid">
         <article class="panel match-details">
@@ -1116,6 +1117,36 @@ function renderPreviewTeam(team, side) {
   const secondary = team.secondaryColorEnabled ? team.secondaryColor : team.color;
   const logo = team.logoImage ? `<img src="${escapeHtml(displayAssetUrl(team.logoImage))}" alt="">` : escapeHtml(team.shortName.slice(0, 3));
   return `<div class="preview-team ${side}"><div class="team-badge ${team.logoImage ? 'has-image' : ''}" style="--team-color:${escapeHtml(team.color)};--team-secondary:${escapeHtml(secondary)}">${logo}</div><div><small>${side === 'left' ? 'HOME' : 'AWAY'}</small><strong>${escapeHtml(team.name)}</strong></div></div>`;
+}
+
+// Hero bans (Overwatch): one ban per team per map, stored on the map row so every round keeps
+// its own bans. The scoreboard overlay shows them next to the team logos.
+function renderOverwatchBans(game, config) {
+  const row = game.mapRows[game.activeMap] || game.mapRows[0] || {};
+  const bans = row.heroBans || {};
+  const icon = (hero) => {
+    const art = hero ? game.characterArt?.[hero]?.url : '';
+    const iconUrl = hero ? `/assets/overwatch/hero-icons/${heroIconSlug(hero)}.png` : '';
+    return hero ? `<img src="${escapeHtml(displayAssetUrl(iconUrl || art))}" alt="">` : '<span>—</span>';
+  };
+  const picker = (side, index) => {
+    const team = game.teams[index] || {};
+    const hero = bans[side] || '';
+    return `<label class="ow-ban-pick">
+      <span class="ow-ban-icon ${hero ? 'has-hero' : ''}">${icon(hero)}</span>
+      <span class="ow-ban-copy"><b>${escapeHtml(team.shortName || (index ? 'AWAY' : 'HOME'))} BAN</b>
+        <select data-ow-ban="${side}"><option value="">No ban</option>${config.characters.map((h) => `<option ${h === hero ? 'selected' : ''}>${escapeHtml(h)}</option>`).join('')}</select></span>
+    </label>`;
+  };
+  return `<article class="panel ow-bans" data-key="ow-bans">
+    <div class="panel-title compact"><div><h2>Hero bans · Map ${game.activeMap + 1}${row.map ? ` · ${escapeHtml(row.map)}` : ''}</h2><p>Shown next to each team's logo on the scoreboard; each map keeps its own bans</p></div>
+      <button class="secondary-button" data-action="ow-bans-clear" ${bans.home || bans.away ? '' : 'disabled'}>CLEAR BANS</button></div>
+    <div class="ow-ban-row">${picker('home', 0)}${picker('away', 1)}</div>
+  </article>`;
+}
+
+function heroIconSlug(hero) {
+  return String(hero || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 function renderTeamControl(team, index, config, game = current()) {
@@ -2136,6 +2167,11 @@ root.addEventListener('click', async (event) => {
     } catch (error) { updateSaveStatus(`Car Lab: ${error.message}`); }
     return;
   }
+  if (button.dataset.action === 'ow-bans-clear') {
+    commit(() => { const game = state.games.overwatch; const row = game.mapRows[game.activeMap]; if (row) row.heroBans = { home: '', away: '' }; }, 'Hero bans cleared');
+    render();
+    return;
+  }
   if (button.dataset.action === 'display-mode') {
     const result = await window.isuDesktop?.setDisplayMode({ station: button.dataset.station, mode: button.dataset.mode });
     if (result && !result.ok) toast(result.error);
@@ -2672,6 +2708,16 @@ root.addEventListener('change', async (event) => {
     return;
   }
   if (target.dataset.obsCfg) { obsDisplays.draft = { ...(obsDisplays.draft || {}), [target.dataset.obsCfg]: target.value }; return; }
+  if (target.dataset.owBan) {
+    const side = target.dataset.owBan; const hero = target.value;
+    commit(() => {
+      const game = state.games.overwatch; const row = game.mapRows[game.activeMap];
+      if (!row) return;
+      row.heroBans = { ...(row.heroBans || {}), [side]: hero };
+    }, hero ? `${side === 'home' ? 'Home' : 'Away'} ban: ${hero}` : `${side === 'home' ? 'Home' : 'Away'} ban cleared`);
+    render();
+    return;
+  }
   if (target.dataset.displayPreset) {
     const n = Number(target.dataset.displayPreset);
     commit(() => { applyDisplayPreset(state, n, target.value, state.displays?.stations?.[n]?.team || ''); }, `Display ${String(n).padStart(2, '0')}: ${target.value}`);

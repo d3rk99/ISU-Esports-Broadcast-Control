@@ -171,6 +171,7 @@ function buildCompanionCapabilities(state = {}) {
   ];
   if (gameKey === 'valorant') actions.push({ id: 'veto.reset', label: 'Reset VALORANT veto selections', parameters: ['game?'] });
   actions.push(
+    { id: 'overwatch.ban', label: 'Overwatch: hero ban for the active map', parameters: ['team', 'hero'] },
     { id: 'stage.display.mode', label: 'Displays: game mirror or NDI', parameters: ['mode', 'station?', 'source?'] },
     { id: 'display.preset', label: 'Displays: NDI preset (idle, intro, player, banner, score, black)', parameters: ['preset', 'station?', 'team?'] }
   );

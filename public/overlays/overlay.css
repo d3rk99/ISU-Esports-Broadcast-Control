@@ -2082,13 +2082,35 @@ body:not([data-game="overwatch"]) .ow-scorecard { display: none; }
 body[data-game="overwatch"].key-output .scoreboard,
 body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0) invert(1); }
 .ow-scorecard {
-  position: absolute; top: 0; left: 50%;
-  display: grid;
-  grid-template-columns: var(--ow-logo-track) var(--ow-name-track) var(--ow-score-track) var(--ow-core-track) var(--ow-score-track) var(--ow-name-track) var(--ow-logo-track);
-  grid-template-rows: 64px;
-  color: #f7fbff;
-  transform: translateX(-50%);
+  /* Where the spectator HUD draws each team's 5 hero/health icons on the 1080p screen.
+     Each team strip sits right above its row (bottom edge at --ow-row-top), the ban on the
+     inside end next to the centre. Tune these to the live HUD. */
+  --ow-row-top: 60px;          /* top of the in-game hero icon rows */
+  --ow-home-row-left: 518px;   /* left edge of the home hero row */
+  --ow-home-row-right: 890px;  /* right edge (inside, next to the timer) */
+  --ow-away-row-left: 1030px;
+  --ow-away-row-right: 1402px;
+  --ow-strip-h: 38px;
+  position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
 }
+.ow-team {
+  position: absolute; top: calc(var(--ow-row-top) - var(--ow-strip-h) - 4px); height: var(--ow-strip-h);
+  display: grid; align-items: stretch; gap: 0;
+}
+.ow-team--home { left: var(--ow-home-row-left); width: calc(var(--ow-home-row-right) - var(--ow-home-row-left)); grid-template-columns: var(--ow-strip-h) 1fr 52px; }
+.ow-team--away { left: var(--ow-away-row-left); width: calc(var(--ow-away-row-right) - var(--ow-away-row-left)); grid-template-columns: 52px 1fr var(--ow-strip-h); }
+.ow-team .ow-panel { height: var(--ow-strip-h); }
+/* Ban: hero icon just inside the team strip, toward the centre, with a red slash. */
+.ow-ban { position: absolute; top: 0; width: var(--ow-strip-h); height: var(--ow-strip-h); box-sizing: border-box; border: 2px solid #e2333b; background: rgba(10,12,18,.92); overflow: hidden; box-shadow: 0 6px 14px rgba(0,0,0,.45); }
+.ow-ban[hidden] { display: none; }
+.ow-ban--home { left: calc(100% + 6px); }
+.ow-ban--away { right: calc(100% + 6px); }
+.ow-ban img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.55) brightness(.85); }
+.ow-ban::after { content: ""; position: absolute; left: -20%; top: 50%; width: 140%; height: 3px; background: #e2333b; transform: rotate(-45deg); box-shadow: 0 0 6px rgba(226,51,59,.8); }
+.ow-ban small { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 1px 0; background: rgba(226,51,59,.92); color: #fff; font-size: 9px; font-weight: 1000; letter-spacing: .18em; text-align: center; line-height: 1.2; }
+/* Map + mode: a thin bar across the very top centre, above the team strips (the centre between
+   the two hero rows belongs to the in-game timer and the bans). */
+.ow-core { position: absolute; top: 0; left: calc(50% - 160px); width: 320px; }
 .ow-scorecard[hidden] { display: none; }
 .ow-panel {
   position: relative; box-sizing: border-box; min-width: 0; height: 64px; overflow: hidden;
@@ -2102,7 +2124,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .3;
   background: linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent), radial-gradient(circle at 50% -35%, rgba(255,255,255,.2), transparent 48%);
 }
-.ow-logo { display: grid; place-items: center; padding: 10px; color: #fff; font-size: 20px; font-weight: 1000; font-style: italic; text-shadow: 0 3px 8px rgba(0,0,0,.7); }
+.ow-logo { display: grid; place-items: center; padding: 5px; color: #fff; font-size: 20px; font-weight: 1000; font-style: italic; text-shadow: 0 3px 8px rgba(0,0,0,.7); }
 .ow-logo--home { clip-path: polygon(0 0, 100% 0, 100% 100%, 18px 100%); border-left: 4px solid var(--home-color);
   background: linear-gradient(90deg, var(--home-color), transparent 8px), linear-gradient(135deg, color-mix(in srgb, var(--home-color) 42%, #07101d), #03070d 72%); }
 .ow-logo--away { clip-path: polygon(0 0, 100% 0, calc(100% - 18px) 100%, 0 100%); border-right: 4px solid var(--away-color);
@@ -2111,7 +2133,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-logo img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,.65)); }
 .ow-name { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 18px; border-left: 1px solid rgba(189,222,255,.22); border-right: 1px solid rgba(189,222,255,.22); }
 .ow-name--away { text-align: right; }
-.ow-name strong { overflow: hidden; font-size: 23px; font-weight: 1000; font-style: italic; letter-spacing: .035em; line-height: 1.05; text-overflow: ellipsis; text-shadow: 0 3px 7px rgba(0,0,0,.65); text-transform: uppercase; white-space: nowrap; }
+.ow-name strong { overflow: hidden; font-size: 20px; font-weight: 1000; font-style: italic; letter-spacing: .035em; line-height: 1.05; text-overflow: ellipsis; text-shadow: 0 3px 7px rgba(0,0,0,.65); text-transform: uppercase; white-space: nowrap; }
 .ow-side { min-height: 12px; color: #9fb0c2; font-size: 11px; font-weight: 1000; letter-spacing: .26em; }
 .ow-side:empty { display: none; }
 .ow-name--home.is-attacking .ow-side { color: var(--home-color); }
@@ -2119,7 +2141,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-score { display: grid; place-items: center; border: 0; }
 .ow-score--home { background: linear-gradient(180deg, color-mix(in srgb, var(--home-color) 82%, white), var(--home-color) 45%, color-mix(in srgb, var(--home-color) 70%, black)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.24), 0 0 24px color-mix(in srgb, var(--home-color) 55%, transparent); }
 .ow-score--away { background: linear-gradient(180deg, color-mix(in srgb, var(--away-color) 82%, white), var(--away-color) 45%, color-mix(in srgb, var(--away-color) 70%, black)); box-shadow: inset 0 0 0 1px rgba(255,255,255,.24), 0 0 24px color-mix(in srgb, var(--away-color) 55%, transparent); }
-.ow-score strong { position: relative; z-index: 1; font-size: 44px; font-weight: 1000; font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 14px rgba(255,255,255,.35), 0 4px 10px rgba(0,0,0,.55); }
+.ow-score strong { position: relative; z-index: 1; font-size: 32px; font-weight: 1000; font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 14px rgba(255,255,255,.35), 0 4px 10px rgba(0,0,0,.55); }
 .ow-core { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-left: 1px solid rgba(189,222,255,.32); border-right: 1px solid rgba(189,222,255,.32); background: linear-gradient(180deg, rgba(5,11,18,.98), rgba(3,7,12,.98)); clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%); }
 .ow-core > * { position: relative; z-index: 1; }
 .ow-core-top, .ow-progress { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; width: 100%; padding: 0 22px; box-sizing: border-box; }
@@ -2143,19 +2165,21 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-core { z-index: 4; animation: sm-drop 560ms cubic-bezier(.2,.82,.18,1) both; }
 .ow-core > * { animation: sm-fade 300ms 420ms both; }
 .ow-score { z-index: 3; }
-.ow-score--home { animation: sm-out-left 460ms 700ms cubic-bezier(.2,.82,.18,1) both; --sm-from: var(--ow-score-track); }
-.ow-score--away { animation: sm-out-right 460ms 700ms cubic-bezier(.2,.82,.18,1) both; --sm-from: calc(var(--ow-score-track) * -1); }
+.ow-score--home { animation: sm-out-left 460ms 700ms cubic-bezier(.2,.82,.18,1) both; --sm-from: 40px; }
+.ow-score--away { animation: sm-out-right 460ms 700ms cubic-bezier(.2,.82,.18,1) both; --sm-from: -40px; }
 .ow-name { z-index: 2; }
-.ow-name--home { animation: sm-out-left 520ms 1020ms cubic-bezier(.2,.82,.18,1) both; --sm-from: calc(var(--ow-name-track) + var(--ow-score-track)); }
-.ow-name--away { animation: sm-out-right 520ms 1020ms cubic-bezier(.2,.82,.18,1) both; --sm-from: calc((var(--ow-name-track) + var(--ow-score-track)) * -1); }
+.ow-name--home { animation: sm-out-left 520ms 1020ms cubic-bezier(.2,.82,.18,1) both; --sm-from: 60px; }
+.ow-name--away { animation: sm-out-right 520ms 1020ms cubic-bezier(.2,.82,.18,1) both; --sm-from: -60px; }
 .ow-name > * { animation: sm-fade 320ms 1380ms both; }
 .ow-logo { z-index: 1; animation: sm-logo-in 420ms 1420ms both; }
 /* The OW spectator HUD draws its own timer/objective line right under the top edge in the
    centre. Keep the centre box short (map + mode only) so that line stays visible below it.
    The series score already lives in the big team-coloured score boxes. */
-.ow-core { align-self: start; height: 42px; justify-content: center; gap: 1px; }
-.ow-core .ow-core-top { display: none; }
-.ow-core strong { font-size: 17px; }
+.ow-core { height: 18px !important; flex-direction: row !important; gap: 10px !important; justify-content: center; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 8px 100%) !important; border-bottom: 0; }
+.ow-core .ow-core-top, .ow-core .ow-progress .ow-progress-pips { display: none; }
+.ow-core .ow-progress { display: contents; }
+.ow-core strong { font-size: 12px; letter-spacing: .14em; }
+.ow-core em { font-size: 9px; }
 
 /* ---- Overwatch player stat cards (scoreboard OCR) ------------------------------------------
    VALORANT card language (team edge, angled corner, ult ring) with OW stats: E / A / D on the
@@ -2220,3 +2244,5 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-ult .ready-icon { position: absolute; inset: 10px; width: 28px; height: 28px; transform: none; stroke: #fff; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
 @keyframes ow-ult-ready { 50% { filter: drop-shadow(0 0 12px color-mix(in srgb, var(--ow-side) 95%, transparent)); } }
 body:not([data-game="overwatch"]) .ow-players { display: none; }
+
+.ow-ban { animation: sm-logo-in 420ms 1500ms both; }
