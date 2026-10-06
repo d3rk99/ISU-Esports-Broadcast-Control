@@ -20,7 +20,7 @@ const game = {
   ],
   match: { event: 'COLLEGIATE ESPORTS', round: 'WEEK 4' }, activeMap: 1,
   mapRows: [{ map: 'Busan' }, { map: "King's Row" }],
-  characterArt: { Hanzo: { url: '/assets/overwatch/heroes/hanzo.webp' }, Reaper: { url: '/assets/overwatch/heroes/reaper.webp' } },
+  characterArt: { Hanzo: { url: '/assets/overwatch/hero-art-hd/hanzo.webp' }, Reaper: { url: '/assets/overwatch/hero-art-hd/reaper.webp' } },
   overwatchLastMapStats: { 1: { map: 'Busan', hero: 'Hanzo', stats: { elims: 18, deaths: 5, assists: 4, damage: 11240, healing: 0, mitigation: 820 } } },
   rosters: { varsity: roster(home) }, awayRosters: { varsity: roster(away) }
 };
@@ -44,7 +44,7 @@ app.whenReady().then(async () => {
   for (const [preset, station] of SHOTS) {
     state.displays.stations = { [station]: { preset, team: '' } };
     if (!wins.has(station)) {
-      const win = new BrowserWindow({ show: false, width: 1280, height: 720, webPreferences: { offscreen: true } });
+      const win = new BrowserWindow({ show: false, width: 1920, height: 1080, webPreferences: { offscreen: true } });
       win.webContents.on('console-message', (event) => { if (['error'].includes(event.level) && !/Security Warning/.test(event.message)) errors.push(`s${station}: ${event.message}`); });
       await win.loadURL(`http://127.0.0.1:${server.address().port}/displays/station.html?station=${station}`).catch((e) => errors.push(String(e)));
       wins.set(station, win);

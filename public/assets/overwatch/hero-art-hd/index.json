@@ -1,0 +1,425 @@
+{
+ "ana": {
+  "file": "ana.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Ana_VP_Poised.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "ashe": {
+  "file": "ashe.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Ashe_VP_Rock_On!.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "baptiste": {
+  "file": "baptiste.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Baptiste-portrait.png",
+  "size": [
+   694,
+   1500
+  ],
+  "cutout": true
+ },
+ "bastion": {
+  "file": "bastion.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Bastion-portrait.png",
+  "size": [
+   1424,
+   1500
+  ],
+  "cutout": true
+ },
+ "brigitte": {
+  "file": "brigitte.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Brigitte_VP_Cat-In-The-Box.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "cassidy": {
+  "file": "cassidy.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Mccree-portrait.png",
+  "size": [
+   1132,
+   1500
+  ],
+  "cutout": true
+ },
+ "domina": {
+  "file": "domina.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Domina_VP_Poised.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "doomfist": {
+  "file": "doomfist.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Doomfist_VP_Poised.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "dva": {
+  "file": "dva.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:D.Va_VP_All-Out_Attack.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "echo": {
+  "file": "echo.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Echo_VP_Poised.png",
+  "size": [
+   1156,
+   1140
+  ],
+  "cutout": false
+ },
+ "freja": {
+  "file": "freja.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Freja_VP_Poised.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "genji": {
+  "file": "genji.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Genji_VP_All-Out_Attack.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "hanzo": {
+  "file": "hanzo.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Hanzo_VP_Downsight.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "hazard": {
+  "file": "hazard.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Hazard_VP_Heroic.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "illari": {
+  "file": "illari.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Illari_-_Heroic.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "junker-queen": {
+  "file": "junker-queen.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Junker_Queen-portrait.png",
+  "size": [
+   600,
+   1500
+  ],
+  "cutout": true
+ },
+ "junkrat": {
+  "file": "junkrat.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Junkrat-Portrait.png",
+  "size": [
+   1228,
+   1500
+  ],
+  "cutout": true
+ },
+ "juno": {
+  "file": "juno.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Juno_VP_Salute.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "kiriko": {
+  "file": "kiriko.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Kiriko_VP_Healing_Ofuda.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "lifeweaver": {
+  "file": "lifeweaver.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Lifeweaver_VP_All-Out_Attack.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "lucio": {
+  "file": "lucio.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Lucio-ow2-portrait.png",
+  "size": [
+   634,
+   1500
+  ],
+  "cutout": true
+ },
+ "mauga": {
+  "file": "mauga.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Mauga_VP_Rock_On!.png",
+  "size": [
+   1800,
+   1705
+  ],
+  "cutout": false
+ },
+ "mei": {
+  "file": "mei.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Mei-ow2-portrait.png",
+  "size": [
+   710,
+   1500
+  ],
+  "cutout": true
+ },
+ "mercy": {
+  "file": "mercy.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Mercy_VP_All-Out_Attack.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "mizuki": {
+  "file": "mizuki.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Mizuki_VP_Preparation.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "moira": {
+  "file": "moira.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Moira.png",
+  "size": [
+   696,
+   1500
+  ],
+  "cutout": true
+ },
+ "orisa": {
+  "file": "orisa.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Orisa_VP_Lantern.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "pharah": {
+  "file": "pharah.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Pharah-portrait.png",
+  "size": [
+   1147,
+   1500
+  ],
+  "cutout": true
+ },
+ "ramattra": {
+  "file": "ramattra.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Ramattra_VP_Defensive.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "reaper": {
+  "file": "reaper.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Reaper_VP_Total_Domination.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "reinhardt": {
+  "file": "reinhardt.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Reinhardt_VP_Triumphant.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "roadhog": {
+  "file": "roadhog.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Roadhog-Portrait.png",
+  "size": [
+   1477,
+   1500
+  ],
+  "cutout": true
+ },
+ "shion": {
+  "file": "shion.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Shion_VP_Heroic.png",
+  "size": [
+   864,
+   1536
+  ],
+  "cutout": false
+ },
+ "sigma": {
+  "file": "sigma.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Sigma_VP_M._Bison_Wins.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "sojourn": {
+  "file": "sojourn.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Sojourn_VP_Down_Sight.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "soldier-76": {
+  "file": "soldier-76.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Soldier76-portrait.png",
+  "size": [
+   959,
+   1500
+  ],
+  "cutout": true
+ },
+ "sombra": {
+  "file": "sombra.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Sombra-portrait.png",
+  "size": [
+   1207,
+   1205
+  ],
+  "cutout": true
+ },
+ "symmetra": {
+  "file": "symmetra.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Symmetra-portrait.png",
+  "size": [
+   831,
+   1800
+  ],
+  "cutout": true
+ },
+ "torbjorn": {
+  "file": "torbjorn.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Torbjorn-portrait.png",
+  "size": [
+   1500,
+   1381
+  ],
+  "cutout": true
+ },
+ "tracer": {
+  "file": "tracer.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Tracer_VP_Confident.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "vendetta": {
+  "file": "vendetta.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Vendetta_VP_Proud.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "venture": {
+  "file": "venture.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Venture_VP_Heroic.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": true
+ },
+ "widowmaker": {
+  "file": "widowmaker.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Widowmaker_VP_In_Sight.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "winston": {
+  "file": "winston.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Winston-ow2-portrait.png",
+  "size": [
+   1196,
+   1500
+  ],
+  "cutout": true
+ },
+ "wuyang": {
+  "file": "wuyang.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Wuyang_VP_Heroic.png",
+  "size": [
+   1800,
+   1800
+  ],
+  "cutout": false
+ },
+ "zarya": {
+  "file": "zarya.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Zarya-portrait.png",
+  "size": [
+   1500,
+   1417
+  ],
+  "cutout": true
+ },
+ "zenyatta": {
+  "file": "zenyatta.webp",
+  "source": "https://overwatch.fandom.com/wiki/File:Zenyatta-portrait.png",
+  "size": [
+   1155,
+   1500
+  ],
+  "cutout": true
+ }
+}
