@@ -33,7 +33,11 @@ function stationRows(state, displayStatus, obsStatus) {
 
 export function renderDisplaysView(state, { displayStatus = {}, obsDisplays = {} } = {}) {
   ensureDisplayState(state);
-  const cfg = obsDisplays.config || {};
+  // Typed-but-unsaved values win over the saved config, so live re-renders don't wipe them.
+  const draft = obsDisplays.draft || {};
+  const saved = obsDisplays.config || {};
+  const cfg = { ...saved, ...draft };
+  if (draft.format) [cfg.resolution, cfg.fps] = draft.format.split('@');
   const obs = obsDisplays.status || null;
   const counts = DISPLAY_PRESETS.map((p) => [p.id, Object.values(state.displays.stations).filter((s) => s.preset === p.id).length]);
   const presetButtons = DISPLAY_PRESETS.map((p) => `<button class="disp-preset-btn ${counts.find(([id]) => id === p.id)[1] === 10 ? 'active' : ''}" data-action="display-preset" data-station="all" data-preset="${p.id}" title="${esc(p.description)}"><b>${esc(p.label)}</b><small>${esc(p.description)}</small></button>`).join('');
@@ -62,7 +66,7 @@ export function renderDisplaysView(state, { displayStatus = {}, obsDisplays = {}
       <div class="obs-connect">
         <label class="field"><span>OBS PC</span><input data-obs-cfg="host" value="${esc(cfg.host || '127.0.0.1')}"></label>
         <label class="field"><span>PORT</span><input type="number" data-obs-cfg="port" value="${esc(cfg.port || 4455)}"></label>
-        <label class="field"><span>PASSWORD</span><input type="password" data-obs-cfg="password" placeholder="${cfg.hasPassword ? 'saved · blank keeps it' : 'from OBS WebSocket settings'}" autocomplete="off"></label>
+        <label class="field"><span>PASSWORD</span><input type="password" data-obs-cfg="password" value="${esc(draft.password || '')}" placeholder="${saved.hasPassword ? 'saved · blank keeps it' : 'from OBS WebSocket settings'}" autocomplete="off"></label>
         <label class="field"><span>OUTPUT</span><select data-obs-cfg="format">${[['1280x720', 30], ['1280x720', 60], ['1920x1080', 30], ['1920x1080', 60]].map(([r, f]) => `<option value="${r}@${f}" ${(cfg.resolution || '1280x720') === r && (Number(cfg.fps) || 30) === f ? 'selected' : ''}>${r.replace('x', '×')} @ ${f}</option>`).join('')}</select></label>
         <label class="field"><span>CONTROLLER URL FOR OBS</span><input data-obs-cfg="controllerUrl" value="${esc(cfg.controllerUrl || '')}" placeholder="blank = this PC's LAN IP :3174"></label>
       </div>
@@ -76,7 +80,7 @@ export function renderDisplaysView(state, { displayStatus = {}, obsDisplays = {}
 
     <article class="panel" data-key="disp-key">
       <div class="panel-title compact"><div><h2>Display key</h2><p>Optional. If set, every display client must enter the same key in its settings (Ctrl+Alt+S on the station).</p></div></div>
-      <div class="obs-actions"><input id="display-key-input" type="password" autocomplete="off" placeholder="${displayStatus.keyRequired ? 'key set · type a new one or leave blank to clear' : 'no key (open)'}"><button data-action="display-key-save">SAVE KEY</button></div>
+      <div class="obs-actions"><input id="display-key-input" data-preserve type="password" autocomplete="off" placeholder="${displayStatus.keyRequired ? 'key set · type a new one or leave blank to clear' : 'no key (open)'}"><button data-action="display-key-save">SAVE KEY</button></div>
     </article>
   </section>`;
 }

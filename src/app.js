@@ -2155,12 +2155,15 @@ root.addEventListener('click', async (event) => {
     return;
   }
   if (['obs-displays-save', 'obs-displays-setup', 'obs-displays-check'].includes(button.dataset.action)) {
-    const field = (k) => root.querySelector(`[data-obs-cfg="${k}"]`)?.value ?? '';
-    const [resolution, fps] = String(field('format') || '1280x720@30').split('@');
+    const typed = {};
+    for (const el of root.querySelectorAll('[data-obs-cfg]')) typed[el.dataset.obsCfg] = el.value;
+    const values = { ...typed, ...(obsDisplays.draft || {}) };
+    const [resolution, fps] = String(values.format || '1280x720@30').split('@');
     obsDisplays.error = ''; obsDisplays.message = button.dataset.action === 'obs-displays-setup' ? 'Setting up OBS…' : button.dataset.action === 'obs-displays-check' ? 'Checking OBS…' : '';
     render();
     try {
-      obsDisplays.config = (await window.isuDesktop?.saveObsDisplays({ host: field('host'), port: field('port'), password: field('password'), resolution, fps: Number(fps), controllerUrl: field('controllerUrl') })) || obsDisplays.config;
+      obsDisplays.config = (await window.isuDesktop?.saveObsDisplays({ host: values.host, port: values.port, password: values.password || '', resolution, fps: Number(fps), controllerUrl: values.controllerUrl })) || obsDisplays.config;
+      obsDisplays.draft = {};
       if (button.dataset.action === 'obs-displays-setup') {
         const result = await window.isuDesktop?.setupObsDisplays();
         if (!result?.ok) throw new Error(result?.error || 'OBS setup failed');
@@ -2573,6 +2576,7 @@ document.addEventListener('mouseleave', endValorantRoiDrag);
 root.addEventListener('input', (event) => {
   const target = event.target;
   if (target.dataset.voRoi) positionValorantRoiBox(target.dataset.voRoi);
+  if (target.dataset.obsCfg) obsDisplays.draft = { ...(obsDisplays.draft || {}), [target.dataset.obsCfg]: target.value };
 });
 
 root.addEventListener('keydown', async (event) => {
@@ -2666,6 +2670,7 @@ root.addEventListener('change', async (event) => {
     render();
     return;
   }
+  if (target.dataset.obsCfg) { obsDisplays.draft = { ...(obsDisplays.draft || {}), [target.dataset.obsCfg]: target.value }; return; }
   if (target.dataset.displayPreset) {
     const n = Number(target.dataset.displayPreset);
     commit(() => { applyDisplayPreset(state, n, target.value, state.displays?.stations?.[n]?.team || ''); }, `Display ${String(n).padStart(2, '0')}: ${target.value}`);
