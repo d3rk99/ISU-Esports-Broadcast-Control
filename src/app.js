@@ -9,6 +9,7 @@ import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueAr
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
+import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel } from './valorant-board-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
@@ -291,6 +292,7 @@ function renderControl(config) {
         ${renderTeamControl(game.teams[1], 1, config, game)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
+      ${state.selectedGame === 'valorant' ? renderValorantBoardPanel(valorantBoard, game.teams) : ''}
       ${state.selectedGame === 'valorant' ? renderValorantOcrPanel(game) : ''}
       ${state.selectedGame === 'overwatch' ? renderOverwatchBans(game, config) : ''}
       ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams, game) : ''}
@@ -2052,6 +2054,20 @@ window.isuDesktop?.onOverwatchOcrState?.((snapshot) => {
 });
 window.isuDesktop?.onOverwatchOcrStatus?.((status) => { overwatchOcr = { ...overwatchOcr, status }; publishOverwatchOcr(); });
 
+// VALORANT scoreboard reader (rebuilt like Overwatch). Mirrored into
+// state.games.valorant.valorantBoard so overlays / displays get it with the normal publish.
+let valorantBoard = emptyValorantBoard();
+let valorantBoardRenderTimer = null;
+function publishValorantBoard() {
+  if (state.games.valorant) state.games.valorant.valorantBoard = { live: valorantBoard.live };
+  if (!livePublishTimer) livePublishTimer = window.setTimeout(() => { livePublishTimer = null; window.isuDesktop?.publishState(state); }, 100);
+  if (state.selectedGame !== 'valorant' || valorantBoardRenderTimer) return;
+  valorantBoardRenderTimer = window.setTimeout(() => { valorantBoardRenderTimer = null; render(); }, 250);
+}
+window.isuDesktop?.getValorantBoardSettings?.().then((info) => { valorantBoard = { ...valorantBoard, ...info }; publishValorantBoard(); }).catch(() => {});
+window.isuDesktop?.onValorantBoardState?.((snapshot) => { valorantBoard = mergeValorantBoardSnapshot(valorantBoard, snapshot); publishValorantBoard(); });
+window.isuDesktop?.onValorantBoardStatus?.((status) => { valorantBoard = { ...valorantBoard, status }; publishValorantBoard(); });
+
 window.isuDesktop?.onValorantOcrState((snapshot) => {
   const ocr = state.games.valorant.valorantOcr;
   const nextObserver3 = snapshot?.observer3 && typeof snapshot.observer3 === 'object'
@@ -2238,6 +2254,16 @@ root.addEventListener('click', async (event) => {
       } else obsDisplays.message = 'Saved';
     } catch (error) { obsDisplays.error = error.message; obsDisplays.message = ''; }
     render();
+    return;
+  }
+  if (button.dataset.action === 'vb-test') {
+    try { valorantBoard = mergeValorantBoardSnapshot(valorantBoard, await window.isuDesktop?.testValorantBoard()); publishValorantBoard(); toast('Read the VALORANT scoreboard once'); }
+    catch (error) { toast(`Test read failed: ${error.message || error}`); }
+    return;
+  }
+  if (button.dataset.action === 'vb-clear') {
+    valorantBoard = mergeValorantBoardSnapshot(valorantBoard, await window.isuDesktop?.clearValorantBoard());
+    publishValorantBoard(); toast('VALORANT board cleared');
     return;
   }
   if (button.dataset.action === 'ow-ocr-test') {
@@ -2772,6 +2798,20 @@ root.addEventListener('change', async (event) => {
       toast(details.name.trim() ? `Name set to ${details.name.trim()} (stays until cleared)` : 'Name cleared, OCR reads it again');
     } catch (error) { toast(`Could not set name: ${String(error?.message || error).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')}`); }
     render();
+    return;
+  }
+  if (target.dataset.vbCfg) {
+    const key = target.dataset.vbCfg;
+    const value = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
+    const result = await window.isuDesktop?.configureValorantBoard({ [key]: value });
+    if (result) valorantBoard = { ...valorantBoard, settings: result.settings, status: result.status };
+    toast(key === 'enabled' ? (value ? 'VALORANT scoreboard reader on' : 'VALORANT scoreboard reader off') : 'VALORANT reader settings saved');
+    render();
+    return;
+  }
+  if (target.dataset.vbName !== undefined) {
+    valorantBoard = mergeValorantBoardSnapshot(valorantBoard, await window.isuDesktop?.setValorantBoardName({ side: target.dataset.side, row: Number(target.dataset.row), name: target.value }));
+    publishValorantBoard();
     return;
   }
   if (target.dataset.owOcr) {

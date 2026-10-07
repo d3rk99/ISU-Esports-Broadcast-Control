@@ -13,6 +13,7 @@ const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
 const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
 const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
+const { ValorantBoardService, normalizeSettings: normalizeValorantBoardSettings } = require('./valorant-board-service.cjs');
 const { WebSocketServer } = require('ws');
 const { DisplayManager } = require('./displays/display-manager.cjs');
 const { ObsClient, setupStageScenes, stageStatus: obsStageStatus } = require('./displays/obs-displays.cjs');
@@ -31,6 +32,7 @@ let overlayServer;
 let rocketLeagueService;
 let valorantOcrService;
 let overwatchOcrService;
+let valorantBoardService;
 let companionApiService;
 let displayManager;
 let companionRequestId = 0;
@@ -790,6 +792,17 @@ function saveRocketLeagueConnection(settings = {}) {
   fs.writeFileSync(rocketLeagueSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
 }
 
+function valorantBoardSettingsPath() { return path.join(app.getPath('userData'), 'valorant-board-settings.json'); }
+function readValorantBoardSettings() {
+  try { return normalizeValorantBoardSettings(JSON.parse(fs.readFileSync(valorantBoardSettingsPath(), 'utf8'))); } catch {}
+  return normalizeValorantBoardSettings();
+}
+function saveValorantBoardSettings(settings = {}) {
+  const saved = normalizeValorantBoardSettings({ ...readValorantBoardSettings(), ...settings });
+  fs.writeFileSync(valorantBoardSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
+  return saved;
+}
+
 function overwatchOcrSettingsPath() {
   return path.join(app.getPath('userData'), 'overwatch-ocr-settings.json');
 }
@@ -1053,6 +1066,11 @@ function registerIpc() {
   ipcMain.handle('valorant-ocr:set-timeline-round', (_event, details = {}) => valorantOcrService.setObserverTimelineRound(details));
   ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
   ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
+  ipcMain.handle('valorant-board:get-settings', () => ({ settings: readValorantBoardSettings(), status: valorantBoardService.getStatus() }));
+  ipcMain.handle('valorant-board:configure', (_event, settings = {}) => { const saved = saveValorantBoardSettings(settings); return { settings: saved, status: valorantBoardService.configure(saved) }; });
+  ipcMain.handle('valorant-board:clear', () => { valorantBoardService.clear(); return valorantBoardService.snapshot(); });
+  ipcMain.handle('valorant-board:set-name', (_event, details = {}) => valorantBoardService.setPlayerName(details));
+  ipcMain.handle('valorant-board:test-read', async () => { await valorantBoardService.sweep(); return valorantBoardService.snapshot(); });
   ipcMain.handle('overwatch-ocr:get-settings', () => ({ settings: readOverwatchOcrSettings(), status: overwatchOcrService.getStatus() }));
   ipcMain.handle('overwatch-ocr:configure', (_event, settings = {}) => {
     const saved = saveOverwatchOcrSettings(settings);
@@ -1299,6 +1317,17 @@ app.whenReady().then(async () => {
     onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('overwatch-ocr:status', status); }
   });
   overwatchOcrService.configure(readOverwatchOcrSettings());
+  // VALORANT scoreboard (Tab) reader, rebuilt like the Overwatch one: own capture + OCR pool.
+  valorantBoardService = new ValorantBoardService({
+    capture: new HybridValorantWindowCapture({
+      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
+      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
+    }),
+    ocr: new TesseractOcrEngine(),
+    onState: (state) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-board:state', state); },
+    onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-board:status', status); }
+  });
+  valorantBoardService.configure(readValorantBoardSettings());
   registerIpc();
   await companionApiService.configure(readCompanionSettings());
   await displayManager.start();
@@ -1325,6 +1354,7 @@ app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
   valorantOcrService?.shutdown();
   overwatchOcrService?.shutdown();
+  valorantBoardService?.shutdown();
   displayManager?.stop();
   companionApiService?.stop();
   if (process.platform !== 'darwin') app.quit();
