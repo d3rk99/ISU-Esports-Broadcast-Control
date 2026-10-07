@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('isuDesktop', {
   getDisplayStatus: () => ipcRenderer.invoke('displays:status'),
   setDisplayMode: (details) => ipcRenderer.invoke('displays:set-mode', details),
+  setDisplayNoise: (details) => ipcRenderer.invoke('displays:set-noise', details),
   getDisplayKey: () => ipcRenderer.invoke('displays:get-key'),
   setDisplayKey: (details) => ipcRenderer.invoke('displays:set-key', details),
   getObsDisplays: () => ipcRenderer.invoke('obs-displays:get'),

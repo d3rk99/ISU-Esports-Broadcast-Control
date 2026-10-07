@@ -64,3 +64,8 @@ window.display.onLink((next) => { link = next; paint(); });
 window.display.onNdiStatus((next) => { ndi = next; if (next.state !== 'receiving' && Date.now() - lastFrameAt > 3000 && mode.mode === 'ndi') document.body.classList.remove('live'); paint(); });
 window.display.onFrame((frame) => { const first = !pending; pending = frame; if (first) requestAnimationFrame(draw); });
 window.display.getConfig().then((c) => { config = c; paint(); });
+
+// Pink noise (headset masking): controller says on/off + volume, settings pick the headset.
+window.pinkNoise.onStatus((status) => window.display.noiseStatus(status));
+window.display.onNoiseDevice((device) => window.pinkNoise.setDevice(device));
+window.display.onNoise((next) => window.pinkNoise.set(next));

@@ -10,5 +10,8 @@ contextBridge.exposeInMainWorld('display', {
   onMode: on('display:mode'),
   onLink: on('display:link'),
   onNdiStatus: on('display:ndi-status'),
-  onFrame: on('display:frame')
+  onFrame: on('display:frame'),
+  onNoise: on('display:noise'),
+  onNoiseDevice: on('display:noise-device'),
+  noiseStatus: (status) => ipcRenderer.send('display:noise-status', status)
 });

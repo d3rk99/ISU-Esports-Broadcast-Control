@@ -13,3 +13,8 @@ footer { display: flex; align-items: center; justify-content: space-between; mar
 footer span { color: #6ee7a8; }
 button { padding: 10px 26px; border: 0; border-radius: 6px; background: #f47920; color: #101012; font-weight: 800; letter-spacing: .1em; cursor: pointer; }
 .ndi-note { margin: 4px 0 0; color: #6b7686; font-size: 11px; }
+
+.noise { border: 1px solid #2a3038; border-radius: 4px; padding: 10px 12px 12px; margin: 4px 0 6px; display: grid; gap: 8px; }
+.noise legend { padding: 0 6px; color: #f47920; font-weight: 800; letter-spacing: .08em; font-size: 12px; text-transform: uppercase; }
+.noise .hint { margin: 0; color: #8b96a3; font-size: 12px; }
+.noise button { justify-self: start; }

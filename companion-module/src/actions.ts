@@ -22,6 +22,7 @@ export type ActionsSchema = {
 	reset_valorant_veto: { options: Record<string, never> }
 	select_program_output: { options: { output: ProgramOutput } }
 	display_mode: { options: { station: string; mode: DisplayMode } }
+	display_noise: { options: { station: string; on: 'on' | 'off' | 'toggle'; volume: string } }
 	display_preset: { options: { station: string; preset: DisplayPreset; team: '' | 'home' | 'away' } }
 }
 
@@ -224,6 +225,16 @@ export function UpdateActions(self: ModuleInstance): void {
 			],
 			callback: async (event) =>
 				self.sendControlAction({ action: 'stage.display.mode', station: event.options.station, mode: event.options.mode }),
+		},
+		display_noise: {
+			name: 'Displays: Pink noise on the player headsets',
+			options: [
+				{ id: 'station', type: 'dropdown', label: 'Station', default: '', choices: STATION_CHOICES },
+				{ id: 'on', type: 'dropdown', label: 'Pink noise', default: 'toggle', choices: [{ id: 'on', label: 'On' }, { id: 'off', label: 'Off' }, { id: 'toggle', label: 'Toggle' }] },
+				{ id: 'volume', type: 'textinput', label: 'Volume 0-100 (blank = keep)', default: '', useVariables: true },
+			],
+			callback: async (event) =>
+				self.sendControlAction({ action: 'stage.display.noise', station: event.options.station, on: event.options.on, volume: event.options.volume }),
 		},
 		display_preset: {
 			name: 'Displays: NDI preset',

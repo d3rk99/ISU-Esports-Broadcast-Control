@@ -100,6 +100,12 @@ export function UpdatePresets(self: ModuleInstance): void {
 					presets: ['display-a-mirror', 'display-a-ndi', 'display-a-player', 'display-a-banner', 'display-b-mirror', 'display-b-ndi', 'display-b-player', 'display-b-banner'],
 				},
 				{
+					id: 'display-noise',
+					name: 'Pink noise (player headsets)',
+					type: 'simple',
+					presets: ['display-noise-all', 'display-noise-a', 'display-noise-b'],
+				},
+				{
 					id: 'display-presets',
 					name: 'NDI presets (all stations)',
 					type: 'simple',
@@ -173,6 +179,9 @@ export function UpdatePresets(self: ModuleInstance): void {
 		'display-b-ndi': displayModePreset('6-10\nNDI', 'ndi', BLUE, '6-10'),
 		'display-b-player': displayPreset('6-10 player cards', '6-10\nCARDS', 'player', ORANGE, '6-10'),
 		'display-b-banner': displayPreset('6-10 banners', '6-10\nBANNER', 'banner', ORANGE, '6-10'),
+		'display-noise-all': noisePreset('ALL', '', '1'),
+		'display-noise-a': noisePreset('1-5', '1-5', '1'),
+		'display-noise-b': noisePreset('6-10', '6-10', '6'),
 	}
 
 	self.setPresetDefinitions(structure, presets)
@@ -219,5 +228,15 @@ function programOutputPreset(label: string, output: 'scoreboard' | 'roster' | 'm
 				style: { color: WHITE, bgcolor: output === 'clean' ? GRAY : BLUE },
 			},
 		],
+	}
+}
+
+function noisePreset(label: string, station: string, feedbackStation: string) {
+	return {
+		type: 'simple' as const,
+		name: `Displays: Pink noise toggle (${station || 'all'})`,
+		style: { text: `NOISE\n${label}`, size: 'auto' as const, color: WHITE, bgcolor: BLACK, show_topbar: false },
+		steps: [{ down: [{ actionId: 'display_noise' as const, options: { station, on: 'toggle' as const, volume: '' } }], up: [] }],
+		feedbacks: [{ feedbackId: 'display_noise' as const, options: { station: feedbackStation }, style: { color: WHITE, bgcolor: 0xc2185b } }],
 	}
 }

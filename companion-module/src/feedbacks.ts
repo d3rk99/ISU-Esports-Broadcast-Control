@@ -8,6 +8,7 @@ export type FeedbacksSchema = {
 	team_leading: { type: 'boolean'; options: { team: 'home' | 'away'; scoreType: 'series' | 'detail' } }
 	display_online: { type: 'boolean'; options: { station: string } }
 	display_mode: { type: 'boolean'; options: { station: string; mode: string } }
+	display_noise: { type: 'boolean'; options: { station: string } }
 	display_preset: { type: 'boolean'; options: { station: string; preset: string } }
 }
 
@@ -113,6 +114,13 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 				{ id: 'mode', type: 'dropdown', label: 'Mode', default: 'ndi', choices: [{ id: 'mirror', label: 'Game mirror' }, { id: 'ndi', label: 'NDI' }] },
 			],
 			callback: (feedback) => self.getVariableValue(`display_${feedback.options.station}_mode`) === feedback.options.mode,
+		},
+		display_noise: {
+			name: 'Display station is playing pink noise',
+			type: 'boolean',
+			defaultStyle: { bgcolor: 0xc2185b, color: 0xffffff },
+			options: [{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES }],
+			callback: (feedback) => self.getVariableValue(`display_${feedback.options.station}_noise_playing`) === true,
 		},
 		display_preset: {
 			name: 'Display station NDI preset is',

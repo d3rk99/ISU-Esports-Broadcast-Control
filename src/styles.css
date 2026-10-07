@@ -747,3 +747,16 @@ input[type="range"]:focus { border-color: #35353a; }
 .ow-ban-copy { display: grid; gap: 6px; flex: 1; min-width: 0; }
 .ow-ban-copy b { font-size: 11px; letter-spacing: .14em; color: #aeb9c5; }
 .ow-ban-copy select { width: 100%; padding: 7px; border: 1px solid #2c323b; border-radius: 6px; background: #0d0f12; color: #fff; }
+
+/* Pink noise controls (Displays page) */
+.disp-noise-btn { padding: 6px; border: 1px solid #2c323b; border-radius: 6px; background: #181b21; color: #8a94a3; font-size: 10px; font-weight: 800; letter-spacing: .08em; cursor: pointer; }
+.disp-noise-btn.on { border-color: #e05aa8; background: #4a1836; color: #fff; }
+.disp-noise-row { display: flex; align-items: center; gap: 6px; }
+.disp-noise-row span { color: #e05aa8; font-size: 10px; font-weight: 900; letter-spacing: .14em; white-space: nowrap; }
+.disp-noise-row button { padding: 7px 12px; border: 1px solid #2c323b; border-radius: 6px; background: #181b21; color: #cfd6df; font-size: 11px; font-weight: 800; cursor: pointer; }
+.disp-noise-row button.active { border-color: #2d8cff; background: #12305a; color: #fff; }
+.disp-noise-row button.active.on { border-color: #e05aa8; background: #4a1836; }
+.disp-noise-all { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; }
+.disp-noise-volume { display: flex; align-items: center; gap: 10px; min-width: 280px; }
+.disp-noise-volume input { flex: 1; }
+.disp-noise-all small { color: #8a94a3; }

@@ -20,11 +20,21 @@
       <label>Player monitor (game mirror)<select name="playerDisplay"></select></label>
       <label>Audience monitor (this window)<select name="stageDisplay"></select></label>
     </div>
+    <fieldset class="noise">
+      <legend>Pink noise (headset)</legend>
+      <div class="pair">
+        <label>Headset output<select name="noiseDevice"></select></label>
+        <label>Max volume on this PC (%)<input name="noiseMaxVolume" type="number" min="0" max="100" step="5"></label>
+      </div>
+      <p class="hint">Pick the headset, not the IEMs. The controller turns it on and off; this cap is the loudest it can ever get here.</p>
+      <button type="button" id="noise-test">TEST 3 SECONDS</button>
+    </fieldset>
     <label class="check"><input name="cursorLock" type="checkbox"><span>Keep the mouse on the player monitor (Ctrl+Alt+L)</span></label>
     <label class="check"><input name="startWithWindows" type="checkbox"><span>Start with Windows (on by default)</span></label>
     <footer><span id="saved"></span><button type="submit">SAVE</button></footer>
     <p class="ndi-note">NDI&reg; is a registered trademark of Vizrt NDI AB &middot; ndi.video. The NDI runtime is included with this app.</p>
   </form>
+  <script src="noise.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

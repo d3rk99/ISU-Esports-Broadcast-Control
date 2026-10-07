@@ -144,6 +144,8 @@ function buildStageVariables(status = {}, state = {}) {
     variables[`display_${index}_receiving`] = Boolean(station.online && (station.mode === 'mirror' || station.state === 'receiving'));
     variables[`display_${index}_hostname`] = scalar(station.hostname);
     variables[`display_${index}_preset`] = scalar(presets[index]?.preset, 'idle');
+    variables[`display_${index}_noise`] = Boolean(station.noise);
+    variables[`display_${index}_noise_playing`] = Boolean(station.online && station.noise && station.noiseState === 'playing');
   }
   return variables;
 }
@@ -173,6 +175,7 @@ function buildCompanionCapabilities(state = {}) {
   actions.push(
     { id: 'overwatch.ban', label: 'Overwatch: hero ban for the active map', parameters: ['team', 'hero'] },
     { id: 'stage.display.mode', label: 'Displays: game mirror or NDI', parameters: ['mode', 'station?', 'source?'] },
+    { id: 'stage.display.noise', label: 'Displays: pink noise on the player headsets', parameters: ['on (on/off/toggle)', 'station?', 'volume?'] },
     { id: 'display.preset', label: 'Displays: NDI preset (idle, intro, player, banner, score, black)', parameters: ['preset', 'station?', 'team?'] }
   );
   return {

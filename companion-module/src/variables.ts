@@ -76,6 +76,8 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		definitions[`display_${number}_receiving`] = { name: `Display ${number}: Showing a picture` }
 		definitions[`display_${number}_hostname`] = { name: `Display ${number}: PC name` }
 		definitions[`display_${number}_preset`] = { name: `Display ${number}: NDI preset` }
+		definitions[`display_${number}_noise`] = { name: `Display ${number}: Pink noise on (from controller)` }
+		definitions[`display_${number}_noise_playing`] = { name: `Display ${number}: Pink noise actually playing` }
 	}
 
 	for (let number = 1; number <= 4; number += 1) {

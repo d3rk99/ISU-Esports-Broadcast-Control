@@ -7,13 +7,18 @@
 // Protocol (JSON text frames):
 //   client -> hello {station, hostname, version, key, mode, source}
 //          -> status {mode, source, state, error, fps}
-//   server -> welcome {station} | mode {mode, source}
+//   server -> welcome {station} | mode {mode, source} | noise {on, volume}
+// Pink noise: players wear IEMs (game + comms) under a headset that plays pink noise to mask the
+// room. The client makes the noise itself and plays it on the headset device picked in its own
+// settings; the controller only says on/off and how loud (0-100, the client caps it).
 const crypto = require('node:crypto');
 const http = require('node:http');
 const { WebSocketServer } = require('ws');
 
 const STATIONS = 10;
 const MODES = ['mirror', 'ndi'];
+const DEFAULT_NOISE_VOLUME = 30;
+const clampVolume = (v, fallback = DEFAULT_NOISE_VOLUME) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : fallback; };
 const pad = (n) => String(n).padStart(2, '0');
 const defaultSource = (station) => `ISU Stage ${pad(station)}`;
 
@@ -41,7 +46,7 @@ class DisplayManager {
     this.server = null; this.wss = null; this.error = '';
   }
 
-  blank(n) { return { station: n, online: false, hostname: '', version: '', mode: 'ndi', source: defaultSource(n), state: 'offline', error: '', fps: 0, lastSeen: 0, socket: null }; }
+  blank(n) { return { station: n, online: false, hostname: '', version: '', mode: 'ndi', source: defaultSource(n), state: 'offline', error: '', fps: 0, lastSeen: 0, socket: null, noise: false, noiseVolume: DEFAULT_NOISE_VOLUME, noiseState: 'off', noiseDevice: '', noiseError: '' }; }
 
   async start() {
     this.server = http.createServer((_req, res) => { res.writeHead(426); res.end('ISU display manager: WebSocket only'); });
@@ -77,6 +82,7 @@ class DisplayManager {
         this.send(n, { type: 'welcome', station: n });
         // The controller is the source of truth: push the assigned mode on every (re)connect.
         this.send(n, { type: 'mode', mode: current.mode, source: current.source });
+        this.send(n, { type: 'noise', on: current.noise, volume: current.noiseVolume });
         this.emit();
         return;
       }
@@ -87,6 +93,9 @@ class DisplayManager {
           state: String(msg.state || '').slice(0, 30), error: String(msg.error || '').slice(0, 300),
           fps: Math.max(0, Math.min(240, Math.round(Number(msg.fps) || 0))), lastSeen: this.now()
         });
+        if (msg.noise && typeof msg.noise === 'object') Object.assign(current, {
+          noiseState: String(msg.noise.state || '').slice(0, 30), noiseDevice: String(msg.noise.device || '').slice(0, 120), noiseError: String(msg.noise.error || '').slice(0, 300)
+        });
         this.emit();
       }
     });
@@ -94,7 +103,7 @@ class DisplayManager {
       if (!station) return;
       const current = this.stations.get(station);
       if (current.socket !== socket) return;
-      Object.assign(current, { online: false, socket: null, state: 'offline', fps: 0 });
+      Object.assign(current, { online: false, socket: null, state: 'offline', fps: 0, noiseState: 'offline' });
       this.emit();
     });
   }
@@ -120,6 +129,24 @@ class DisplayManager {
     return { ok: true, stations: targets, mode };
   }
 
+  // Pink noise on the station headsets. on: true | false | 'toggle' | 'keep' (volume only).
+  // volume: 0-100 (blank = keep).
+  setNoise(station, on, volume) {
+    const targets = stationTargets(station);
+    if (!targets) return { ok: false, error: 'Station must be 1-10, 1-5, 6-10 or all' };
+    // Toggle a group by its majority: all on -> off, otherwise -> on (never half and half).
+    const next = on === 'toggle' ? !targets.every((n) => this.stations.get(n).noise) : on === 'keep' ? null : Boolean(on);
+    const hasVolume = volume !== undefined && volume !== null && volume !== '';
+    for (const n of targets) {
+      const current = this.stations.get(n);
+      if (next !== null) current.noise = next;
+      if (hasVolume) current.noiseVolume = clampVolume(volume, current.noiseVolume);
+      this.send(n, { type: 'noise', on: current.noise, volume: current.noiseVolume });
+    }
+    this.emit();
+    return { ok: true, stations: targets, on: next, volume: hasVolume ? clampVolume(volume) : undefined };
+  }
+
   setKey(key = '') { this.key = String(key || '').trim(); this.emit(); return { ok: true, keyRequired: Boolean(this.key) }; }
 
   status() {
@@ -140,4 +167,4 @@ class DisplayManager {
   }
 }
 
-module.exports = { DisplayManager, defaultSource, stationTargets, STATIONS, MODES };
+module.exports = { DisplayManager, defaultSource, stationTargets, clampVolume, STATIONS, MODES, DEFAULT_NOISE_VOLUME };

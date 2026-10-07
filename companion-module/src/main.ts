@@ -129,7 +129,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 			this.checkFeedbacks('team_leading')
 		}
 		if (Object.keys(changed).some((id) => id.startsWith('display_'))) {
-			this.checkFeedbacks('display_online', 'display_mode', 'display_preset')
+			this.checkFeedbacks('display_online', 'display_mode', 'display_preset', 'display_noise')
 		}
 	}
 

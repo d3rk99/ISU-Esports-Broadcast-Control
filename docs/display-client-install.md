@@ -46,3 +46,17 @@ Install **DistroAV** (OBS 31.1+), turn on **Tools → WebSocket Server**, then o
 - No picture yet: a "STATION NN" screen with what it is waiting for.
 - A small red note in the corner only when something is wrong (controller gone, NDI feed lost).
 - If the controller drops, an NDI feed keeps playing and the client reconnects by itself.
+
+## Pink noise (player headsets)
+
+Players wear IEMs (game, desktop, comms) under a headset that plays pink noise, so they can't hear the room.
+The display client makes the pink noise itself (no audio file) and plays it on one output device; the controller turns it on and off.
+
+On each station PC, open settings (Ctrl+Alt+S):
+- **Headset output**: pick the headset, NOT the IEM output. Blank = Windows default output.
+- **Max volume on this PC**: the loudest it can ever get on this station (default 60%). The controller's volume is a share of this.
+- **TEST 3 SECONDS** plays it on the picked headset so you can check by ear.
+
+On the controller, Displays page: PINK NOISE ON/OFF per station, per group (1-5, 6-10), or for all 10, plus one volume slider.
+Noise always fades in (1.5 s) and out (0.6 s). If the picked headset is unplugged the client falls back to the default output and the station card shows a warning.
+Companion: action "Displays: Pink noise" (on / off / toggle, station or group, optional volume), feedback "Display station is playing pink noise", variables `display_N_noise` / `display_N_noise_playing`.

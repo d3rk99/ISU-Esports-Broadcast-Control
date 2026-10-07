@@ -13,6 +13,8 @@ const { NdiReceiver } = require('./ndi-receiver.cjs');
 const { CursorLock } = require('./cursor-lock.cjs');
 
 const VERSION = require('../../package.json').version;
+// Pink noise must start when the controller says so, with nobody clicking the window first.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Own name + own settings folder, so it never shares the controller's single-instance lock
 // (run from source, both apps would otherwise be "isu-esports-broadcast-control").
 app.setName('ISU Display Client');
@@ -37,6 +39,8 @@ let socket = null; let reconnectTimer = null; let reconnectDelay = 1000; let sta
 let mode = { mode: 'ndi', source: '' };
 let link = { state: 'disconnected', error: '' };
 let ndiState = { state: 'idle', error: '', source: '', fps: 0 };
+let noise = { on: false, volume: 30 };
+let noiseState = { state: 'off', device: '', error: '' };
 const cursorLock = new CursorLock();
 
 // ---- config ------------------------------------------------------------------------------
@@ -53,7 +57,12 @@ function normalize(raw = {}) {
     playerDisplay: Math.max(1, Math.round(Number(raw.playerDisplay) || 1)),
     stageDisplay: Math.max(1, Math.round(Number(raw.stageDisplay) || 2)),
     cursorLock: raw.cursorLock === true,
-    startWithWindows: raw.startWithWindows !== false // on unless turned off in settings
+    startWithWindows: raw.startWithWindows !== false, // on unless turned off in settings
+    // Pink noise: which output plays it (the headset, NOT the IEMs) and a hard volume cap for
+    // this station. Blank device = Windows default output.
+    noiseDevice: String(raw.noiseDevice || '').slice(0, 300),
+    noiseDeviceLabel: String(raw.noiseDeviceLabel || '').slice(0, 200),
+    noiseMaxVolume: Math.max(0, Math.min(100, Math.round(Number(raw.noiseMaxVolume ?? 60))))
   };
 }
 function cliConfig() {
@@ -122,12 +131,21 @@ function applyMode(next) {
   updateTray();
 }
 
+// Pink noise is played by the display window (Web Audio); main only relays on/off + device.
+function noiseDevice() { return { id: config.noiseDevice, label: config.noiseDeviceLabel, maxVolume: config.noiseMaxVolume }; }
+function applyNoise(next = {}) {
+  noise = { on: Boolean(next.on), volume: Math.max(0, Math.min(100, Math.round(Number(next.volume ?? noise.volume) || 0))) };
+  logLine(`pink noise ${noise.on ? `on ${noise.volume}%` : 'off'}`);
+  win?.webContents.send('display:noise', noise);
+  updateTray();
+}
+
 // ---- controller link ---------------------------------------------------------------------
 function setLink(state, error = '') { link = { state, error }; win?.webContents.send('display:link', link); updateTray(); }
 function reportStatus() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   const state = mode.mode === 'mirror' ? 'mirror' : ndiState.state;
-  socket.send(JSON.stringify({ type: 'status', mode: mode.mode, source: mode.source, state, error: ndiState.error || '', fps: ndiState.fps || 0 }));
+  socket.send(JSON.stringify({ type: 'status', mode: mode.mode, source: mode.source, state, error: ndiState.error || '', fps: ndiState.fps || 0, noise: noiseState }));
 }
 function connect() {
   clearTimeout(reconnectTimer);
@@ -144,6 +162,7 @@ function connect() {
     let msg; try { msg = JSON.parse(String(raw)); } catch { return; }
     if (msg.type === 'welcome') setLink('connected');
     if (msg.type === 'mode') applyMode(msg);
+    if (msg.type === 'noise') applyNoise(msg);
   });
   s.on('close', (code, reason) => {
     if (socket !== s) return;
@@ -166,7 +185,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'display-client-preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false }
   });
   win.loadFile(path.join(__dirname, 'client', 'index.html'));
-  win.webContents.on('did-finish-load', () => { win.webContents.send('display:mode', mode); win.webContents.send('display:link', link); win.webContents.send('display:ndi-status', ndiState); });
+  win.webContents.on('did-finish-load', () => { win.webContents.send('display:mode', mode); win.webContents.send('display:link', link); win.webContents.send('display:ndi-status', ndiState); win.webContents.send('display:noise-device', noiseDevice()); win.webContents.send('display:noise', noise); });
   win.on('closed', () => { win = null; });
   // Windows can re-add a taskbar button after fullscreen/display changes: keep it off.
   win.on('show', () => win?.setSkipTaskbar(true));
@@ -198,7 +217,7 @@ function trayIcon() {
 }
 function updateTray() {
   if (!tray) return;
-  const label = `Station ${String(config.station).padStart(2, '0')} · ${mode.mode === 'mirror' ? 'Game mirror' : `NDI ${ndiState.source || mode.source || ''}`} · ${link.state}`;
+  const label = `Station ${String(config.station).padStart(2, '0')} · ${mode.mode === 'mirror' ? 'Game mirror' : `NDI ${ndiState.source || mode.source || ''}`} · ${link.state}${noise.on ? ' · pink noise' : ''}`;
   tray.setToolTip(`ISU Display Client\n${label}`);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label, enabled: false },
@@ -216,6 +235,7 @@ ipcMain.handle('display:save-config', (_e, next = {}) => {
   saveConfig(next);
   if (before.stageDisplay !== config.stageDisplay && win) { win.setBounds(displayAt(config.stageDisplay, 1).bounds); win.setFullScreen(true); }
   applyCursorLock();
+  win?.webContents.send('display:noise-device', noiseDevice());
   if (before.controller !== config.controller || before.port !== config.port || before.key !== config.key || before.station !== config.station) connect();
   else if (mode.mode === 'ndi') applyMode(mode); // ndiHost may have changed
   return config;
@@ -232,6 +252,11 @@ ipcMain.on('display:mirror-status', (_e, status = {}) => {
   reportStatus();
 });
 ipcMain.on('display:open-settings', openSettings);
+ipcMain.on('display:noise-status', (_e, status = {}) => {
+  const next = { state: String(status.state || '').slice(0, 30), device: String(status.device || '').slice(0, 120), error: String(status.error || '').slice(0, 300) };
+  if (next.error && next.error !== noiseState.error) logLine(`pink noise: ${next.error}`);
+  noiseState = next; reportStatus();
+});
 
 // ---- lifecycle ---------------------------------------------------------------------------
 if (!app.requestSingleInstanceLock()) { logLine('another Display Client is already running: quitting'); app.quit(); }

@@ -2195,6 +2195,12 @@ root.addEventListener('click', async (event) => {
     if (result && !result.ok) toast(result.error);
     return;
   }
+  if (button.dataset.action === 'display-noise') {
+    const result = await window.isuDesktop?.setDisplayNoise({ station: button.dataset.station, on: button.dataset.on === 'on' });
+    if (result && !result.ok) toast(result.error);
+    else toast(`Pink noise ${button.dataset.station === 'all' ? 'all' : button.dataset.station}: ${button.dataset.on}`);
+    return;
+  }
   if (button.dataset.action === 'display-preset') {
     const station = button.dataset.station; // 'all' | '1-5' | '6-10' | '1'..'10'
     const team = button.dataset.team || '';
@@ -2672,6 +2678,13 @@ root.addEventListener('keydown', async (event) => {
 });
 
 root.addEventListener('change', async (event) => {
+  if (event.target.dataset?.displayNoiseVolume !== undefined) {
+    // Volume only: every station keeps its own on/off.
+    const volume = Number(event.target.value);
+    await window.isuDesktop?.setDisplayNoise({ station: 'all', on: 'keep', volume });
+    toast(`Pink noise volume ${volume}%`);
+    return;
+  }
   const target = event.target;
   if (target.id === 'game-select') {
     state.selectedGame = target.value;

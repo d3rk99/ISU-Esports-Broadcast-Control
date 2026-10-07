@@ -918,6 +918,13 @@ async function dispatchCompanionStageAction(action = {}) {
     if (!result.ok) throw Object.assign(new Error(result.error), { statusCode: 400 });
     return { message: `Displays ${action.station || 'all'}: ${result.mode}` };
   }
+  if (actionId === 'stage.display.noise') {
+    const raw = String(action.on ?? action.state ?? 'toggle').toLowerCase();
+    const on = raw === 'toggle' || raw === 'keep' ? raw : ['on', 'true', '1', 'start', 'play'].includes(raw);
+    const result = displayManager.setNoise(action.station === undefined || action.station === '' ? 'all' : action.station, on, action.volume);
+    if (!result.ok) throw Object.assign(new Error(result.error), { statusCode: 400 });
+    return { message: `Pink noise ${action.station || 'all'}: ${result.on ? 'on' : 'off'}` };
+  }
   throw Object.assign(new Error(`Unknown display action: ${actionId}`), { statusCode: 404 });
 }
 
@@ -955,6 +962,7 @@ function registerIpc() {
   // Display clients (game mirror / NDI) + OBS display presets.
   ipcMain.handle('displays:status', () => displayManager.status());
   ipcMain.handle('displays:set-mode', (_event, d = {}) => displayManager.setMode(d.station ?? 'all', d.mode, d.source || ''));
+  ipcMain.handle('displays:set-noise', (_event, d = {}) => displayManager.setNoise(d.station ?? 'all', d.on, d.volume));
   ipcMain.handle('displays:get-key', () => ({ key: displayManager.key || '' }));
   ipcMain.handle('displays:set-key', (_event, d = {}) => { saveDisplayKey(d.key); return displayManager.setKey(d.key); });
   const obsPath = () => path.join(app.getPath('userData'), 'obs-displays.json');
