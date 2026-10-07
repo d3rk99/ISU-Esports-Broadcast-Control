@@ -1,0 +1,9 @@
+out/
+lstmf/
+ckpt/
+base/
+*.traineddata
+all.txt
+train.txt
+eval.txt
+*.log

@@ -24,7 +24,7 @@ const PROFILE = {
   cellHeight: 18,
   columns: {
     agent: { x: 567, w: 32, kind: 'icon' },
-    name: { x: 634, w: 190, kind: 'text', allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#' },
+    name: { x: 634, w: 190, kind: 'text', lang: 'val', allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#' },
     ultimate: { x: 842, w: 56, kind: 'ult', allowedChars: '0123456789/' },
     kills: { h: 14, threshold: 150, x: 936, w: 24, kind: 'count', allowedChars: '0123456789' },
     deaths: { h: 14, threshold: 150, x: 976, w: 24, kind: 'count', allowedChars: '0123456789' },
@@ -192,6 +192,12 @@ class GearMatcher {
       const real = fs.readFileSync(realPath);
       meta.real.forEach((name, i) => this.weapons.push({ name, m: real.subarray(i * n, (i + 1) * n) }));
     }
+    // Trained set (tools/valorant-gun-training): board-size renders of every official icon.
+    const trainedPath = path.join(dir, 'valorant-weapon-trained.bin');
+    if (meta.trained && fs.existsSync(trainedPath)) {
+      const trained = fs.readFileSync(trainedPath);
+      meta.trained.forEach((name, i) => this.weapons.push({ name, m: trained.subarray(i * n, (i + 1) * n), trained: true }));
+    }
     this.shieldSize = meta.shieldSize;
     this.shields = [['light', 'light-armor'], ['heavy', 'heavy-armor'], ['regen', 'regen-shield']]
       .map(([name, file]) => ({ name, m: fs.readFileSync(path.join(dir, `valorant-shield-${file}.bin`)) }));
@@ -281,7 +287,7 @@ async function readCell(ocr, lum, cell, makeImage, fieldId = 'valorant-board') {
   const g = isText || cell.field === 'ultimate' ? NaN : glyphCount(lum, cell.roi, { thr: 150 });
   if (g === 0) return cell.field === 'credits' ? 0 : 0;
   for (const [thr, scale] of isText ? TEXT_LADDER : NUMBER_LADDER) {
-    const r = await ocr.recognize(makeImage(cell.roi, scale, thr), { allowedChars: cell.column.allowedChars, kind: isText ? 'text' : 'score', fieldId, pageMode: g === 1 ? 'char' : 'line' });
+    const r = await ocr.recognize(makeImage(cell.roi, scale, thr), { allowedChars: cell.column.allowedChars, kind: isText ? 'text' : 'score', fieldId, pageMode: g === 1 ? 'char' : 'line', ...(cell.column.lang ? { lang: cell.column.lang } : {}) });
     if (r.confidence < (isText ? 0.6 : 0.7)) continue;
     const v = plausibleRead(cell.field, parseCell(cell.field, r.text), g);
     if (v !== null) return v;

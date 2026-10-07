@@ -112,3 +112,50 @@ test('VALORANT board service: real board through full sweeps (consensus) -> agen
   assert.equal(svc.status.state, 'reading'); assert.ok(svc.lastAlign.dx <= -12, 'found the shifted board');
   assert.ok(states.length >= 1);
 });
+
+test('VALORANT guns: trained set alone recognises every real board crop (no crop of its own in the set)', () => {
+  // tools/valorant-gun-training/make_templates.py --renders-only would drop the crops entirely;
+  // here we keep the trained renders and remove any template identical to the crop being read.
+  const fs = require('node:fs'); const path = require('node:path'); const zlib = require('node:zlib');
+  const { GearMatcher } = require('../electron/valorant-board-parse.cjs');
+  const g = new GearMatcher(); const trained = g.weapons.filter((t) => t.trained);
+  const root = path.join(__dirname, '..', 'public', 'assets', 'valorant', 'weapons', 'trained');
+  const readGray = (file) => {
+    const buf = fs.readFileSync(file); let at = 8; let w = 0; let h = 0; let ct = 0; const idat = [];
+    while (at < buf.length) { const len = buf.readUInt32BE(at); const type = buf.toString('ascii', at + 4, at + 8); const d = buf.subarray(at + 8, at + 8 + len); if (type === 'IHDR') { w = d.readUInt32BE(0); h = d.readUInt32BE(4); ct = d[9]; } if (type === 'IDAT') idat.push(d); at += 12 + len; }
+    const ch = ct === 6 ? 4 : ct === 2 ? 3 : ct === 4 ? 2 : 1; const stride = w * ch; const raw = zlib.inflateSync(Buffer.concat(idat)); const out = Buffer.alloc(w * h); let prev = Buffer.alloc(stride);
+    for (let y = 0; y < h; y += 1) { const f = raw[y * (stride + 1)]; const row = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)); const cur = Buffer.alloc(stride);
+      for (let i = 0; i < stride; i += 1) { const a = i >= ch ? cur[i - ch] : 0; const b = prev[i]; const c = i >= ch ? prev[i - ch] : 0; let v = row[i]; if (f === 1) v += a; else if (f === 2) v += b; else if (f === 3) v += (a + b) >> 1; else if (f === 4) { const p = a + b - c; const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c); v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c; } cur[i] = v & 255; }
+      for (let x = 0; x < w; x += 1) out[y * w + x] = ch >= 3 ? Math.round(cur[x * ch] * 0.299 + cur[x * ch + 1] * 0.587 + cur[x * ch + 2] * 0.114) : cur[x * ch];
+      prev = cur; }
+    return { w, h, lum: (x, y) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : out[y * w + x]) };
+  };
+  const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+  let right = 0; let total = 0; const wrong = [];
+  for (const gun of fs.readdirSync(root).filter((d) => fs.statSync(path.join(root, d)).isDirectory())) for (const f of fs.readdirSync(path.join(root, gun)).filter((n) => n.endsWith('.png'))) {
+    const c = readGray(path.join(root, gun, f)); const own = [150, 175].map((t) => g.silhouette(c.lum, { x: 0, y: 0, w: c.w, h: c.h }, t)).filter(Boolean);
+    g.weapons = trained.filter((t) => !own.some((o) => same(Array.from(o), Array.from(t.m))));
+    const r = g.weapon(c.lum, { x: 0, y: 0, w: c.w, h: c.h }); total += 1;
+    if (r.weapon === gun) right += 1; else if (r.weapon) wrong.push(`${gun}/${f} -> ${r.weapon}`);
+  }
+  console.log(`real gun crops: ${right}/${total} right, wrong: ${wrong.join(', ') || 'none'}`);
+  assert.ok(right >= total * 0.75, `${right}/${total}`);
+});
+
+test('VALORANT names: trained model (electron/ocr-models/val.traineddata) reads the real names', { timeout: 240000 }, async () => {
+  const ocr = new TesseractOcrEngine(); let right = 0; let total = 0; const got = [];
+  try {
+    for (const f of ['val-board-1.png', 'val-board-2.png']) {
+      const b = board(f); const a = alignBoard(b.lum);
+      for (const cell of cellRois(PROFILE, a).filter((c) => c.field === 'name')) {
+        const v = await readCell(ocr, b.lum, cell, (roi, scale, thr) => cellImage(b.lum, roi, scale, thr));
+        const want = B1[cell.side][cell.row][0]; total += 1;
+        // Roster matching ignores case, so does this score.
+        if (v && v.toLowerCase() === want.toLowerCase()) right += 1;
+        got.push(v);
+      }
+    }
+  } finally { await ocr.close(); }
+  console.log(`VALORANT names: ${right}/${total} (case-insensitive): ${got.join(' | ')}`);
+  assert.ok(right >= 14, `${right}/${total}`);
+});
