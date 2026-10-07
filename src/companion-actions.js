@@ -109,33 +109,61 @@ function saveActiveMapResult(game, gameKey) {
   game.teams.forEach((team, index) => { team.score = visibleMapRows(game).filter((mapRow) => mapRow.winner === index).length; });
 }
 
-// Overwatch: keep each stationed player's scoreboard-OCR stats from the map that just ended,
-// keyed by stage station, so the station player cards can show "last map" during the next one.
-export function saveOverwatchLastMapStats(game, rosterKey = 'varsity') {
-  const live = game.overwatchOcr?.live?.teams;
-  if (!live) return 0;
+// Player cards are shown BETWEEN matches, so they show the game that just ended, never a live
+// readout. When a game ends (NEXT MATCH, or Rocket League's MatchEnded) each stationed player's
+// stats are copied out of that game's live feed, matched by gamertag, and kept per station in
+// game.lastGameStats[station] = { handle, map, character, stats, savedAt }.
+//   Overwatch: scoreboard OCR -> elims / deaths / assists / damage / healing / mitigation (+ hero)
+//   VALORANT:  scoreboard reader -> kills / deaths / assists (+ agent)
+//   Rocket League: Stats API players -> score / goals / assists / saves / shots / demos
+const LAST_GAME_FIELDS = {
+  overwatch: ['elims', 'deaths', 'assists', 'damage', 'healing', 'mitigation'],
+  valorant: ['kills', 'deaths', 'assists'],
+  rocketleague: ['score', 'goals', 'assists', 'saves', 'shots', 'demos']
+};
+function lastGameRows(game, gameKey) {
+  if (gameKey === 'overwatch') { const t = game.overwatchOcr?.live?.teams; return t ? { home: t.home?.players || [], away: t.away?.players || [] } : null; }
+  if (gameKey === 'valorant') { const t = game.valorantBoard?.live?.teams; return t ? { home: t.home?.players || [], away: t.away?.players || [] } : null; }
+  if (gameKey === 'rocketleague') {
+    // RL lists both teams together; any player matched by gamertag counts (side doesn't matter).
+    const all = game.rocketLeague?.live?.players || [];
+    return all.length ? { home: all, away: all } : null;
+  }
+  return null;
+}
+export function saveLastGameStats(game, gameKey, rosterKey = 'varsity') {
+  const fields = LAST_GAME_FIELDS[gameKey];
+  const rows = fields && lastGameRows(game, gameKey);
+  if (!rows) return 0;
   const map = game.mapRows?.[game.activeMap]?.map || '';
-  const saved = { ...(game.overwatchLastMapStats || {}) };
+  const saved = { ...(game.lastGameStats || (gameKey === 'overwatch' ? game.overwatchLastMapStats : null) || {}) };
   let count = 0;
-  for (const [side, roster] of [['home', game.rosters?.[rosterKey] || []], ['away', game.awayRosters?.[rosterKey] || []]]) {
-    const rows = live[side]?.players || [];
+  // Both rosters: Varsity and JV can be on stage at once (each on its own stations).
+  const rosterKeys = [...new Set([rosterKey, 'varsity', 'jv'])];
+  for (const key of rosterKeys) for (const [side, roster] of [['home', game.rosters?.[key] || []], ['away', game.awayRosters?.[key] || []]]) {
     for (const player of roster) {
       const station = Math.round(Number(player?.stageStation) || 0);
-      if (station < 1 || station > 10 || !player?.handle) continue;
+      const tag = player?.handle || player?.name;
+      if (station < 1 || station > 10 || !tag) continue;
       let row = null; let best = NAME_MATCH;
-      for (const r of rows) { const sc = tagSimilarity(player.handle, r?.name); if (sc >= best) { row = r; best = sc; } }
+      for (const r of rows[side]) { const sc = tagSimilarity(tag, r?.name); if (sc >= best) { row = r; best = sc; } }
       if (!row) continue;
-      const { elims, assists, deaths, damage, healing, mitigation, hero } = row;
-      saved[station] = { handle: player.handle, map, hero: hero || '', stats: { elims, assists, deaths, damage, healing, mitigation }, savedAt: Date.now() };
+      const stats = Object.fromEntries(fields.map((f) => [f, Number.isFinite(Number(row[f])) && row[f] !== null && row[f] !== '' ? Number(row[f]) : null]));
+      if (Object.values(stats).every((v) => v === null)) continue;
+      const character = gameKey === 'overwatch' ? row.hero || '' : gameKey === 'valorant' ? row.agent || '' : player.character || '';
+      saved[station] = { game: gameKey, handle: tag, map, character, hero: gameKey === 'overwatch' ? character : undefined, stats, savedAt: Date.now() };
       count += 1;
     }
   }
-  game.overwatchLastMapStats = saved;
+  game.lastGameStats = saved;
+  if (gameKey === 'overwatch') game.overwatchLastMapStats = saved; // older saves / callers
   return count;
 }
+// Kept for older callers.
+export function saveOverwatchLastMapStats(game, rosterKey = 'varsity') { return saveLastGameStats(game, 'overwatch', rosterKey); }
 
 export function advanceGameMatch(game, gameKey, rosterKey = 'varsity') {
-  if (gameKey === 'overwatch') saveOverwatchLastMapStats(game, rosterKey);
+  saveLastGameStats(game, gameKey, rosterKey);
   const length = visibleMapRows(game).length;
   const nextIndex = (game.activeMap + 1) % length;
   saveActiveMapResult(game, gameKey);

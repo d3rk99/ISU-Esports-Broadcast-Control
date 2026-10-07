@@ -48,28 +48,30 @@ const rlState = (live) => ({ selectedGame: 'rocketleague', activeRoster: 'varsit
     rocketLeague: { live },
     rosters: { varsity: [{ handle: 'D3RK99', name: 'Derek', role: 'Striker', character: 'Fennec', characterImage: '/user-assets/fennec.png', stageStation: 1 }] }, awayRosters: { varsity: [] } } } });
 
-test('station player card (Rocket League): car PNG is the background, live RL stats by gamertag', async () => {
-  const state = rlState({ overtime: false, players: [{ name: 'SOMEONE', score: 50 }, { name: 'D3RK_99', score: 412, goals: 2, assists: 1, saves: 3, shots: 5, demos: 1, boost: 64 }] });
+// Player cards run between matches: they show the LAST game (saved when it ended), never live.
+test('station player card (Rocket League): car background + LAST GAME stats only, live feed ignored, no boost meter', async () => {
+  const state = rlState({ overtime: false, players: [{ name: 'D3RK_99', score: 999, goals: 9, boost: 64 }] });
+  state.games.rocketleague.mapRows = [{ map: 'DFH Stadium' }]; state.games.rocketleague.activeMap = 0;
+  state.games.rocketleague.lastGameStats = { 1: { game: 'rocketleague', handle: 'D3RK99', map: 'DFH Stadium', stats: { score: 412, goals: 2, assists: 1, saves: 3, shots: 5, demos: 1 } } };
   const page = loadStation(1, state);
   page.render(state);
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(page.$('player-hero-img').getAttribute('src'), '/user-assets/fennec.png', 'car PNG from the roster');
   assert.ok(page.$('player-hero-img').classList.contains('is-car'));
-  assert.equal(page.$('player-stats-label').textContent, 'THIS GAME · LIVE');
+  assert.equal(page.$('player-stats-label').textContent, 'LAST GAME · DFH STADIUM');
   const stats = page.$('player-stats').children.map((d) => d.children.map((c) => c.textContent).join(' '));
-  assert.deepEqual(stats, ['412 SCORE', '2 GOALS', '1 ASSISTS', '3 SAVES', '5 SHOTS', '1 DEMOS']);
-  assert.equal(page.$('player-boost').hidden, false);
-  assert.equal(page.$('player-boost-num').textContent, '64');
+  assert.deepEqual(stats, ['412 SCORE', '2 GOALS', '1 ASSISTS', '3 SAVES', '5 SHOTS', '1 DEMOS'], 'saved last game, not the live 999');
+  assert.ok(!fs.readFileSync(path.join(__dirname, '../public/displays/station.html'), 'utf8').includes('player-boost'), 'no boost meter on the card');
   assert.equal(page.$('player-meta').textContent, 'Derek · Striker · Fennec');
 });
 
-test('station player card (Rocket League): no live match = no stats, boost hidden, car still shown', async () => {
-  const state = rlState({ players: [] });
+test('station player card (Rocket League): nothing saved yet = no stats (even with a live match), car still shown', async () => {
+  const state = rlState({ players: [{ name: 'D3RK99', score: 412, goals: 2 }] });
   const page = loadStation(1, state);
   page.render(state);
   await new Promise((r) => setTimeout(r, 20));
   assert.equal(page.$('player-stats').children.length, 0);
-  assert.equal(page.$('player-boost').hidden, true);
+  assert.equal(page.$('player-stats-label').textContent, '');
   assert.equal(page.$('player-hero-img').getAttribute('src'), '/user-assets/fennec.png');
 });
 
@@ -90,7 +92,7 @@ test('station player card: Varsity and JV on stage together (each station finds 
   assert.equal(page.$('player-handle').textContent, 'VARS2');
 });
 
-test('station player card (VALORANT): agent art + live K/D/A, creds, ult, gun from the scoreboard reader', async () => {
+test('station player card (VALORANT): last map K / D / A only (no creds, ult or weapon), agent art from the saved map', async () => {
   const state = {
     selectedGame: 'valorant', activeRoster: 'varsity', displays: { stations: { 1: { preset: 'player', team: '' } } },
     games: { valorant: {
@@ -98,17 +100,17 @@ test('station player card (VALORANT): agent art + live K/D/A, creds, ult, gun fr
       characterArt: { 'KAY/O': { url: '/assets/valorant/agents/kay-o.webp' }, Viper: { url: '/assets/valorant/agents/viper.webp' } },
       rosters: { varsity: [{ handle: 'Sn0wfal', stageStation: 1, role: 'Controller', character: '' }] },
       awayRosters: { varsity: [] },
-      valorantBoard: { live: { teams: { home: { players: [
-        { row: 0, name: 'SnOwfal', agent: 'kay-o', ultimate: '3/9', kills: 3, deaths: 0, assists: 0, credits: 2600, weapon: 'vandal', shield: 'heavy' }
-      ] }, away: { players: [] } } } }
+      // live board says something else: the card must ignore it
+      valorantBoard: { live: { teams: { home: { players: [{ name: 'Sn0wfal', agent: 'viper', kills: 20, deaths: 1, assists: 1, credits: 2600 }] }, away: { players: [] } } } },
+      lastGameStats: { 1: { game: 'valorant', handle: 'SnOwfal', map: 'Ascent', character: 'kay-o', stats: { kills: 18, deaths: 12, assists: 6 } } }
     } }
   };
   const page = loadStation(1, state);
   page.render(state);
   await new Promise((r) => setTimeout(r, 20));
-  assert.equal(page.$('player-hero-img').getAttribute('src'), '/assets/valorant/agents/kay-o.webp', 'agent from the board (KAY/O slug kay-o)');
-  assert.equal(page.$('player-stats-label').textContent, 'THIS MAP · LIVE');
+  assert.equal(page.$('player-hero-img').getAttribute('src'), '/assets/valorant/agents/kay-o.webp', 'agent from the saved map (slug kay-o -> KAY/O)');
+  assert.equal(page.$('player-stats-label').textContent, 'LAST MAP · ASCENT');
   const stats = page.$('player-stats').children.map((d) => d.children.map((c) => c.textContent).join(' '));
-  assert.deepEqual(stats, ['3 KILLS', '0 DEATHS', '0 ASSISTS', '2,600 CREDS', '3/9 ULT', 'VANDAL WEAPON']);
+  assert.deepEqual(stats, ['18 KILLS', '12 DEATHS', '6 ASSISTS']);
   assert.ok(page.$('player-meta').textContent.includes('KAY/O'));
 });

@@ -6,7 +6,7 @@ import { renderDisplaysView } from './displays-view.js';
 import { applyDisplayPreset } from './display-presets.js';
 import { patchHtml } from './dom-patch.js';
 import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueArenaName, createBundledCharacterArt } from './game-config.js';
-import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
+import { advanceGameMatch, applyCompanionAction, saveLastGameStats, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
 import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel, syncValorantRoster } from './valorant-board-panel.js';
@@ -1991,6 +1991,8 @@ function handleRocketLeagueEvent(envelope) {
     : Number((rl.live.teamScores?.[1] || 0) > (rl.live.teamScores?.[0] || 0));
   const winner = mapRocketLeagueTeam(winnerRlTeam, rl);
   commit(() => {
+    // Player cards show the game that just ended: grab every stationed player's final stats now.
+    saveLastGameStats(game, 'rocketleague', state.activeRoster);
     rl.processedMatches.push(matchGuid);
     rl.processedMatches = rl.processedMatches.slice(-30);
     const activeRow = game.mapRows[game.activeMap];

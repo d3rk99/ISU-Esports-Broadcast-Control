@@ -157,50 +157,38 @@
     fitName();
     setText('player-initials', handle.slice(0, 2).toUpperCase());
     setText('player-station', pad(station));
-    const isValorant = state?.selectedGame === 'valorant';
-    // Live OCR row for this player (matched by gamertag): Overwatch board or the VALORANT board reader.
-    const liveTeams = isValorant ? game.valorantBoard?.live?.teams : game.overwatchOcr?.live?.teams;
-    const live = player?.handle ? bestByTag(liveTeams?.[found.side]?.players, player.handle) : null;
+    const gameKey = state?.selectedGame || '';
+    const isValorant = gameKey === 'valorant';
+    const isRocketLeague = gameKey === 'rocketleague';
+    // Player cards run BETWEEN matches: they show the game that just ended (saved per station
+    // when it ended), never a live readout. Nothing saved yet = name + art only, no stats.
+    const savedAll = game.lastGameStats || game.overwatchLastMapStats || {};
+    const saved0 = savedAll[station];
+    const tagOk = (a, b) => similarity(a, b) >= 0.9;
+    const saved = saved0 && (!saved0.game || saved0.game === gameKey) && (!player?.handle || !saved0.handle || tagOk(saved0.handle, player.handle)) ? saved0 : null;
     // VALORANT agents come back as slugs ('kay-o'); the art table uses display names ('KAY/O').
     const agentName = (slug) => Object.keys(game.characterArt || {}).find((k) => k.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug) || '';
-    const hero = (isValorant ? agentName(live?.agent || '') : live?.hero) || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
-    const isRL = state?.selectedGame === 'rocketleague';
-    setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, isRL ? player?.character : hero].filter(Boolean).join(' · '));
+    const savedChar = saved?.character || saved?.hero || '';
+    const hero = (isValorant ? agentName(savedChar) || savedChar : savedChar) || player?.character || '';
+    setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, isRocketLeague ? player?.character : hero].filter(Boolean).join(' · '));
     showPortrait(safeUrl(player?.playerImage));
     // Background art: Rocket League = the player's own car PNG (roster 'Player car PNG', manual or
     // auto-rendered from the loadout); other games = the hero/agent/fighter art.
-    const isRocketLeague = state?.selectedGame === 'rocketleague';
     const art = isRocketLeague ? player?.characterImage : (hero ? game.characterArt?.[hero]?.url : '');
     placeHero(safeUrl(art), isRocketLeague ? 'car' : 'hero');
     $('st').classList.toggle('game-rl', isRocketLeague);
-    // Stats: Rocket League = live from the RL Stats API (rocketLeague.live.players, matched by
-    // gamertag); Overwatch = scoreboard OCR (live, or saved "last map" after NEXT MATCH).
+    const COLUMNS = {
+      overwatch: [['elims', 'ELIMS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS'], ['damage', 'DAMAGE'], ['healing', 'HEALING'], ['mitigation', 'MITIGATED']],
+      valorant: [['kills', 'KILLS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS']],
+      rocketleague: [['score', 'SCORE'], ['goals', 'GOALS'], ['assists', 'ASSISTS'], ['saves', 'SAVES'], ['shots', 'SHOTS'], ['demos', 'DEMOS']]
+    };
     let rows = []; let label = '';
-    if (isRocketLeague) {
-      const rlLive = game.rocketLeague?.live;
-      const rlPlayer = player?.handle || player?.name ? bestByTag(rlLive?.players, player.handle || player.name) : null;
-      if (rlPlayer) {
-        label = rlLive?.overtime ? 'THIS GAME · OVERTIME' : 'THIS GAME · LIVE';
-        rows = [['score', 'SCORE'], ['goals', 'GOALS'], ['assists', 'ASSISTS'], ['saves', 'SAVES'], ['shots', 'SHOTS'], ['demos', 'DEMOS']].map(([k, l]) => [rlPlayer[k], l]);
-      }
-      const boost = rlPlayer && Number.isFinite(Number(rlPlayer.boost)) ? Math.max(0, Math.min(100, Number(rlPlayer.boost))) : null;
-      $('player-boost').hidden = boost === null;
-      if (boost !== null) { $('player-boost').style.setProperty('--boost', `${boost}%`); setText('player-boost-num', Math.round(boost)); }
-      $('player-portrait').classList.toggle('is-demolished', Boolean(rlPlayer?.demolished));
-    } else {
-      $('player-boost').hidden = true;
-      $('player-portrait').classList.remove('is-demolished');
-      const saved = isValorant ? null : game.overwatchLastMapStats?.[station];
-      const stats = saved?.stats || live;
-      if (isValorant && live) {
-        label = 'THIS MAP · LIVE';
-        const ult = live.ultimate === 'READY' ? 'READY' : live.ultimate || null;
-        rows = [[live.kills, 'KILLS'], [live.deaths, 'DEATHS'], [live.assists, 'ASSISTS'], [live.credits, 'CREDS'], [ult, 'ULT'], [live.weapon ? String(live.weapon).toUpperCase() : null, 'WEAPON']];
-      } else if (stats) {
-        label = saved?.stats ? `LAST MAP${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}` : 'THIS MAP · LIVE';
-        rows = [['elims', 'ELIMS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS'], ['damage', 'DAMAGE'], ['healing', 'HEALING'], ['mitigation', 'MITIGATED']].map(([k, l]) => [stats[k], l]);
-      }
+    if (saved?.stats && COLUMNS[gameKey]) {
+      const unit = isRocketLeague ? 'LAST GAME' : 'LAST MAP';
+      label = `${unit}${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}`;
+      rows = COLUMNS[gameKey].map(([k, l]) => [saved.stats[k], l]);
     }
+    $('st').classList.toggle('stats-3', rows.length === 3);
     setText('player-stats-label', label);
     $('player-stats').replaceChildren(...rows.map(([v, l]) => {
       const d = document.createElement('div'); const b = document.createElement('b'); const i = document.createElement('i');

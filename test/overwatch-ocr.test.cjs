@@ -267,7 +267,7 @@ test('Overwatch: NEXT MATCH saves each stationed player\'s OCR stats as "last ma
     overwatchOcr: { live: { teams: { home: { players: [{ name: 'BENGAL', hero: 'Hanzo', elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }] }, away: { players: [{ name: 'BRONCO1', elims: 3, assists: 1, deaths: 9, damage: 2100, healing: 0, mitigation: 0 }] } } } }
   };
   assert.equal(saveOverwatchLastMapStats(game), 2);
-  assert.deepEqual(game.overwatchLastMapStats[3], { handle: 'Bengal', map: 'Busan', hero: 'Hanzo', stats: { elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }, savedAt: game.overwatchLastMapStats[3].savedAt });
+  assert.deepEqual(game.overwatchLastMapStats[3], { game: 'overwatch', character: 'Hanzo', handle: 'Bengal', map: 'Busan', hero: 'Hanzo', stats: { elims: 21, assists: 6, deaths: 4, damage: 11240, healing: 0, mitigation: 1830 }, savedAt: game.overwatchLastMapStats[3].savedAt });
   assert.equal(game.overwatchLastMapStats[7].stats.deaths, 9);
 });
 

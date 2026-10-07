@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DISPLAY_PRESETS, applyDisplayPreset, ensureDisplayState } from '../src/display-presets.js';
-import { applyCompanionAction } from '../src/companion-actions.js';
+import { applyCompanionAction, saveLastGameStats, advanceGameMatch } from '../src/companion-actions.js';
 import { createInitialState } from '../src/game-config.js';
 import { loadState } from '../src/store.js';
 
@@ -62,4 +62,26 @@ test('Overwatch hero bans: per map, per team, via Companion; unknown hero reject
   applyCompanionAction(state, { action: 'overwatch.ban', team: 'home', hero: '' });
   assert.equal(game.mapRows[1].heroBans.home, '');
   assert.throws(() => applyCompanionAction(state, { action: 'overwatch.ban', team: 'home', hero: 'Pikachu' }), /Unknown hero/);
+});
+
+test('last game stats: saved per station when a game ends (VALORANT K/D/A, RL stats, Overwatch), Varsity + JV', () => {
+  const val = { activeMap: 0, mapRows: [{ map: 'Ascent' }, { map: 'Bind' }],
+    rosters: { varsity: [{ handle: 'Sn0wfal', stageStation: 1 }], jv: [{ handle: 'newx', stageStation: 6 }] }, awayRosters: { varsity: [{ handle: 'CWTJ', stageStation: 9 }], jv: [] },
+    valorantBoard: { live: { teams: { home: { players: [{ name: 'SnOwfal', agent: 'viper', kills: 18, deaths: 12, assists: 6, credits: 2600 }, { name: 'newx', agent: 'yoru', kills: 4, deaths: 9, assists: 2 }] }, away: { players: [{ name: 'CWTJ', agent: 'tejo', kills: 7, deaths: 8, assists: 11 }] } } } } };
+  assert.equal(saveLastGameStats(val, 'valorant', 'varsity'), 3);
+  assert.deepEqual(val.lastGameStats[1].stats, { kills: 18, deaths: 12, assists: 6 }, 'K/D/A only, no credits');
+  assert.equal(val.lastGameStats[1].map, 'Ascent');
+  assert.equal(val.lastGameStats[1].character, 'viper');
+  assert.equal(val.lastGameStats[6].stats.kills, 4, 'JV on stage too');
+  assert.equal(val.lastGameStats[9].stats.assists, 11);
+  const rl = { activeMap: 0, mapRows: [{ map: 'DFH Stadium' }], rosters: { varsity: [{ handle: 'D3RK99', stageStation: 2, character: 'Fennec' }] }, awayRosters: { varsity: [] },
+    rocketLeague: { live: { players: [{ name: 'D3RK_99', score: 412, goals: 2, assists: 1, saves: 3, shots: 5, demos: 1, boost: 64 }] } } };
+  saveLastGameStats(rl, 'rocketleague');
+  assert.deepEqual(rl.lastGameStats[2].stats, { score: 412, goals: 2, assists: 1, saves: 3, shots: 5, demos: 1 }, 'no boost');
+  const ow = { activeMap: 0, mapRows: [{ map: 'Busan' }, { map: 'Ilios' }], teams: [{ score: 0 }, { score: 0 }], rosters: { varsity: [{ handle: 'D3RK99', stageStation: 3 }] }, awayRosters: { varsity: [] },
+    overwatchOcr: { live: { teams: { home: { players: [{ name: 'D3RK99', hero: 'Tracer', elims: 12, deaths: 4, assists: 3, damage: 9000, healing: 0, mitigation: 0 }] }, away: { players: [] } } } } };
+  advanceGameMatch(ow, 'overwatch');
+  assert.equal(ow.lastGameStats[3].stats.elims, 12, 'NEXT MATCH saves the map that just ended');
+  assert.equal(ow.lastGameStats[3].map, 'Busan');
+  assert.equal(ow.overwatchLastMapStats[3].hero, 'Tracer');
 });
