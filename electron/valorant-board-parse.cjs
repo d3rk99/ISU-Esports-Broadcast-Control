@@ -306,7 +306,8 @@ function parseCell(field, text) {
 // numbers must also match the digit count seen in the pixels, so a doubt stays blank instead
 // of becoming a wrong number. makeImage(roi, scale, threshold) builds the OCR input.
 const NUMBER_LADDER = [[150, 4], [175, 4], [125, 4], [175, 6], [110, 5], [150, 6]];
-const TEXT_LADDER = [[175, 4], [150, 4]];
+// names: white on dark; tagged names (LCU | name) are dimmer, so 130 comes last
+const TEXT_LADDER = [[175, 4], [150, 4], [130, 4]];
 async function readCell(ocr, lum, cell, makeImage, fieldId = 'valorant-board') {
   const isText = cell.field === 'name';
   if (cell.field === 'credits') {

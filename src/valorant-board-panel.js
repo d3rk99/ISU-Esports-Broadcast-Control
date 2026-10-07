@@ -40,7 +40,9 @@ function spectatePanel(sp = {}, addresses = []) {
   </div>`;
 }
 
-export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = []) {
+// assetBase: the controller page is loaded from a file, so '/assets/..' must go through the
+// overlay server (same as the other roster images).
+export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = [], assetBase = '') {
   const s = vb.settings || {}; const status = vb.status || {};
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' ? 'bad' : status.state === 'no-board' ? 'warn' : '';
   const table = ['home', 'away'].map((side, i) => {
@@ -48,7 +50,7 @@ export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresse
     return `<div class="vb-team"><h3>${esc(teams[i]?.name || (side === 'home' ? 'TOP TEAM' : 'BOTTOM TEAM'))}</h3>
       <table><thead><tr><th>AGENT</th><th>NAME</th><th>ULT</th><th>K</th><th>D</th><th>A</th><th>GUN</th><th>SHIELD</th><th>CREDS</th><th>PING</th></tr></thead><tbody>
       ${players.map((p) => `<tr data-key="vb-${side}-${p.row}">
-        <td>${p.agent ? `<img src="/assets/valorant/agents/${esc(p.agent)}.webp" alt=""><span>${esc(p.agent.toUpperCase())}</span>` : v(null)}</td>
+        <td>${p.agent ? `<img src="${esc(assetBase)}/assets/valorant/agents/${esc(p.agent)}.webp" alt=""><span>${esc(p.agent.toUpperCase())}</span>` : v(null)}</td>
         <td><input data-vb-name data-side="${side}" data-row="${p.row}" value="${esc(p.name)}" placeholder="(OCR)" class="${p.nameManual ? 'manual' : ''}"></td>
         <td>${v(p.ultimate)}</td><td>${v(p.kills)}</td><td>${v(p.deaths)}</td><td>${v(p.assists)}</td>
         <td>${v(p.weapon ? p.weapon.toUpperCase() : null)}</td><td>${v(p.shield ? SHIELD[p.shield] : null)}</td>

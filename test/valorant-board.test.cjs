@@ -210,3 +210,13 @@ test('VALORANT top HUD: timer on the old lab\'s 152 real timer crops - right (wi
   assert.ok(right >= 120, `most timers read (${right}/${n})`);
   assert.ok(wrong.filter((x) => !x.startsWith('00.00')).length <= 2, `wrong reads: ${wrong.join(' ')}`);
 });
+
+test('VALORANT top HUD: bright map behind the HUD (Derk 2026-10-07): 0 - 3, timer 0:11', () => {
+  const { HudReader } = require('../electron/valorant-hud-reader.cjs');
+  const { execFileSync } = require('node:child_process');
+  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-hud-top-0-3-0011.png')], { maxBuffer: 1e8 });
+  const lum = (x, y) => { x -= 780; y -= 20; return x < 0 || y < 0 || x >= 360 || y >= 50 ? 0 : raw[y * 360 + x]; };
+  const r = new HudReader().read(lum);
+  assert.equal(r.homeScore, 0); assert.equal(r.awayScore, 3);
+  assert.equal(r.timer?.display, '0:11'); assert.equal(r.timer?.seconds, 11);
+});

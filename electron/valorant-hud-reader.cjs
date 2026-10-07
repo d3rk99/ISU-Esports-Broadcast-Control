@@ -68,18 +68,24 @@ class HudReader {
     return ok ? r[0][0] : null;
   }
 
-  readDigits(lum, roi, kind, thr = 122) {
-    const gs = this.glyphs(lum, roi, thr);
-    if (!gs.length) return null;
-    let text = '';
-    for (const g of gs) { const d = this.digit(this.cell(lum, g, thr), kind); if (d === null) return null; text += d; }
-    return text;
+  // The HUD text is white, but the map behind it can be bright too: try cutoffs from low to high
+  // (a bright background turns into one huge blob at a low cutoff and is rejected by glyphs()),
+  // and keep the first one where every glyph matches a digit clearly.
+  readDigits(lum, roi, kind, thrs = [122, 170, 200, 225]) {
+    for (const thr of [].concat(thrs)) {
+      const gs = this.glyphs(lum, roi, thr);
+      if (!gs.length || gs.length > 4) continue;
+      let text = '';
+      for (const g of gs) { const d = this.digit(this.cell(lum, g, thr), kind); if (d === null) { text = null; break; } text += d; }
+      if (text) return text;
+    }
+    return null;
   }
 
   // -> { homeScore, awayScore, timer: { seconds, display, lowTime } | null }
   read(lum, { dx = 0, dy = 0 } = {}) {
     const at = (r) => ({ ...r, x: r.x + dx, y: r.y + dy });
-    const score = (r) => { const t = this.readDigits(lum, at(r), 'score', 150); const v = t === null ? null : Number(t); return t !== null && t.length <= 2 && v <= 30 ? v : null; };
+    const score = (r) => { const t = this.readDigits(lum, at(r), 'score', [150, 185, 210, 230]); const v = t === null ? null : Number(t); return t !== null && t.length <= 2 && v <= 30 ? v : null; };
     const t = this.readDigits(lum, at(HUD_ROIS.timer), 'timer');
     let timer = null;
     if (t && t.length === 3) { const m = Number(t[0]); const s = Number(t.slice(1)); if (m <= 2 && s <= 59 && m * 60 + s <= 140) timer = { seconds: m * 60 + s, display: `${m}:${t.slice(1)}`, lowTime: false }; }
