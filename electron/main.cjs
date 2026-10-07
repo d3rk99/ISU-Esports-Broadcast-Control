@@ -11,7 +11,7 @@ const { RocketLeagueService } = require('./rocket-league-service.cjs');
 const { ValorantWindowCapture } = require('./valorant-capture.cjs');
 const { HybridValorantWindowCapture, NativeValorantWindowCapture } = require('./valorant-native-capture.cjs');
 const { TesseractOcrEngine, isRecoverableWorkerPipeError } = require('./valorant-ocr-engine.cjs');
-const { ValorantOcrService } = require('./valorant-ocr-service.cjs');
+const { SpectateReceiver, normalizeSettings: normalizeSpectateReceiverSettings } = require('./spectate-receiver.cjs');
 const { OverwatchOcrService, normalizeSettings: normalizeOverwatchOcrSettings } = require('./overwatch-ocr-service.cjs');
 const { ValorantBoardService, normalizeSettings: normalizeValorantBoardSettings } = require('./valorant-board-service.cjs');
 const { WebSocketServer } = require('ws');
@@ -33,7 +33,7 @@ let spectatedPlayer = { name: '', station: null, side: '', team: '', score: 0, s
 const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
-let valorantOcrService;
+let spectateReceiver;
 let overwatchOcrService;
 let valorantBoardService;
 let companionApiService;
@@ -43,9 +43,6 @@ let controllerWindow = null;
 const pendingCompanionActions = new Map();
 const ROCKET_LEAGUE_CONNECTION_FIELDS = [
   'enabled', 'source', 'transport', 'host', 'tcpPort', 'webPort', 'bridgePort', 'bridgeToken', 'updateIntervalMs'
-];
-const VALORANT_OCR_SETTINGS_FIELDS = [
-  'enabled', 'source', 'windowName', 'captureBackend', 'captureFps', 'profileId', 'language', 'scoreboardMode', 'recordedVideoMode', 'debugRois', 'bridgePort', 'bridgeToken', 'roiOverrides', 'scoreboardTableOverrides', 'observerScanIntervalMs', 'observerConcurrency'
 ];
 app.setAppUserModelId('edu.isu.esports.broadcastcontrol');
 process.on('uncaughtException', (error) => {
@@ -58,42 +55,10 @@ process.on('uncaughtException', (error) => {
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 
-function findSharedValorantLoadoutTemplateRoot() {
-  const candidates = [
-    path.join(process.cwd(), 'public', 'assets', 'valorant', 'weapons', 'trained'),
-    path.join(path.dirname(app.getPath('exe')), '..', '..', 'public', 'assets', 'valorant', 'weapons', 'trained'),
-    path.join(app.getAppPath(), '..', 'public', 'assets', 'valorant', 'weapons', 'trained')
-  ];
-  for (const candidate of candidates) {
-    try {
-      const root = path.resolve(candidate);
-      const projectRoot = path.resolve(root, '..', '..', '..', '..', '..');
-      if (fs.existsSync(path.join(projectRoot, 'package.json')) && fs.existsSync(path.join(projectRoot, 'public'))) return root;
-    } catch {}
-  }
-  return '';
-}
-
 // Display key: display clients must send the same key (blank = open).
 function displayKeyPath() { return path.join(app.getPath('userData'), 'display-key.json'); }
 function readDisplayKey() { try { return String(JSON.parse(fs.readFileSync(displayKeyPath(), 'utf8')).key || '').trim(); } catch { return ''; } }
 function saveDisplayKey(key = '') { fs.writeFileSync(displayKeyPath(), JSON.stringify({ key: String(key || '').trim() }, null, 2), { encoding: 'utf8', mode: 0o600 }); }
-
-function findSharedValorantScoreTemplateRoot() {
-  const candidates = [
-    path.join(process.cwd(), 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores'),
-    path.join(path.dirname(app.getPath('exe')), '..', '..', 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores'),
-    path.join(app.getAppPath(), '..', 'public', 'assets', 'valorant', 'scoreboard', 'trained', 'scores')
-  ];
-  for (const candidate of candidates) {
-    try {
-      const root = path.resolve(candidate);
-      const projectRoot = path.resolve(root, '..', '..', '..', '..', '..', '..');
-      if (fs.existsSync(path.join(projectRoot, 'package.json')) && fs.existsSync(path.join(projectRoot, 'public'))) return root;
-    } catch {}
-  }
-  return '';
-}
 
 const MIME_TYPES = {
   '.css': 'text/css; charset=utf-8',
@@ -715,7 +680,7 @@ function serveRocketLeagueLoadoutAsset(response, requestPath) {
 function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
-  valorantOcrService?.setSpectateCandidates(spectateCandidatesFrom(nextState));
+  spectateReceiver?.setCandidates(spectateCandidatesFrom(nextState));
   overlayClients.publish(broadcastState);
   companionApiService?.publish(broadcastState);
 }
@@ -741,6 +706,17 @@ function spectateCandidatesFrom(state = {}) {
   const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live?.teams : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live?.teams : null;
   for (const side of ['home', 'away']) for (const p of live?.[side]?.players || []) if (p?.name) out.push({ name: p.name, station: null, side, team: '' });
   return out;
+}
+
+function spectateReceiverSettingsPath() { return path.join(app.getPath('userData'), 'spectate-receiver.json'); }
+function readSpectateReceiverSettings() {
+  try { return normalizeSpectateReceiverSettings(JSON.parse(fs.readFileSync(spectateReceiverSettingsPath(), 'utf8'))); } catch {}
+  return normalizeSpectateReceiverSettings();
+}
+function saveSpectateReceiverSettings(next = {}) {
+  const saved = normalizeSpectateReceiverSettings({ ...readSpectateReceiverSettings(), ...next });
+  fs.writeFileSync(spectateReceiverSettingsPath(), JSON.stringify(saved, null, 2), { encoding: 'utf8', mode: 0o600 });
+  return saved;
 }
 
 function companionSettingsPath() {
@@ -842,34 +818,6 @@ function readOverwatchOcrSettings() {
 function saveOverwatchOcrSettings(settings = {}) {
   const saved = normalizeOverwatchOcrSettings({ ...readOverwatchOcrSettings(), ...settings });
   fs.writeFileSync(overwatchOcrSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
-  return saved;
-}
-
-function valorantOcrSettingsPath() {
-  return path.join(app.getPath('userData'), 'valorant-ocr-settings.json');
-}
-
-function sanitizeValorantOcrSettings(saved) {
-  if (!saved || typeof saved !== 'object') return null;
-  return Object.fromEntries(VALORANT_OCR_SETTINGS_FIELDS
-    .filter((field) => Object.hasOwn(saved, field))
-    .map((field) => [field, saved[field]]));
-}
-
-function readValorantOcrSettings() {
-  try {
-    return sanitizeValorantOcrSettings(JSON.parse(fs.readFileSync(valorantOcrSettingsPath(), 'utf8')));
-  } catch {}
-  return null;
-}
-
-function saveValorantOcrSettings(settings = {}) {
-  const saved = Object.fromEntries(VALORANT_OCR_SETTINGS_FIELDS
-    .filter((field) => Object.hasOwn(settings, field))
-    .map((field) => [field, field === 'enabled' && Object.hasOwn(settings, 'savedEnabled')
-      ? Boolean(settings.savedEnabled)
-      : settings[field]]));
-  fs.writeFileSync(valorantOcrSettingsPath(), JSON.stringify(saved, null, 2), 'utf8');
   return saved;
 }
 
@@ -1071,28 +1019,8 @@ function registerIpc() {
     rocketLeagueService.stopSimulator();
     return rocketLeagueService.status;
   });
-  ipcMain.on('valorant-ocr:get-settings-sync', (event) => {
-    event.returnValue = readValorantOcrSettings();
-  });
-  ipcMain.handle('valorant-ocr:configure', (_event, settings = {}) => {
-    const saved = saveValorantOcrSettings(settings);
-    const status = valorantOcrService.configure(settings);
-    return { settings: saved, status };
-  });
-  ipcMain.handle('valorant-ocr:get-info', () => valorantOcrService.getInfo());
-  ipcMain.handle('valorant-ocr:list-windows', () => valorantOcrService.listWindows());
-  ipcMain.handle('valorant-ocr:capture-snapshot', () => valorantOcrService.captureSnapshot());
-  ipcMain.handle('valorant-ocr:save-loadout-template', (_event, details = {}) => valorantOcrService.saveLoadoutTemplate(details));
-  ipcMain.handle('valorant-ocr:save-score-template', (_event, details = {}) => valorantOcrService.saveScoreTemplate(details));
-  ipcMain.handle('valorant-ocr:start-timer-dataset', (_event, details = {}) => valorantOcrService.startTimerDatasetCapture(details));
-  ipcMain.handle('valorant-ocr:pause-timer-dataset', () => valorantOcrService.pauseTimerDatasetCapture());
-  ipcMain.handle('valorant-ocr:stop-timer-dataset', () => valorantOcrService.stopTimerDatasetCapture());
-  ipcMain.handle('valorant-ocr:review-timer-dataset', () => valorantOcrService.reviewTimerDataset());
-  ipcMain.handle('valorant-ocr:clear', () => valorantOcrService.clearState());
-  ipcMain.handle('valorant-ocr:set-observer-name', (_event, details = {}) => valorantOcrService.setObserverPlayerName(details));
-  ipcMain.handle('valorant-ocr:set-timeline-round', (_event, details = {}) => valorantOcrService.setObserverTimelineRound(details));
-  ipcMain.handle('valorant-ocr:start-simulator', () => valorantOcrService.startSimulator());
-  ipcMain.handle('valorant-ocr:stop-simulator', () => valorantOcrService.stopSimulator());
+  ipcMain.handle('spectate-receiver:get', () => ({ settings: readSpectateReceiverSettings(), status: spectateReceiver.getStatus(), spectated: spectatedPlayer }));
+  ipcMain.handle('spectate-receiver:configure', (_event, next = {}) => { const saved = saveSpectateReceiverSettings(next); return { settings: saved, status: spectateReceiver.configure(saved) }; });
   ipcMain.handle('valorant-board:get-settings', () => ({ settings: readValorantBoardSettings(), status: valorantBoardService.getStatus() }));
   ipcMain.handle('valorant-board:configure', (_event, settings = {}) => { const saved = saveValorantBoardSettings(settings); return { settings: saved, status: valorantBoardService.configure(saved) }; });
   ipcMain.handle('valorant-board:clear', () => { valorantBoardService.clear(); return valorantBoardService.snapshot(); });
@@ -1315,28 +1243,17 @@ app.whenReady().then(async () => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('rocket-league:status', status);
     }
   });
-  valorantOcrService = new ValorantOcrService({
-    capture: new HybridValorantWindowCapture({
-      nativeCapture: new NativeValorantWindowCapture({ nativeImage }),
-      fallbackCapture: new ValorantWindowCapture({ desktopCapturer, nativeImage })
-    }),
-    ocr: new TesseractOcrEngine(),
-    templateRoot: path.join(app.getPath('userData'), 'valorant-loadout-templates'),
-    sharedTemplateRoot: findSharedValorantLoadoutTemplateRoot(),
-    scoreTemplateRoot: path.join(app.getPath('userData'), 'valorant-score-templates'),
-    sharedScoreTemplateRoot: findSharedValorantScoreTemplateRoot(),
-    onState: (state) => {
-      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:state', state);
-    },
-    onStatus: (status) => {
-      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:status', status);
-    },
+  // Spectated player (player-POV spectator PC running the Game Bridge). Replaces the receiver
+  // the old VALORANT OCR lab used to own. Settings: userData/spectate-receiver.json.
+  spectateReceiver = new SpectateReceiver({
     onSpectated: (spectated) => {
       spectatedPlayer = { ...spectatedPlayer, ...spectated };
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('spectated:update', spectatedPlayer);
       companionApiService?.publish(broadcastState);
-    }
+    },
+    onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('spectate-receiver:status', status); }
   });
+  spectateReceiver.configure(readSpectateReceiverSettings());
   // Spectated name goes stale if the bridge stops sending: re-publish so Companion clears it.
   setInterval(() => { if (spectatedPlayer.name && Date.now() - spectatedPlayer.receivedAt > 10000) { spectatedPlayer = { ...spectatedPlayer, name: '', station: null }; companionApiService?.publish(broadcastState); } }, 3000).unref?.();
   // Overwatch scoreboard OCR shares the window-capture stack and Tesseract engine design with
@@ -1386,7 +1303,7 @@ app.on('second-instance', () => {
 
 app.on('window-all-closed', () => {
   rocketLeagueService?.stop();
-  valorantOcrService?.shutdown();
+  spectateReceiver?.stop();
   overwatchOcrService?.shutdown();
   valorantBoardService?.shutdown();
   displayManager?.stop();

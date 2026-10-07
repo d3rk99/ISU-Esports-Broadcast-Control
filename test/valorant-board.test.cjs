@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { PROFILE, alignBoard, cellRois, AgentMatcher, parseCell, readCell, BoardConsensus, emptyBoard, applySweep } = require('../electron/valorant-board-parse.cjs');
 const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
 const { board, cellImage, AGENTS, B1, B2, FIELDS } = require('./valorant-board-fixtures.cjs');
@@ -158,4 +160,53 @@ test('VALORANT names: trained model (electron/ocr-models/val.traineddata) reads 
   } finally { await ocr.close(); }
   console.log(`VALORANT names: ${right}/${total} (case-insensitive): ${got.join(' | ')}`);
   assert.ok(right >= 14, `${right}/${total}`);
+});
+
+// Derk's live test board (2026-10-07): credits 0 / 0 / 100 / 0 / 50 / 50 / 400 / 0 / 0 / 0 ; the
+// old reader took the small currency icon for a '1' (100 -> 1100, 400 -> 1400).
+test('VALORANT board: credits skip the currency icon (100 not 1100, 400 not 1400)', { timeout: 120000 }, async () => {
+  const P = require('../electron/valorant-board-parse.cjs');
+  const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
+  const { cellImage } = require('./valorant-board-fixtures.cjs');
+  const { execFileSync } = require('node:child_process');
+  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-credits-icon.png')], { maxBuffer: 1e8 });
+  const lum = (x, y) => { x -= 1180; y -= 330; return x < 0 || y < 0 || x >= 120 || y >= 410 ? 0 : raw[y * 120 + x]; };
+  const rows = [355, 389, 424, 458, 492, 587, 621, 655, 689, 723];
+  const want = [0, 0, 100, 0, 50, 50, 400, 0, 0, 0];
+  const ocr = new TesseractOcrEngine();
+  try {
+    const col = P.PROFILE.columns.credits; const got = [];
+    for (const cy of rows) {
+      const cell = { side: 'home', row: 0, field: 'credits', column: col, roi: { x: col.x + 3, y: cy - 7, w: col.w, h: 14 } };
+      got.push(await P.readCell(ocr, lum, cell, (roi, scale, thr) => cellImage(lum, roi, scale, thr)));
+    }
+    assert.deepEqual(got, want);
+  } finally { await ocr.close(); }
+});
+
+test('VALORANT top HUD: round score from the real screen (11 - 1), spike planted = no timer', () => {
+  const { HudReader } = require('../electron/valorant-hud-reader.cjs');
+  const { execFileSync } = require('node:child_process');
+  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-hud-top-11-1-spike.png')], { maxBuffer: 1e8 });
+  const lum = (x, y) => { x -= 780; y -= 20; return x < 0 || y < 0 || x >= 360 || y >= 50 ? 0 : raw[y * 360 + x]; };
+  const r = new HudReader().read(lum);
+  assert.equal(r.homeScore, 11); assert.equal(r.awayScore, 1); assert.equal(r.timer, null);
+});
+
+test('VALORANT top HUD: timer on the old lab\'s 152 real timer crops - right (within 1 s) or blank, almost never wrong', () => {
+  const { HudReader } = require('../electron/valorant-hud-reader.cjs');
+  const { execFileSync } = require('node:child_process');
+  const dir = path.join(__dirname, '..', 'public', 'assets', 'valorant', 'timer-dataset');
+  const h = new HudReader(); let right = 0; let n = 0; const wrong = [];
+  for (const d of fs.readdirSync(dir)) for (const f of fs.readdirSync(path.join(dir, d)).filter((x) => x.endsWith('.png'))) {
+    const meta = JSON.parse(fs.readFileSync(path.join(dir, d, f.replace('.png', '.json')), 'utf8'));
+    const out = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');print(im.size[0],im.size[1]);sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())`, path.join(dir, d, f)], { maxBuffer: 1e7 });
+    const nl = out.indexOf(10); const [w, hh] = out.subarray(0, nl).toString().split(' ').map(Number); const px = out.subarray(nl + 1); const r = meta.roi;
+    const lum = (x, y) => { x -= r.x; y -= r.y; return x < 0 || y < 0 || x >= w || y >= hh ? 0 : px[y * w + x]; };
+    const t = h.read(lum).timer; n += 1;
+    if (t && Math.abs(t.seconds - meta.expectedSeconds) <= 1) right += 1; else if (t) wrong.push(`${meta.expectedTimer}->${t.display}`);
+  }
+  console.log(`timer: ${right}/${n} right, wrong: ${wrong.join(' ') || 'none'}`);
+  assert.ok(right >= 120, `most timers read (${right}/${n})`);
+  assert.ok(wrong.filter((x) => !x.startsWith('00.00')).length <= 2, `wrong reads: ${wrong.join(' ')}`);
 });

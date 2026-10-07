@@ -17,7 +17,30 @@ export function mergeValorantBoardSnapshot(current, snapshot) {
 
 const v = (x) => (x === null || x === undefined || x === '' ? '<i class="vb-blank">·</i>' : esc(x));
 
-export function renderValorantBoardPanel(vb, teams = []) {
+function matchLine(m) {
+  if (!m) return '';
+  const score = Number.isFinite(m.homeScore) && Number.isFinite(m.awayScore) ? `${m.homeScore} – ${m.awayScore}` : '–';
+  const timer = m.spikePlanted ? 'SPIKE PLANTED' : m.timer?.display || '–';
+  return `<p class="vb-match">ROUND SCORE <b>${esc(score)}</b> · TIMER <b>${esc(timer)}</b><small>Read from the top of the screen; the round score fills in the match score (never goes backwards).</small></p>`;
+}
+
+// Player-POV spectator: the Game Bridge on that PC reads which player is watched and sends it
+// here; the controller turns it into the Companion variables spectated_name / spectated_station.
+function spectatePanel(sp = {}, addresses = []) {
+  const s = sp.settings || {}; const st = sp.status || {}; const who = sp.spectated || {};
+  const tone = ['connected', 'listening'].includes(st.state) ? (st.state === 'connected' ? 'ok' : '') : st.state === 'error' ? 'bad' : '';
+  return `<div class="vb-spectate">
+    <h3>SPECTATED PLAYER (player-POV spectator → Companion)</h3>
+    <div class="ow-ocr-controls">
+      <label class="rl-enable-toggle"><input type="checkbox" data-sp-cfg="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>SPECTATED PLAYER RECEIVER</b><small>For the Game Bridge on the player-view spectator PC</small></span></label>
+      <label class="field"><span>PORT</span><input type="number" min="1024" max="65535" data-sp-cfg="port" value="${Number(s.port) || 3175}"></label>
+      <label class="field bridge-key-field"><span>BRIDGE KEY</span><input data-sp-cfg="token" value="${esc(s.token || '')}" placeholder="Generate a private key"><button data-action="sp-generate-key">GENERATE</button><small>This PC: ${esc(addresses.join(' / ') || 'address unavailable')}</small></label>
+    </div>
+    <p class="ow-ocr-status is-${tone}">${esc((st.state || 'disabled').toUpperCase())} · ${esc(st.message || 'off')} · NOW: <b>${esc(who.name || '—')}</b>${who.station ? ` (station ${who.station})` : ''}</p>
+  </div>`;
+}
+
+export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = []) {
   const s = vb.settings || {}; const status = vb.status || {};
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' ? 'bad' : status.state === 'no-board' ? 'warn' : '';
   const table = ['home', 'away'].map((side, i) => {
@@ -41,8 +64,10 @@ export function renderValorantBoardPanel(vb, teams = []) {
       <label class="field"><span>CPU CORES (OCR WORKERS)</span><input type="number" min="1" max="16" data-vb-cfg="workers" value="${Number(s.workers) || 4}"></label>
       <div class="ow-ocr-buttons"><button data-action="vb-test">TEST READ</button><button data-action="vb-clear" data-confirm="Clear?">CLEAR</button></div>
     </div>
+    ${matchLine(vb.live?.match)}
     <p class="ow-ocr-status is-${tone}">${esc((status.state || 'disabled').toUpperCase())} · ${esc(status.message || 'off')}${status.sweepMs ? ` · ${status.sweepMs} ms per read` : ''}</p>
     <div class="vb-tables">${table}</div>
+    ${spectatePanel(spectate, addresses)}
   </article>`;
 }
 

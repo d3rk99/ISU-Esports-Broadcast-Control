@@ -4,8 +4,7 @@ const net = require('node:net');
 const { EventEmitter } = require('node:events');
 const WebSocket = require('ws');
 const { bridgeKeyMatches, keepAlive } = require('../electron/bridge-link.cjs');
-const { ValorantOcrService, normalizeSettings } = require('../electron/valorant-ocr-service.cjs');
-const { createGameEnvelope } = require('../electron/game-bridge.cjs');
+const { SpectateReceiver } = require('../electron/spectate-receiver.cjs');
 
 function reservePort() {
   return new Promise((resolve, reject) => {
@@ -28,58 +27,29 @@ function openBridge(port, token = 'bridge-key') {
   });
 }
 
-// A real, fully-shaped VALORANT state (same shape the Bridge forwards), tagged with a marker.
-const baseState = new ValorantOcrService().normalizedState();
-
-function sendState(socket, sequence, marker) {
-  socket.send(JSON.stringify(createGameEnvelope('valorant', { ...JSON.parse(JSON.stringify(baseState)), marker }, sequence)));
-}
-
-test('valorant receiver accepts a restarted Bridge whose sequence starts over at 1', async (t) => {
+test('spectate receiver: wrong key rejected; right key gets the candidate names and delivers spectated packets', async (t) => {
   const port = await reservePort();
-  const received = [];
-  const service = new ValorantOcrService({ onState: () => {} });
-  const originalOnState = service.onState;
-  service.onState = (state) => { received.push(service.remoteState?.marker); originalOnState?.(state); };
-  service.configure(normalizeSettings({ enabled: true, source: 'remote', bridgePort: port, bridgeToken: 'bridge-key' }));
-  t.after(() => service.stop());
+  const got = [];
+  const rx = new SpectateReceiver({ onSpectated: (s) => got.push(s) });
+  t.after(() => rx.stop());
+  rx.setCandidates([{ name: 'Sn0wfal', station: 1, side: 'home' }, { name: '', station: 2 }]);
+  rx.configure({ enabled: true, port, token: 'bridge-key' });
   await wait(100);
-
-  // First Bridge session gets far into the match.
-  const first = await openBridge(port);
-  sendState(first, 4811, 'before-restart-a');
-  sendState(first, 4812, 'before-restart-b');
-  await wait(100);
-  assert.equal(service.remoteState.marker, 'before-restart-b');
-  first.terminate();
-  await wait(100);
-
-  // Bridge app restarts: its counter is back to 1.
-  const second = await openBridge(port);
-  sendState(second, 1, 'after-restart');
-  await wait(100);
-  assert.equal(service.remoteState.marker, 'after-restart', 'data after a Bridge restart must not be dropped');
-
-  // Within one connection, stale/out-of-order packets are still ignored.
-  sendState(second, 3, 'newer');
-  sendState(second, 2, 'older-late-packet');
-  await wait(100);
-  assert.equal(service.remoteState.marker, 'newer');
-  second.terminate();
-});
-
-test('valorant receiver still rejects a wrong bridge key', async (t) => {
-  const port = await reservePort();
-  const service = new ValorantOcrService({ onState: () => {} });
-  service.configure(normalizeSettings({ enabled: true, source: 'remote', bridgePort: port, bridgeToken: 'bridge-key' }));
-  t.after(() => service.stop());
-  await wait(100);
-  const code = await new Promise((resolve) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${port}/game-bridge?token=wrong-key&game=valorant`);
-    socket.on('close', (closeCode) => resolve(closeCode));
-    socket.on('error', () => {});
-  });
-  assert.equal(code, 1008);
+  const bad = new WebSocket(`ws://127.0.0.1:${port}/game-bridge?token=nope`);
+  const code = await new Promise((r) => bad.on('close', (c) => r(c)));
+  assert.equal(code, 1008, 'wrong key closed');
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/game-bridge?token=bridge-key&game=valorant`);
+  const msgs = [];
+  ws.on('message', (raw) => msgs.push(JSON.parse(String(raw))));
+  await new Promise((r) => ws.on('open', r)); await wait(100);
+  const cands = msgs.find((m) => m.type === 'spectate-candidates');
+  assert.deepEqual(cands.candidates.map((c) => c.name), ['Sn0wfal'], 'blank names dropped');
+  rx.setCandidates([{ name: 'nyv', station: 8, side: 'away' }]); await wait(80);
+  assert.equal(msgs.filter((m) => m.type === 'spectate-candidates').at(-1).candidates[0].name, 'nyv', 'changes pushed live');
+  ws.send(JSON.stringify({ type: 'spectated', game: 'valorant', version: 1, sequence: 1, payload: { name: 'nyv', station: 8, side: 'away' } }));
+  await wait(80);
+  assert.equal(got.at(-1).name, 'nyv'); assert.equal(got.at(-1).station, 8); assert.ok(got.at(-1).receivedAt > 0);
+  ws.close();
 });
 
 test('keepAlive terminates a link that stops answering pings, and leaves a healthy one alone', () => {

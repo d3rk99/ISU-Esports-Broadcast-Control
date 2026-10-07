@@ -86,12 +86,12 @@ app.whenReady().then(() => {
     return forwarder.getStatus();
   });
   ipcMain.handle('bridge:list-windows', () => forwarder.listWindows());
-  ipcMain.handle('bridge:capture-snapshot', () => forwarder.captureSnapshot());
-  ipcMain.handle('bridge:clear-ocr', () => forwarder.clearOcrState());
   ipcMain.handle('bridge:spectate-snapshot', async (_event, config) => {
-    if (config) { saveConfig(config); forwarder.settings = forwarder.settings || null; }
-    if (config && !forwarder.settings) forwarder.settings = require('./game-bridge.cjs').normalizeBridgeSettings(config);
-    else if (config) forwarder.settings.spectate = require('./game-bridge.cjs').normalizeSpectateSettings(config.spectate, config.game);
+    if (config) {
+      saveConfig(config);
+      const { normalizeBridgeSettings } = require('./game-bridge.cjs');
+      forwarder.settings = { ...(forwarder.settings || {}), ...normalizeBridgeSettings(config) };
+    }
     return forwarder.spectateSnapshot();
   });
   ipcMain.handle('bridge:start-simulator', (_event, config) => {

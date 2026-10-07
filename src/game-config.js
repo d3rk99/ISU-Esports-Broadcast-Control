@@ -680,23 +680,8 @@ export function createGameState(gameKey) {
         playerStats: {}
       }
     } : null,
+    // Round timer + round history for the VALORANT HUD (filled by the scoreboard reader).
     valorantOcr: gameKey === 'valorant' ? {
-      enabled: false,
-      source: 'local',
-      windowName: 'VALORANT',
-      captureBackend: 'auto',
-      captureFps: 8,
-      profileId: '1920x1080-en-5v5',
-      language: 'eng',
-      scoreboardMode: 'manual',
-      recordedVideoMode: false,
-      debugRois: true,
-      bridgePort: 3175,
-      bridgeToken: '',
-      roiOverrides: {},
-      scoreboardTableOverrides: {},
-      observerScanIntervalMs: 25,
-      observerConcurrency: 4,
       live: {
         status: 'disabled',
         message: 'VALORANT OCR is off',

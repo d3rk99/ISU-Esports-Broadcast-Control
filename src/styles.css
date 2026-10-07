@@ -772,3 +772,9 @@ input[type="range"]:focus { border-color: #35353a; }
 .vb-team td input { width: 120px; padding: 3px 5px; border: 1px solid #2c323b; border-radius: 4px; background: #0e1014; color: inherit; font: inherit; }
 .vb-team td input.manual { border-color: var(--orange); }
 .vb-blank { color: #4a525d; font-style: normal; }
+/* VALORANT reader: top-HUD line + spectated-player receiver */
+.vb-match { margin: 8px 0; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: #aeb9c4; }
+.vb-match b { color: #fff; margin-right: 10px; }
+.vb-match small { display: block; font-weight: 600; letter-spacing: 0; opacity: .7; }
+.vb-spectate { margin-top: 14px; padding-top: 12px; border-top: 1px solid #262a31; }
+.vb-spectate h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .12em; color: #8a94a3; }

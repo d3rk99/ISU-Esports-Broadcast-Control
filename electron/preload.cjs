@@ -13,7 +13,6 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   platform: process.platform,
   versions: Object.freeze({ electron: process.versions.electron }),
   savedRocketLeagueConnection: ipcRenderer.sendSync('rocket-league:get-saved-connection-sync'),
-  savedValorantOcrSettings: ipcRenderer.sendSync('valorant-ocr:get-settings-sync'),
   savedCompanionSettings: ipcRenderer.sendSync('companion:get-settings-sync'),
   savedOutputDisplaySettings: ipcRenderer.sendSync('overlay:get-output-display-settings-sync'),
   overlayBaseUrl: 'http://127.0.0.1:3174',
@@ -38,21 +37,10 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   setRocketLeagueUpdateInterval: (value) => ipcRenderer.invoke('rocket-league:set-update-interval', value),
   startRocketLeagueSimulator: () => ipcRenderer.invoke('rocket-league:start-simulator'),
   stopRocketLeagueSimulator: () => ipcRenderer.invoke('rocket-league:stop-simulator'),
-  configureValorantOcr: (settings) => ipcRenderer.invoke('valorant-ocr:configure', settings),
-  getValorantOcrInfo: () => ipcRenderer.invoke('valorant-ocr:get-info'),
-  listValorantWindows: () => ipcRenderer.invoke('valorant-ocr:list-windows'),
-  captureValorantOcrSnapshot: () => ipcRenderer.invoke('valorant-ocr:capture-snapshot'),
-  saveValorantLoadoutTemplate: (details) => ipcRenderer.invoke('valorant-ocr:save-loadout-template', details),
-  saveValorantScoreTemplate: (details) => ipcRenderer.invoke('valorant-ocr:save-score-template', details),
-  startValorantTimerDataset: (details) => ipcRenderer.invoke('valorant-ocr:start-timer-dataset', details),
-  pauseValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:pause-timer-dataset'),
-  stopValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:stop-timer-dataset'),
-  reviewValorantTimerDataset: () => ipcRenderer.invoke('valorant-ocr:review-timer-dataset'),
-  clearValorantOcrState: () => ipcRenderer.invoke('valorant-ocr:clear'),
-  setValorantObserverName: (details) => ipcRenderer.invoke('valorant-ocr:set-observer-name', details),
-  setValorantTimelineRound: (details) => ipcRenderer.invoke('valorant-ocr:set-timeline-round', details),
-  startValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:start-simulator'),
-  stopValorantOcrSimulator: () => ipcRenderer.invoke('valorant-ocr:stop-simulator'),
+  getSpectateReceiver: () => ipcRenderer.invoke('spectate-receiver:get'),
+  configureSpectateReceiver: (next) => ipcRenderer.invoke('spectate-receiver:configure', next),
+  onSpectated: (callback) => { const l = (_e, p) => callback(p); ipcRenderer.on('spectated:update', l); return () => ipcRenderer.removeListener('spectated:update', l); },
+  onSpectateReceiverStatus: (callback) => { const l = (_e, p) => callback(p); ipcRenderer.on('spectate-receiver:status', l); return () => ipcRenderer.removeListener('spectate-receiver:status', l); },
   getValorantBoardSettings: () => ipcRenderer.invoke('valorant-board:get-settings'),
   configureValorantBoard: (settings) => ipcRenderer.invoke('valorant-board:configure', settings),
   clearValorantBoard: () => ipcRenderer.invoke('valorant-board:clear'),
@@ -85,16 +73,6 @@ contextBridge.exposeInMainWorld('isuDesktop', {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('rocket-league:status', listener);
     return () => ipcRenderer.removeListener('rocket-league:status', listener);
-  },
-  onValorantOcrState: (callback) => {
-    const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('valorant-ocr:state', listener);
-    return () => ipcRenderer.removeListener('valorant-ocr:state', listener);
-  },
-  onValorantOcrStatus: (callback) => {
-    const listener = (_event, payload) => callback(payload);
-    ipcRenderer.on('valorant-ocr:status', listener);
-    return () => ipcRenderer.removeListener('valorant-ocr:status', listener);
   },
   onDisplayStatus: (callback) => {
     const listener = (_event, payload) => callback(payload);

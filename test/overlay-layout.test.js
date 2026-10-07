@@ -39,7 +39,8 @@ test('Valorant native-fit scoreboard stays in the central HUD corridor with stag
   assert.match(overlayCss, /\.val-native-fit \.val-team \{[^}]*animation: none/s);
   assert.match(overlayCss, /\.val-native-fit \.val-center strong \{ display: none; \}/);
   assert.match(overlayCss, /\.val-native-fit\.spike-planted \.val-center \{ background: transparent/);
-  assert.match(overlayJs, /setText\('#val-timer', ''\)/);
+  // timer comes from the scoreboard reader's top-HUD read, blank while the spike is planted
+  assert.match(overlayJs, /setText\('#val-timer', live\?\.match\?\.spikePlanted \? '' : \(live\?\.match\?\.timerDisplay \|\| ''\)\)/);
 });
 
 test('Valorant game alignment output can target a selected screen at 1080p or 1440p', () => {

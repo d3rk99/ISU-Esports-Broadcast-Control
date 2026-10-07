@@ -1,7 +1,6 @@
 const { WebSocket } = require('ws');
 const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } = require('./rocket-league-service.cjs');
-const { ValorantOcrService, normalizeSettings: normalizeValorantSettings } = require('./valorant-ocr-service.cjs');
 const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS } = require('./spectate-tracker.cjs');
 
 const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant']);
@@ -20,10 +19,9 @@ function normalizeBridgeSettings(settings = {}) {
     bridgePort: safePort(settings.bridgePort),
     bridgeToken: String(settings.bridgeToken || '').trim(),
     rocketLeague: normalizeRocketLeagueSettings({ ...(settings.rocketLeague || settings), enabled: true, source: 'local' }),
-    valorant: normalizeValorantSettings({ ...(settings.valorant || settings), enabled: true, source: 'local' }),
-    // Spectated-player tracker (player POV spectator PC): reads the small name of the player being
-    // watched; the controller turns it into a Companion variable for the camera switcher.
-    spectate: normalizeSpectateSettings(settings.spectate, game)
+    // VALORANT: the scoreboard is read on the Graphics PC (scoreboard reader); on a Game PC the
+    // bridge only tracks the spectated player (player-POV spectator), so it is always on there.
+    spectate: { ...normalizeSpectateSettings(settings.spectate, game), enabled: game !== 'rocketleague' }
   };
 }
 
@@ -69,18 +67,10 @@ class UniversalGameBridge {
       onStatus: (status) => this.reportSource(status)
     });
     this.capture = capture;
+    this.ocr = ocr;
     this.spectate = new SpectateTracker({ ocr });
     this.spectateTimer = null;
     this.spectateStatus = { state: 'off', message: 'Spectated-player tracking is off' };
-    this.valorant = new ValorantOcrService({
-      capture,
-      ocr,
-      onState: (state) => {
-        this.onOcrState(state);
-        this.forward('valorant', state);
-      },
-      onStatus: (status) => this.reportSource(status)
-    });
   }
 
   start(settings = {}) {
@@ -114,9 +104,8 @@ class UniversalGameBridge {
   startGameSource() {
     this.stopSpectate();
     // Rocket League reports the spectated player in its API: no OCR tracker there.
-    if (this.settings.spectate?.enabled && this.settings.game !== 'rocketleague') { this.rocketLeague.stop(); this.valorant.stop(); this.startSpectate(); return; }
-    if (this.settings.game === 'valorant') this.valorant.configure(this.settings.valorant);
-    else this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
+    if (this.settings.game !== 'rocketleague') { this.rocketLeague.stop(); this.startSpectate(); return; }
+    this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
   }
 
   startSpectate() {
@@ -162,7 +151,6 @@ class UniversalGameBridge {
     clearTimeout(this.remoteRetry);
     this.remoteRetry = null;
     this.rocketLeague.stop();
-    this.valorant.stop();
     this.stopSpectate?.();
     if (this.remote) {
       this.remote.removeAllListeners?.();
@@ -174,7 +162,7 @@ class UniversalGameBridge {
 
   async shutdown() {
     this.stop();
-    await this.valorant.shutdown();
+    try { await this.ocr?.close?.(); } catch {}
   }
 
   connectRemote() {
@@ -190,7 +178,7 @@ class UniversalGameBridge {
       if (generation !== this.generation) return socket.terminate?.();
       // Detect a dead link (cable pull / Wi-Fi drop) and fall into the normal 3 s reconnect.
       keepAlive(socket);
-      this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT' : 'Rocket League'}` };
+      this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT (spectated player)' : 'Rocket League'}` };
       this.report();
     });
     // The controller sends the names to look for (rosters + scoreboard) whenever they change.
@@ -242,29 +230,16 @@ class UniversalGameBridge {
     };
   }
 
-  listWindows() {
-    return this.valorant.listWindows();
+  async listWindows() {
+    if (typeof this.capture?.listWindows === 'function') return this.capture.listWindows();
+    return [];
   }
 
-  captureSnapshot() {
-    if (this.settings?.game !== 'valorant') throw new Error('Debug capture is only available in VALORANT mode');
-    return this.valorant.captureSnapshot();
-  }
-
-  clearOcrState() {
-    return this.valorant.clearState();
-  }
-
-  startSimulator() {
-    if (this.settings?.game === 'valorant') return this.valorant.startSimulator();
-    return this.rocketLeague.startSimulator();
-  }
+  startSimulator() { return this.rocketLeague.startSimulator(); }
 
   stopSimulator() {
     if (!this.settings) return null;
-    if (this.settings.game === 'valorant') this.valorant.stopSimulator();
-    else this.rocketLeague.stopSimulator();
-    if (this.settings.game === 'valorant') return this.valorant.configure(this.settings.valorant);
+    this.rocketLeague.stopSimulator();
     return this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
   }
 }
