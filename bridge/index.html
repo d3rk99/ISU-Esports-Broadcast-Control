@@ -89,6 +89,8 @@
       document.documentElement.style.setProperty('--game', game === 'valorant' ? '#ff4655' : '#2d8cff');
       $('#rocketleagueSettings').classList.toggle('hidden', game !== 'rocketleague');
       $('#valorantSettings').classList.toggle('hidden', game !== 'valorant');
+      // Rocket League sends the spectated player in its own API, so no name tracker there.
+      $('#spectateSettings').classList.toggle('hidden', game === 'rocketleague');
       $('#setupNote').innerHTML = game === 'valorant'
         ? '<b>SETUP:</b> On the Graphics PC, choose VALORANT, set OCR Data Source to Game PC Bridge, and use the same port and key. Use Recorded Video Test Mode for YouTube/replays only. Native capture remains live when the game is behind other windows.'
         : '<b>SETUP:</b> On the Graphics PC, choose Rocket League, set Data Source to Game PC Bridge, and use the same port and key.';

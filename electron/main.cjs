@@ -26,6 +26,7 @@ const { OverlayEventHub } = require('./overlay-events.cjs');
 const overlayClients = new OverlayEventHub({
   onDrop: ({ buffered }) => recordDiagnostic('overlay-client-dropped', `Dropped a stalled overlay viewer with ${Math.round(buffered / 1024)} KB unsent; it will reconnect`)
 });
+const { rocketLeagueSpectated } = require('./spectate-tracker.cjs');
 let broadcastState = {};
 // Who the player-POV spectator is watching (from the Game Bridge's spectate tracker).
 let spectatedPlayer = { name: '', station: null, side: '', team: '', score: 0, since: 0, receivedAt: 0, game: '' };
@@ -719,6 +720,13 @@ function publishBroadcastState(nextState) {
   companionApiService?.publish(broadcastState);
 }
 
+// Rocket League exposes the spectated player in its own Stats API (Game.Target), so it needs no
+// OCR tracker: take the name from the live feed and find that player's roster station. Other
+// games use the Game Bridge's spectate tracker (spectatedPlayer).
+function currentSpectated() {
+  return broadcastState?.selectedGame === 'rocketleague' ? rocketLeagueSpectated(broadcastState) : spectatedPlayer;
+}
+
 // Every gamertag the spectate tracker may report: both teams' Varsity + JV rosters (with their
 // stage station) plus names the scoreboard reader saw this map.
 function spectateCandidatesFrom(state = {}) {
@@ -1281,7 +1289,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   companionApiService = new CompanionApiService({
     getState: () => broadcastState,
-    getStageStatus: () => ({ ...(displayManager?.status() || {}), spectated: spectatedPlayer }),
+    getStageStatus: () => ({ ...(displayManager?.status() || {}), spectated: currentSpectated() }),
     dispatchAction: dispatchCompanionAction,
     dispatchStageAction: dispatchCompanionStageAction,
     onDiagnostic: recordDiagnostic

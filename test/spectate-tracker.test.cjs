@@ -53,3 +53,19 @@ test('spectate: a new player needs 3 of 4 sweeps; one bad frame never flips it; 
   for (let i = 0; i < 15; i += 1) step(null);
   assert.equal(t.snapshot().name, '', 'nothing readable for a while = nobody');
 });
+
+test('spectate: Rocket League uses the Stats API target (no OCR) -> roster station, side, team', () => {
+  const { rocketLeagueSpectated } = require('../electron/spectate-tracker.cjs');
+  const state = (live) => ({ selectedGame: 'rocketleague', games: { rocketleague: {
+    teams: [{ name: 'IDAHO STATE' }, { name: 'BOISE STATE' }],
+    rosters: { varsity: [{ handle: 'D3RK99', stageStation: 2 }], jv: [{ handle: 'JVGuy', stageStation: 6 }] },
+    awayRosters: { varsity: [{ handle: 'Bronco', stageStation: 9 }] },
+    rocketLeague: { blueTeam: 0, live: { status: 'connected', dataAgeMs: 100, ...live } } } } });
+  assert.deepEqual((({ name, station, side, team }) => ({ name, station, side, team }))(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99' }))), { name: 'D3RK99', station: 2, side: 'home', team: 'IDAHO STATE' });
+  assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'JVGuy' })).station, 6, 'JV roster too');
+  assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'Bronco' })).side, 'away');
+  const stranger = rocketLeagueSpectated(state({ spectatedPlayer: 'Rando', players: [{ name: 'Rando', teamNum: 1 }] }));
+  assert.equal(stranger.station, null); assert.equal(stranger.side, 'away', 'side from the RL team number');
+  assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99', replay: true })).name, '', 'replay = nobody');
+  assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99', status: 'disconnected' })).name, '', 'no feed = nobody');
+});

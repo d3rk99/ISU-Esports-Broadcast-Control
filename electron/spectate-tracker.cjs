@@ -158,4 +158,27 @@ class SpectateTracker {
   clear() { this.history = []; this.current = null; this.lastSeenAt = 0; }
 }
 
-module.exports = { SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };
+// Rocket League: the Stats API names the spectated player (Game.Target) -> roster station.
+function rocketLeagueSpectated(state = {}) {
+  const game = state.games?.rocketleague || {};
+  const live = game.rocketLeague?.live || {};
+  const name = String(live.spectatedPlayer || '').trim();
+  const fresh = ['connected', 'simulating'].includes(live.status) && (live.dataAgeMs ?? 0) < 10000;
+  if (!name || !fresh || live.replay) return { name: '', station: null, side: '', team: '', receivedAt: Date.now(), game: 'rocketleague' };
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  let hit = null;
+  for (const [side, rosters, team] of [['home', game.rosters, game.teams?.[0]], ['away', game.awayRosters, game.teams?.[1]]]) {
+    for (const key of ['varsity', 'jv']) for (const p of rosters?.[key] || []) {
+      if (!hit && [p?.handle, p?.name].some((n) => norm(n) && norm(n) === norm(name))) hit = { station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '' };
+    }
+  }
+  // Not in a roster: still give the side from the RL team number (blue/orange mapped to home/away).
+  if (!hit) {
+    const player = (live.players || []).find((p) => p.name === name);
+    const blue = Number(game.rocketLeague?.blueTeam) || 0;
+    const teamIndex = player ? (Number(player.teamNum) === 0 ? blue : 1 - blue) : -1;
+    hit = { station: null, side: teamIndex === 0 ? 'home' : teamIndex === 1 ? 'away' : '', team: game.teams?.[teamIndex]?.name || '' };
+  }
+  return { name, ...hit, receivedAt: Date.now(), game: 'rocketleague' };
+}
+module.exports = { rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };

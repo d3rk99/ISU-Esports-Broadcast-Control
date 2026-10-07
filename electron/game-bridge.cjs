@@ -113,7 +113,8 @@ class UniversalGameBridge {
   // this PC follows player POVs, so only the spectated-name tracker runs.
   startGameSource() {
     this.stopSpectate();
-    if (this.settings.spectate?.enabled) { this.rocketLeague.stop(); this.valorant.stop(); this.startSpectate(); return; }
+    // Rocket League reports the spectated player in its API: no OCR tracker there.
+    if (this.settings.spectate?.enabled && this.settings.game !== 'rocketleague') { this.rocketLeague.stop(); this.valorant.stop(); this.startSpectate(); return; }
     if (this.settings.game === 'valorant') this.valorant.configure(this.settings.valorant);
     else this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
   }
