@@ -919,7 +919,23 @@ function resetValorantRoundHistory() {
   }));
 }
 
-function markValorantRoundWinner(roundNumber, winnerRole) {
+// Teams swap sides after round 12 (and every round in overtime), so the colour a round is drawn in
+// depends on WHO won and WHEN: home starts on the first-half colour (teal / 'defense'), away on
+// coral / 'attack', and they trade after the half. We store the winning team (home/away) and
+// derive the colour from the round number.
+function valorantRoundSwapped(round) {
+  const r = Number(round) || 1;
+  if (r <= 12) return false;
+  if (r <= 24) return true;
+  return (r - 25) % 2 === 1;
+}
+function valorantRoleFor(winnerSide, round) {
+  if (winnerSide !== 'home' && winnerSide !== 'away') return null;
+  const homeRole = valorantRoundSwapped(round) ? 'attack' : 'defense';
+  return winnerSide === 'home' ? homeRole : (homeRole === 'defense' ? 'attack' : 'defense');
+}
+
+function markValorantRoundWinner(roundNumber, winnerSide) {
   const timeline = ensureValorantRoundTimeline();
   const index = Math.max(0, Math.min(23, Math.round(Number(roundNumber) || 1) - 1));
   const existing = {
@@ -927,9 +943,11 @@ function markValorantRoundWinner(roundNumber, winnerRole) {
     ...(timeline.rounds[index] || {})
   };
   if (existing.manual) return;
-  const winnerRow = winnerRole === 'defense' ? 'top' : winnerRole === 'attack' ? 'bottom' : null;
+  const winnerRole = valorantRoleFor(winnerSide, index + 1);
+  const winnerRow = winnerSide === 'home' ? 'top' : winnerSide === 'away' ? 'bottom' : null;
   timeline.rounds[index] = {
     ...existing,
+    winnerSide: winnerSide === 'home' || winnerSide === 'away' ? winnerSide : null,
     winnerRow,
     winnerRole,
     method: null,
@@ -949,14 +967,14 @@ function syncValorantRoundHistoryFromScore(previousHome, previousAway, nextHome,
     refreshValorantTimelineCurrentRound(nextHome, nextAway);
     return;
   }
-  const winnerRole = homeDelta > 0 && awayDelta === 0
-    ? 'defense'
+  const winnerSide = homeDelta > 0 && awayDelta === 0
+    ? 'home'
     : awayDelta > 0 && homeDelta === 0
-      ? 'attack'
+      ? 'away'
       : null;
-  if (winnerRole) {
+  if (winnerSide) {
     for (let round = previousTotal + 1; round <= nextTotal; round += 1) {
-      markValorantRoundWinner(round, winnerRole);
+      markValorantRoundWinner(round, winnerSide);
     }
   }
   refreshValorantTimelineCurrentRound(nextHome, nextAway);
