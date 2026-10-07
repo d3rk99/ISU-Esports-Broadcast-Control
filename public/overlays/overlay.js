@@ -592,7 +592,7 @@
       ? Number(teams[1].detailScore)
       : trustedValorantScore(live, 'away', teams[1]?.score);
     const roundNumber = valorantRoundNumber(live, homeScore, awayScore);
-    hud.classList.remove('spike-planted');
+    hud.classList.toggle('spike-planted', Boolean(live?.match?.spikePlanted));
     hud.classList.toggle('sides-swapped', valorantSidesSwapped(roundNumber));
     hud.dataset.homeName = teams[0]?.name || 'HOME';
     hud.dataset.awayName = teams[1]?.name || 'AWAY';
@@ -608,7 +608,8 @@
     renderValorantSeriesDots('#val-home-series', teams[0]?.score, valorantSeriesDots);
     renderValorantSeriesDots('#val-away-series', teams[1]?.score, valorantSeriesDots);
     setText('#val-round-label', `ROUND ${roundNumber}`);
-    setText('#val-timer', '');
+    // Round timer from the scoreboard reader's top-HUD read (blank while the spike is planted).
+    setText('#val-timer', live?.match?.spikePlanted ? '' : (live?.match?.timerDisplay || ''));
     setText('#val-series-label', `${selectedGame === 'valorant' ? 'MAP' : 'GAME'} ${(game.activeMap || 0) + 1} / ${game.match?.format || 'BEST OF 3'}`);
     setText('#val-map-name', activeMap?.map || 'MAP TBD');
     setText('#val-map-detail', `MAP ${(game.activeMap || 0) + 1} OF ${Math.max(1, Math.min(3, Number(game.seriesLength) || 3))}`);

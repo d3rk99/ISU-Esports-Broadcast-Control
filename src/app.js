@@ -2069,6 +2069,14 @@ function publishValorantBoard() {
 window.isuDesktop?.getValorantBoardSettings?.().then((info) => { valorantBoard = { ...valorantBoard, ...info }; publishValorantBoard(); }).catch(() => {});
 window.isuDesktop?.onValorantBoardState?.((snapshot) => {
   valorantBoard = mergeValorantBoardSnapshot(valorantBoard, snapshot);
+  // Top HUD from the reader: round score -> current map score + round history (same safety rules
+  // the old lab used: never goes backwards, a big jump from 0-0 is ignored), timer -> overlay.
+  const m = snapshot?.match;
+  if (m && state.games.valorant) {
+    const ocr = state.games.valorant.valorantOcr;
+    ocr.live = { ...(ocr.live || {}), match: { timerSeconds: m.timer?.seconds ?? null, timerDisplay: m.timer?.display || '', lowTime: Boolean(m.timer?.lowTime), spikePlanted: Boolean(m.spikePlanted), updatedAt: m.updatedAt || 0 } };
+    if (Number.isFinite(m.homeScore) && Number.isFinite(m.awayScore) && syncValorantOcrScores({ teams: { home: { score: m.homeScore }, away: { score: m.awayScore } } })) commit(() => {}, `Round score ${m.homeScore}-${m.awayScore}`);
+  }
   publishValorantBoard();
   // Same as Overwatch: board agents/roles flow into the roster by gamertag, empty slots filled.
   const game = state.games.valorant;

@@ -5,6 +5,7 @@
 // through a consensus gate so one bad read never shows. Uses the shared window capture and
 // Tesseract engine. The controller writes the result to state.games.valorant.valorantBoard.
 const os = require('node:os');
+const { HudReader } = require('./valorant-hud-reader.cjs');
 const { PROFILE, SIDES, alignBoard, cellRois, readCell, AgentMatcher, GearMatcher, BoardConsensus, emptyBoard, applySweep } = require('./valorant-board-parse.cjs');
 
 const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
@@ -29,6 +30,11 @@ class ValorantBoardService {
     this.timer = null; this.running = false; this.nameOverrides = new Map();
     try { this.agents = new AgentMatcher(); } catch (error) { this.agents = null; this.agentError = error.message; }
     try { this.gear = new GearMatcher(); } catch (error) { this.gear = null; this.gearError = error.message; }
+    // Top HUD: round score + round timer (replaces the old OCR lab). Score needs 2 matching
+    // reads in a row; the timer is passed through as read (null = spike planted / not sure).
+    try { this.hud = new HudReader(); } catch (error) { this.hud = null; this.hudError = error.message; }
+    this.match = { homeScore: null, awayScore: null, timer: null, spikePlanted: false, updatedAt: 0 };
+    this.scoreVotes = { home: [], away: [] };
   }
 
   configure(next = {}) {
@@ -59,7 +65,9 @@ class ValorantBoardService {
     if (!this.settings.enabled) this.setStatus('disabled', 'VALORANT scoreboard OCR is off');
   }
 
-  clear() { this.board = emptyBoard(); this.consensus = new BoardConsensus(); this.nameOverrides = new Map(); this.onState(this.snapshot()); }
+  clear() {
+    this.match = { homeScore: null, awayScore: null, timer: null, spikePlanted: false, updatedAt: 0 };
+    this.scoreVotes = { home: [], away: [] }; this.board = emptyBoard(); this.consensus = new BoardConsensus(); this.nameOverrides = new Map(); this.onState(this.snapshot()); }
 
   // Operator-set name for one slot; wins over OCR until cleared (empty name).
   setPlayerName({ side, row, name } = {}) {
@@ -90,9 +98,11 @@ class ValorantBoardService {
       if (typeof this.capture.luminance !== 'function') throw new Error('Capture has no pixel access');
       const lum = (x, y) => this.capture.luminance(frame, x, y);
       const rgb = typeof this.capture.rgb === 'function' ? (x, y) => this.capture.rgb(frame, x, y) : null;
+      // Top HUD first: score and timer are visible with or without the Tab board.
+      const matchChanged = this.readHud(lum);
       const align = alignBoard(lum);
       this.lastAlign = align;
-      if (!align.found) { this.setStatus('no-board', 'Window found but no scoreboard visible (is Tab open on Observer 3?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1 }); return false; }
+      if (!align.found) { if (matchChanged) this.onState(this.snapshot()); this.setStatus('no-board', 'Window found but no scoreboard visible (is Tab open on Observer 3?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1 }); return false; }
       const cells = cellRois(PROFILE, align).filter((c) => !(c.field === 'name' && this.nameOverrides.has(`${c.side}:${c.row}`)));
       this.ocr.observerConcurrency = this.settings.workers;
       const reads = new Array(cells.length); let next = 0; const make = this.makeImage(frame);
@@ -111,12 +121,28 @@ class ValorantBoardService {
       const changed = applySweep(this.board, this.consensus, reads, this.now());
       const seen = reads.filter((r) => r.value !== null).length;
       this.setStatus('reading', `Reading ${seen}/${reads.length} cells · board ${align.dx >= 0 ? '+' : ''}${align.dx}/${align.dy >= 0 ? '+' : ''}${align.dy} px`, { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
-      if (changed) this.onState(this.snapshot());
-      return changed;
+      if (changed || matchChanged) this.onState(this.snapshot());
+      return changed || matchChanged;
     } finally { this.running = false; }
   }
 
-  snapshot() { return { ...JSON.parse(JSON.stringify(this.board)), status: this.getStatus(), align: this.lastAlign ? { dx: this.lastAlign.dx, dy: this.lastAlign.dy, found: this.lastAlign.found } : null }; }
+  readHud(lum) {
+    if (!this.hud) return false;
+    const r = this.hud.read(lum);
+    const before = JSON.stringify(this.match);
+    for (const side of ['home', 'away']) {
+      const v = r[`${side}Score`]; const votes = this.scoreVotes[side];
+      votes.push(v); if (votes.length > 2) votes.shift();
+      if (v !== null && votes.length === 2 && votes[0] === v) this.match[`${side}Score`] = v;
+    }
+    // Score digits visible but no timer digits = the spike icon is up.
+    this.match.timer = r.timer;
+    this.match.spikePlanted = !r.timer && r.homeScore !== null && r.awayScore !== null;
+    if (JSON.stringify(this.match) !== before) { this.match.updatedAt = this.now(); return true; }
+    return false;
+  }
+
+  snapshot() { return { ...JSON.parse(JSON.stringify(this.board)), match: { ...this.match }, status: this.getStatus(), align: this.lastAlign ? { dx: this.lastAlign.dx, dy: this.lastAlign.dy, found: this.lastAlign.found } : null }; }
   async shutdown() { this.settings.enabled = false; this.stop(); }
 }
 

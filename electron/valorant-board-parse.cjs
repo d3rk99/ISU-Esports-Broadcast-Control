@@ -122,6 +122,30 @@ function cellRois(profile = PROFILE, align = null) {
   return cells;
 }
 
+// Credits: the cell starts with the small currency icon (a hollow square, shorter than the
+// digits) and the number follows it, left-aligned, so the icon moves with the number's width.
+// OCR read that icon as a '1' ('¤100' -> 1100, '¤400' -> 1400). Find the ink runs, drop the
+// icon (leading run clearly shorter than the digits) and tighten the box to the digits only.
+function creditsRoi(lum, roi, { thr = 150 } = {}) {
+  const x0 = roi.x - 10; const x1 = roi.x + roi.w + 6;
+  const runs = []; let s = -1; let top = Infinity; let bot = -1;
+  for (let x = x0; x <= x1; x += 1) {
+    let on = false;
+    if (x < x1) for (let y = roi.y - 2; y < roi.y + roi.h + 2; y += 1) if (lum(x, y) >= thr) { on = true; top = Math.min(top, y); bot = Math.max(bot, y); }
+    if (on && s < 0) s = x;
+    if (!on && s >= 0) { runs.push({ x0: s, x1: x - 1, top, bot, h: bot - top + 1 }); s = -1; top = Infinity; bot = -1; }
+  }
+  const tall = runs.filter((r) => r.h >= 6);
+  if (!tall.length) return null;
+  const H = Math.max(...tall.map((r) => r.h));
+  // the icon is the first run and noticeably shorter (7 rows vs ~10 for digits)
+  let i = 0; while (i < tall.length - 1 && tall[i].h <= H - 2 && tall[i].x1 - tall[i].x0 <= 9) i += 1;
+  const digits = tall.slice(i).filter((r) => r.h >= H - 2);
+  if (!digits.length) return null;
+  const a = digits[0].x0 - 2; const b = runs[runs.length - 1].x1 + 3;
+  return { x: a, y: roi.y, w: Math.max(6, b - a), h: roi.h };
+}
+
 // ---- agents ------------------------------------------------------------------------------
 // 32x32 RGBA official icons (valorant-api.com). Score = RMS colour difference under the
 // icon's alpha, best over a small position search. Must beat the runner-up clearly.
@@ -172,7 +196,8 @@ function glyphCount(lum, roi, { thr = PROFILE.textThreshold, digitWidth = 7.5, m
   return count;
 }
 function plausibleRead(field, value, glyphs) {
-  if (value === null || ['name', 'ultimate', 'credits'].includes(field) || !Number.isFinite(glyphs)) return value;
+  if (value === null || ['name', 'ultimate'].includes(field) || !Number.isFinite(glyphs)) return value;
+  // credits: the comma is narrow and short, so it never counts as a glyph
   return String(value).length === glyphs ? value : null;
 }
 
@@ -284,8 +309,13 @@ const NUMBER_LADDER = [[150, 4], [175, 4], [125, 4], [175, 6], [110, 5], [150, 6
 const TEXT_LADDER = [[175, 4], [150, 4]];
 async function readCell(ocr, lum, cell, makeImage, fieldId = 'valorant-board') {
   const isText = cell.field === 'name';
+  if (cell.field === 'credits') {
+    const tight = creditsRoi(lum, cell.roi);
+    if (!tight) return null; // nothing there (not even the 0): don't guess
+    cell = { ...cell, roi: tight };
+  }
   const g = isText || cell.field === 'ultimate' ? NaN : glyphCount(lum, cell.roi, { thr: 150 });
-  if (g === 0) return cell.field === 'credits' ? 0 : 0;
+  if (g === 0) return 0;
   for (const [thr, scale] of isText ? TEXT_LADDER : NUMBER_LADDER) {
     const r = await ocr.recognize(makeImage(cell.roi, scale, thr), { allowedChars: cell.column.allowedChars, kind: isText ? 'text' : 'score', fieldId, pageMode: g === 1 ? 'char' : 'line', ...(cell.column.lang ? { lang: cell.column.lang } : {}) });
     if (r.confidence < (isText ? 0.6 : 0.7)) continue;
@@ -330,4 +360,4 @@ function applySweep(board, consensus, reads, now = Date.now()) {
   return changed;
 }
 
-module.exports = { GearMatcher, PROFILE, READ_FIELDS, SIDES, glyphCount, plausibleRead, readCell, findHeader, alignBoard, cellRois, AgentMatcher, parseCell, BoardConsensus, emptyBoard, applySweep };
+module.exports = { creditsRoi, GearMatcher, PROFILE, READ_FIELDS, SIDES, glyphCount, plausibleRead, readCell, findHeader, alignBoard, cellRois, AgentMatcher, parseCell, BoardConsensus, emptyBoard, applySweep };
