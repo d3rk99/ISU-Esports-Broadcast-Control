@@ -147,6 +147,15 @@ function buildStageVariables(status = {}, state = {}) {
     variables[`display_${index}_noise`] = Boolean(station.noise);
     variables[`display_${index}_noise_playing`] = Boolean(station.online && station.noise && station.noiseState === 'playing');
   }
+  // Spectated player (player-POV spectator PC via the Game Bridge). station = the roster STATION,
+  // so a switcher can map station N to camera N. Blank / 0 = nobody known.
+  const sp = status.spectated || {};
+  const fresh = sp.receivedAt && Date.now() - Number(sp.receivedAt) < 10000;
+  variables.spectated_name = fresh ? scalar(sp.name) : '';
+  variables.spectated_station = fresh && sp.name ? Number(sp.station) || 0 : 0;
+  variables.spectated_side = fresh && sp.name ? scalar(sp.side) : '';
+  variables.spectated_team = fresh && sp.name ? scalar(sp.team) : '';
+  variables.spectated_known = Boolean(fresh && sp.name);
   return variables;
 }
 

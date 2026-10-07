@@ -27,6 +27,8 @@ const overlayClients = new OverlayEventHub({
   onDrop: ({ buffered }) => recordDiagnostic('overlay-client-dropped', `Dropped a stalled overlay viewer with ${Math.round(buffered / 1024)} KB unsent; it will reconnect`)
 });
 let broadcastState = {};
+// Who the player-POV spectator is watching (from the Game Bridge's spectate tracker).
+let spectatedPlayer = { name: '', station: null, side: '', team: '', score: 0, since: 0, receivedAt: 0, game: '' };
 const runtimeDiagnostics = [];
 let overlayServer;
 let rocketLeagueService;
@@ -712,8 +714,25 @@ function serveRocketLeagueLoadoutAsset(response, requestPath) {
 function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
+  valorantOcrService?.setSpectateCandidates(spectateCandidatesFrom(nextState));
   overlayClients.publish(broadcastState);
   companionApiService?.publish(broadcastState);
+}
+
+// Every gamertag the spectate tracker may report: both teams' Varsity + JV rosters (with their
+// stage station) plus names the scoreboard reader saw this map.
+function spectateCandidatesFrom(state = {}) {
+  const game = state.games?.[state.selectedGame] || {};
+  const out = [];
+  for (const [side, rosters, team] of [['home', game.rosters, game.teams?.[0]], ['away', game.awayRosters, game.teams?.[1]]]) {
+    for (const key of ['varsity', 'jv']) for (const p of rosters?.[key] || []) {
+      const name = String(p?.handle || p?.name || '').trim();
+      if (name) out.push({ name, station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '' });
+    }
+  }
+  const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live?.teams : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live?.teams : null;
+  for (const side of ['home', 'away']) for (const p of live?.[side]?.players || []) if (p?.name) out.push({ name: p.name, station: null, side, team: '' });
+  return out;
 }
 
 function companionSettingsPath() {
@@ -1262,7 +1281,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   companionApiService = new CompanionApiService({
     getState: () => broadcastState,
-    getStageStatus: () => displayManager?.status() || {},
+    getStageStatus: () => ({ ...(displayManager?.status() || {}), spectated: spectatedPlayer }),
     dispatchAction: dispatchCompanionAction,
     dispatchStageAction: dispatchCompanionStageAction,
     onDiagnostic: recordDiagnostic
@@ -1303,8 +1322,15 @@ app.whenReady().then(async () => {
     },
     onStatus: (status) => {
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('valorant-ocr:status', status);
+    },
+    onSpectated: (spectated) => {
+      spectatedPlayer = { ...spectatedPlayer, ...spectated };
+      for (const window of BrowserWindow.getAllWindows()) window.webContents.send('spectated:update', spectatedPlayer);
+      companionApiService?.publish(broadcastState);
     }
   });
+  // Spectated name goes stale if the bridge stops sending: re-publish so Companion clears it.
+  setInterval(() => { if (spectatedPlayer.name && Date.now() - spectatedPlayer.receivedAt > 10000) { spectatedPlayer = { ...spectatedPlayer, name: '', station: null }; companionApiService?.publish(broadcastState); } }, 3000).unref?.();
   // Overwatch scoreboard OCR shares the window-capture stack and Tesseract engine design with
   // VALORANT but has its own engine instance (its own worker pool) and its own window.
   overwatchOcrService = new OverwatchOcrService({

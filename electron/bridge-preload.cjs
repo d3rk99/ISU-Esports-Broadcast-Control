@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('isuBridge', {
   listWindows: () => ipcRenderer.invoke('bridge:list-windows'),
   captureSnapshot: () => ipcRenderer.invoke('bridge:capture-snapshot'),
   clearOcr: () => ipcRenderer.invoke('bridge:clear-ocr'),
+  spectateSnapshot: (config) => ipcRenderer.invoke('bridge:spectate-snapshot', config),
   startSimulator: (config) => ipcRenderer.invoke('bridge:start-simulator', config),
   stopSimulator: () => ipcRenderer.invoke('bridge:stop-simulator'),
   onStatus: (callback) => {

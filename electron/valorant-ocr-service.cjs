@@ -982,8 +982,11 @@ class ValorantOcrService {
     sharedScoreTemplateRoot = '',
     onState = () => {},
     onStatus = () => {},
+    onSpectated = () => {},
     now = () => Date.now()
   } = {}) {
+    this.onSpectated = onSpectated;
+    this.spectateCandidates = [];
     this.capture = capture;
     this.ocr = ocr;
     this.templateRoot = templateRoot;
@@ -2612,9 +2615,13 @@ class ValorantOcrService {
       // Without this reset every packet after a restart was dropped as "old" and VALORANT froze.
       this.remoteSequence = 0;
       this.emitStatus('connected', 'Universal Game Bridge connected; waiting for VALORANT data', { transport: 'bridge' });
+      // Spectated-player tracking: tell this bridge which names to look for.
+      if (this.spectateCandidates.length) client.send(JSON.stringify({ type: 'spectate-candidates', candidates: this.spectateCandidates }));
       client.on('message', (raw) => {
         try {
           const packet = JSON.parse(raw.toString());
+          // A bridge in player-POV mode sends who is being spectated (name from the closed list).
+          if (packet.type === 'spectated' && packet.payload && typeof packet.payload === 'object') { this.onSpectated({ ...packet.payload, game: packet.game || 'valorant', receivedAt: this.now() }); return; }
           if (packet.game !== 'valorant' || !['game-state', 'valorant-state'].includes(packet.type)) return;
           const sequence = Number(packet.sequence) || 0;
           if (sequence && sequence <= this.remoteSequence) return;
@@ -2633,6 +2640,16 @@ class ValorantOcrService {
       client.on('error', () => {});
       client.send(JSON.stringify({ type: 'welcome', game: 'valorant', version: 1 }));
     });
+  }
+
+  // Names the spectate bridge may report (rosters + scoreboard reader), pushed to every bridge.
+  setSpectateCandidates(list = []) {
+    const next = (Array.isArray(list) ? list : []).filter((c) => c && String(c.name || '').trim()).slice(0, 40)
+      .map((c) => ({ name: String(c.name).trim().slice(0, 40), station: Number(c.station) || null, side: c.side === 'away' ? 'away' : c.side === 'home' ? 'home' : '', team: String(c.team || '').slice(0, 60) }));
+    if (JSON.stringify(next) === JSON.stringify(this.spectateCandidates)) return next.length;
+    this.spectateCandidates = next;
+    for (const client of this.bridgeClients) { try { client.send(JSON.stringify({ type: 'spectate-candidates', candidates: next })); } catch {} }
+    return next.length;
   }
 
   startSimulator() {

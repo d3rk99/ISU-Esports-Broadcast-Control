@@ -8,6 +8,11 @@ type VariableDefinition = { name: string }
 export function createVariableDefinitions(): Record<string, VariableDefinition> {
 	const definitions: Record<string, VariableDefinition> = {
 		connection_ok: { name: 'Controller: Connected' },
+		spectated_name: { name: 'Spectated player: Gamertag (blank = nobody known)' },
+		spectated_station: { name: 'Spectated player: Stage station 1-10 (0 = unknown)' },
+		spectated_side: { name: 'Spectated player: Side (home/away)' },
+		spectated_team: { name: 'Spectated player: Team name' },
+		spectated_known: { name: 'Spectated player: Known (true/false)' },
 		selected_game: { name: 'Match: Selected game' },
 		event: { name: 'Match: Event' },
 		round: { name: 'Match: Round' },

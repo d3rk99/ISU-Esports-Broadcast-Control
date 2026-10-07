@@ -131,6 +131,7 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		if (Object.keys(changed).some((id) => id.startsWith('display_'))) {
 			this.checkFeedbacks('display_online', 'display_mode', 'display_preset', 'display_noise')
 		}
+		if (Object.hasOwn(changed, 'spectated_station')) this.checkFeedbacks('spectated_station')
 	}
 
 	private updateActions(): void {

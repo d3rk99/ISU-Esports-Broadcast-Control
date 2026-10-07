@@ -2,6 +2,7 @@ const { WebSocket } = require('ws');
 const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } = require('./rocket-league-service.cjs');
 const { ValorantOcrService, normalizeSettings: normalizeValorantSettings } = require('./valorant-ocr-service.cjs');
+const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS } = require('./spectate-tracker.cjs');
 
 const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant']);
 
@@ -19,7 +20,23 @@ function normalizeBridgeSettings(settings = {}) {
     bridgePort: safePort(settings.bridgePort),
     bridgeToken: String(settings.bridgeToken || '').trim(),
     rocketLeague: normalizeRocketLeagueSettings({ ...(settings.rocketLeague || settings), enabled: true, source: 'local' }),
-    valorant: normalizeValorantSettings({ ...(settings.valorant || settings), enabled: true, source: 'local' })
+    valorant: normalizeValorantSettings({ ...(settings.valorant || settings), enabled: true, source: 'local' }),
+    // Spectated-player tracker (player POV spectator PC): reads the small name of the player being
+    // watched; the controller turns it into a Companion variable for the camera switcher.
+    spectate: normalizeSpectateSettings(settings.spectate, game)
+  };
+}
+
+function normalizeSpectateSettings(raw = {}, game = 'valorant') {
+  const def = SPECTATE_ROIS[game] || SPECTATE_ROIS.valorant;
+  const r = raw?.roi || {};
+  const n = (v, d, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number.isFinite(Number(v)) ? Number(v) : d)));
+  return {
+    enabled: Boolean(raw?.enabled),
+    // Off = the normal scoreboard OCR; on = THIS PC watches player POVs and only tracks the name.
+    windowName: String(raw?.windowName || (game === 'valorant' ? 'VALORANT' : game === 'overwatch' ? 'Overwatch' : 'Rocket League')).slice(0, 120),
+    intervalMs: n(raw?.intervalMs, 250, 120, 2000),
+    roi: { x: n(r.x, def.x, 0, 1900), y: n(r.y, def.y, 0, 1060), w: n(r.w, def.w, 20, 1920), h: n(r.h, def.h, 10, 300) }
   };
 }
 
@@ -51,6 +68,10 @@ class UniversalGameBridge {
       onEvent: (event) => this.forward('rocketleague', event),
       onStatus: (status) => this.reportSource(status)
     });
+    this.capture = capture;
+    this.spectate = new SpectateTracker({ ocr });
+    this.spectateTimer = null;
+    this.spectateStatus = { state: 'off', message: 'Spectated-player tracking is off' };
     this.valorant = new ValorantOcrService({
       capture,
       ocr,
@@ -72,8 +93,7 @@ class UniversalGameBridge {
       this.report();
       return this.getStatus();
     }
-    if (this.settings.game === 'valorant') this.valorant.configure(this.settings.valorant);
-    else this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
+    this.startGameSource();
     this.connectRemote();
     return this.getStatus();
   }
@@ -85,9 +105,55 @@ class UniversalGameBridge {
     if (previous.game !== this.settings.game || previous.graphicsHost !== this.settings.graphicsHost || previous.bridgePort !== this.settings.bridgePort || previous.bridgeToken !== this.settings.bridgeToken) {
       return this.start(this.settings);
     }
+    this.startGameSource();
+    return this.getStatus();
+  }
+
+  // Normal mode: the game's own adapter (RL Stats API / VALORANT scoreboard OCR). Spectate mode:
+  // this PC follows player POVs, so only the spectated-name tracker runs.
+  startGameSource() {
+    this.stopSpectate();
+    if (this.settings.spectate?.enabled) { this.rocketLeague.stop(); this.valorant.stop(); this.startSpectate(); return; }
     if (this.settings.game === 'valorant') this.valorant.configure(this.settings.valorant);
     else this.rocketLeague.configure({ ...this.settings.rocketLeague, updateIntervalMs: 1 });
-    return this.getStatus();
+  }
+
+  startSpectate() {
+    const generation = this.generation;
+    const cfg = this.settings.spectate;
+    this.spectateStatus = { state: 'starting', message: `Looking for the "${cfg.windowName}" window` };
+    this.reportSource(this.spectateStatus);
+    const loop = async () => {
+      if (generation !== this.generation || !this.settings?.spectate?.enabled) return;
+      const started = Date.now();
+      try {
+        if (!this.capture) throw new Error('Capture is unavailable');
+        const frame = await this.capture.capture(cfg.windowName);
+        if (frame.width !== 1920 || frame.height !== 1080) throw new Error(`Captured ${frame.width}x${frame.height}; use a 16:9 window`);
+        const { changed, spectated } = await this.spectate.sweep((x, y) => this.capture.rgb(frame, x, y), cfg.roi);
+        if (changed || !this.lastSpectateSentAt || Date.now() - this.lastSpectateSentAt > 2000) {
+          this.forwardRaw({ type: 'spectated', game: this.settings.game, version: 1, payload: spectated });
+          this.lastSpectateSentAt = Date.now();
+        }
+        this.onOcrState({ spectate: { ...spectated, last: this.spectate.last } });
+        const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}` : (this.spectate.candidates.length ? 'No known player name in the box' : 'Waiting for player names from the controller');
+        this.spectateStatus = { state: 'reading', message: `${who} · ${Date.now() - started} ms/read` };
+      } catch (error) {
+        this.spectateStatus = { state: 'error', message: error.message || String(error) };
+      }
+      this.reportSource(this.spectateStatus);
+      this.spectateTimer = setTimeout(loop, Math.max(0, cfg.intervalMs - (Date.now() - started)));
+    };
+    this.spectateTimer = setTimeout(loop, 0);
+  }
+
+  stopSpectate() { clearTimeout(this.spectateTimer); this.spectateTimer = null; this.spectate.clear(); }
+
+  // Debug: one frame + the name box crop, so the operator can place the box.
+  async spectateSnapshot() {
+    const cfg = this.settings?.spectate || normalizeSpectateSettings({}, this.settings?.game);
+    const frame = await this.capture.capture(cfg.windowName);
+    return { frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', roi: cfg.roi, width: frame.width, height: frame.height, last: this.spectate.last, capturedAt: Date.now() };
   }
 
   stop() {
@@ -96,6 +162,7 @@ class UniversalGameBridge {
     this.remoteRetry = null;
     this.rocketLeague.stop();
     this.valorant.stop();
+    this.stopSpectate?.();
     if (this.remote) {
       this.remote.removeAllListeners?.();
       this.remote.on?.('error', () => {});
@@ -125,6 +192,13 @@ class UniversalGameBridge {
       this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT' : 'Rocket League'}` };
       this.report();
     });
+    // The controller sends the names to look for (rosters + scoreboard) whenever they change.
+    socket.on('message', (raw) => {
+      try {
+        const msg = JSON.parse(String(raw));
+        if (msg.type === 'spectate-candidates' && Array.isArray(msg.candidates)) this.spectate.setCandidates(msg.candidates);
+      } catch {}
+    });
     socket.on('error', () => {});
     socket.on('close', (_code, reason) => {
       if (this.remote !== socket || generation !== this.generation) return;
@@ -139,6 +213,13 @@ class UniversalGameBridge {
     if (this.settings?.game !== game || this.remote?.readyState !== this.WebSocketImpl.OPEN) return false;
     const packet = createGameEnvelope(game, payload, ++this.sequence);
     this.remote.send(JSON.stringify(packet));
+    this.sentPackets += 1;
+    return true;
+  }
+
+  forwardRaw(packet) {
+    if (this.remote?.readyState !== this.WebSocketImpl.OPEN) return false;
+    this.remote.send(JSON.stringify({ ...packet, sequence: ++this.sequence, capturedAt: Date.now() }));
     this.sentPackets += 1;
     return true;
   }
@@ -187,4 +268,4 @@ class UniversalGameBridge {
   }
 }
 
-module.exports = { SUPPORTED_GAMES, UniversalGameBridge, createGameEnvelope, normalizeBridgeSettings };
+module.exports = { SUPPORTED_GAMES, UniversalGameBridge, createGameEnvelope, normalizeBridgeSettings, normalizeSpectateSettings };

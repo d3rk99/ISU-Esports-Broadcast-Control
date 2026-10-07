@@ -10,6 +10,7 @@ export type FeedbacksSchema = {
 	display_mode: { type: 'boolean'; options: { station: string; mode: string } }
 	display_noise: { type: 'boolean'; options: { station: string } }
 	display_preset: { type: 'boolean'; options: { station: string; preset: string } }
+	spectated_station: { type: 'boolean'; options: { station: string } }
 }
 
 const GAME_CHOICES = [
@@ -97,6 +98,13 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 					Number(self.getVariableValue(`${feedback.options.team === 'home' ? 'away' : 'home'}${suffix}`)) || 0
 				return own > opponent
 			},
+		},
+		spectated_station: {
+			name: 'Spectated player is at station',
+			type: 'boolean',
+			defaultStyle: { bgcolor: 0xff4655, color: 0xffffff },
+			options: [{ id: 'station', type: 'dropdown', label: 'Station', default: '1', choices: STATION_CHOICES.filter((c) => /^\d+$/.test(c.id)) }],
+			callback: (feedback) => Number(self.getVariableValue('spectated_station')) === Number(feedback.options.station),
 		},
 		display_online: {
 			name: 'Display station is online and showing a picture',
