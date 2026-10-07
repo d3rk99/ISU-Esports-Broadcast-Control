@@ -19,7 +19,7 @@
     }
     return (/^(https?:|data:image\/)/i.test(u) || u.startsWith('/')) ? u.replace(/["\\]/g, '') : '';
   };
-  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('en-US') : '–'; };
+  const num = (v) => { if (v === null || v === undefined || v === '') return '–'; const n = Number(v); return Number.isFinite(n) ? n.toLocaleString('en-US') : '–'; };
 
   // Same >= 90% gamertag match the controller roster sync uses.
   const fold = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/O/g, '0').replace(/[IL|]/g, '1').replace(/S/g, '5').replace(/B/g, '8').replace(/[\s_.\-#]/g, '');
@@ -157,8 +157,13 @@
     fitName();
     setText('player-initials', handle.slice(0, 2).toUpperCase());
     setText('player-station', pad(station));
-    const live = player?.handle ? bestByTag(game.overwatchOcr?.live?.teams?.[found.side]?.players, player.handle) : null;
-    const hero = live?.hero || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
+    const isValorant = state?.selectedGame === 'valorant';
+    // Live OCR row for this player (matched by gamertag): Overwatch board or the VALORANT board reader.
+    const liveTeams = isValorant ? game.valorantBoard?.live?.teams : game.overwatchOcr?.live?.teams;
+    const live = player?.handle ? bestByTag(liveTeams?.[found.side]?.players, player.handle) : null;
+    // VALORANT agents come back as slugs ('kay-o'); the art table uses display names ('KAY/O').
+    const agentName = (slug) => Object.keys(game.characterArt || {}).find((k) => k.toLowerCase().replace(/[^a-z0-9]+/g, '-') === slug) || '';
+    const hero = (isValorant ? agentName(live?.agent || '') : live?.hero) || game.overwatchLastMapStats?.[station]?.hero || player?.character || '';
     const isRL = state?.selectedGame === 'rocketleague';
     setText('player-meta', [player?.name !== handle ? player?.name : '', player?.role, isRL ? player?.character : hero].filter(Boolean).join(' · '));
     showPortrait(safeUrl(player?.playerImage));
@@ -185,9 +190,13 @@
     } else {
       $('player-boost').hidden = true;
       $('player-portrait').classList.remove('is-demolished');
-      const saved = game.overwatchLastMapStats?.[station];
+      const saved = isValorant ? null : game.overwatchLastMapStats?.[station];
       const stats = saved?.stats || live;
-      if (stats) {
+      if (isValorant && live) {
+        label = 'THIS MAP · LIVE';
+        const ult = live.ultimate === 'READY' ? 'READY' : live.ultimate || null;
+        rows = [[live.kills, 'KILLS'], [live.deaths, 'DEATHS'], [live.assists, 'ASSISTS'], [live.credits, 'CREDS'], [ult, 'ULT'], [live.weapon ? String(live.weapon).toUpperCase() : null, 'WEAPON']];
+      } else if (stats) {
         label = saved?.stats ? `LAST MAP${saved.map ? ` · ${String(saved.map).toUpperCase()}` : ''}` : 'THIS MAP · LIVE';
         rows = [['elims', 'ELIMS'], ['deaths', 'DEATHS'], ['assists', 'ASSISTS'], ['damage', 'DAMAGE'], ['healing', 'HEALING'], ['mitigation', 'MITIGATED']].map(([k, l]) => [stats[k], l]);
       }
@@ -195,7 +204,7 @@
     setText('player-stats-label', label);
     $('player-stats').replaceChildren(...rows.map(([v, l]) => {
       const d = document.createElement('div'); const b = document.createElement('b'); const i = document.createElement('i');
-      b.textContent = num(v); i.textContent = l; d.append(b, i); return d;
+      b.textContent = typeof v === 'string' && !/^\d+$/.test(v) ? v : num(v); i.textContent = l; d.append(b, i); return d;
     }));
 
     // banner: 5-screen canvas, this station shows slot (station-1) % 5

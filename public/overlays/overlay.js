@@ -312,6 +312,30 @@
     return game?.valorantOcr?.live || {};
   }
 
+  // Player rows for the HUD cards. The rebuilt scoreboard reader (game.valorantBoard, agents /
+  // guns / shields / K-D-A / creds / ult) wins when it has data; otherwise the old Observer 3
+  // reader (valorantOcr.live.observer3). Both are mapped to the same shape.
+  function valorantBoardPlayers(game, side) {
+    const board = game?.valorantBoard?.live?.teams?.[side]?.players;
+    if (Array.isArray(board) && board.some((p) => p && (p.name || p.agent || Number.isFinite(Number(p.kills))))) {
+      return board.map((p) => {
+        const ult = String(p?.ultimate || '');
+        const m = ult.match(/(\d+)\s*\/\s*(\d+)/);
+        return {
+          name: p?.name || '',
+          agent: p?.agent || '',
+          shield: p?.shield || '',
+          kda: { kills: p?.kills, deaths: p?.deaths, assists: p?.assists },
+          credits: p?.credits,
+          ultimateState: ult === 'READY' ? { status: 'ready', current: null, required: null, display: 'READY' }
+            : m ? { status: 'charging', current: Number(m[1]), required: Number(m[2]), display: ult } : { status: 'unknown' },
+          loadout: p?.weapon ? { status: 'matched', weapon: p.weapon } : { status: 'pending', weapon: '' }
+        };
+      });
+    }
+    return valorantOcrLive(game).observer3?.teams?.[side]?.players || [];
+  }
+
   function renderRocketLeagueStatCard(game, selectedGame, program) {
     const card = $('#rl-player-stats');
     if (!card) return;
@@ -376,6 +400,7 @@
   }
 
   function valorantCredits(value) {
+    if (value === null || value === undefined || value === '') return '--';
     const number = Number(value);
     return Number.isFinite(number) ? number.toLocaleString('en-US') : '--';
   }
@@ -536,6 +561,18 @@
         weaponWrap.classList.add('has-weapon');
         weaponWrap.append(image);
       }
+      const shield = ['light', 'heavy', 'regen'].includes(player?.shield) ? player.shield : '';
+      if (shield) {
+        const icon = document.createElement('img');
+        icon.className = `val-shield val-shield--${shield}`;
+        icon.src = `../assets/valorant/shields/${shield}.png`;
+        icon.alt = '';
+        weaponWrap.append(icon);
+      }
+      if (player?.agent) {
+        card.classList.add('has-agent');
+        card.style.setProperty('--val-agent-art', `url("../assets/valorant/agents/${String(player.agent).replace(/[^a-z0-9-]/gi, '')}.webp")`);
+      }
       card.append(valorantUltimateRing(player), name, stats, weaponWrap);
       container.append(card);
     });
@@ -580,8 +617,8 @@
     renderLogo('#val-home-logo', teams[0]);
     renderLogo('#val-away-logo', teams[1]);
     renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber });
-    renderValorantPlayerCards('#val-home-players', observer.teams?.home?.players, 'home');
-    renderValorantPlayerCards('#val-away-players', observer.teams?.away?.players, 'away');
+    renderValorantPlayerCards('#val-home-players', valorantBoardPlayers(game, 'home'), 'home');
+    renderValorantPlayerCards('#val-away-players', valorantBoardPlayers(game, 'away'), 'away');
   }
 
   // Smash crew battle: 1v1 games, each crew shares a 12-stock pool (detailScore = stocks left,

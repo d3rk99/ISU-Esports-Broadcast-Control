@@ -9,7 +9,7 @@ import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueAr
 import { advanceGameMatch, applyCompanionAction, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
-import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel } from './valorant-board-panel.js';
+import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel, syncValorantRoster } from './valorant-board-panel.js';
 import { DEFAULT_VALORANT_OCR_PROFILE_ID, VALORANT_OCR_FIELD_IDS, VALORANT_OCR_PROFILE_CHOICES, getValorantOcrProfile } from './valorant-ocr-profiles.js';
 
 const root = document.querySelector('#app');
@@ -2065,7 +2065,19 @@ function publishValorantBoard() {
   valorantBoardRenderTimer = window.setTimeout(() => { valorantBoardRenderTimer = null; render(); }, 250);
 }
 window.isuDesktop?.getValorantBoardSettings?.().then((info) => { valorantBoard = { ...valorantBoard, ...info }; publishValorantBoard(); }).catch(() => {});
-window.isuDesktop?.onValorantBoardState?.((snapshot) => { valorantBoard = mergeValorantBoardSnapshot(valorantBoard, snapshot); publishValorantBoard(); });
+window.isuDesktop?.onValorantBoardState?.((snapshot) => {
+  valorantBoard = mergeValorantBoardSnapshot(valorantBoard, snapshot);
+  publishValorantBoard();
+  // Same as Overwatch: board agents/roles flow into the roster by gamertag, empty slots filled.
+  const game = state.games.valorant;
+  if (game && game.valorantAgentAutofill !== false) {
+    const preview = syncValorantRoster(deepClone(game), state.activeRoster);
+    if (preview.length) {
+      const label = (c) => c.field === 'handle' ? `added ${c.to}` : c.field === 'role' ? `${c.handle} role → ${c.to}` : `${c.handle} → ${c.to}`;
+      commit(() => { syncValorantRoster(state.games.valorant, state.activeRoster); }, `Roster: ${preview.map(label).join(', ')}`);
+    }
+  }
+});
 window.isuDesktop?.onValorantBoardStatus?.((status) => { valorantBoard = { ...valorantBoard, status }; publishValorantBoard(); });
 
 window.isuDesktop?.onValorantOcrState((snapshot) => {

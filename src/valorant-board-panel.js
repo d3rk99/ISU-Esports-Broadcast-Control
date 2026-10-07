@@ -1,3 +1,4 @@
+import { matchRosterToOcr, NAME_MATCH } from './overwatch-ocr-panel.js';
 // Controller panel for the rebuilt VALORANT scoreboard reader (electron/valorant-board-service.cjs).
 // Same idea as the Overwatch OCR panel: on/off, window, live table, test read, clear.
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -43,4 +44,44 @@ export function renderValorantBoardPanel(vb, teams = []) {
     <p class="ow-ocr-status is-${tone}">${esc((status.state || 'disabled').toUpperCase())} · ${esc(status.message || 'off')}${status.sweepMs ? ` · ${status.sweepMs} ms per read` : ''}</p>
     <div class="vb-tables">${table}</div>
   </article>`;
+}
+
+// Roster sync, same rules as Overwatch (src/overwatch-ocr-panel.js): gamertags match at >= 90%
+// similarity; matched players get the agent + role from the board; board players nobody
+// matched fill empty roster slots. Agent slugs ('kay-o') map to the roster names ('KAY/O').
+export const VALORANT_AGENT_ROLES = {
+  Jett: 'Duelist', Raze: 'Duelist', Reyna: 'Duelist', Phoenix: 'Duelist', Neon: 'Duelist', Yoru: 'Duelist', Iso: 'Duelist', Waylay: 'Duelist',
+  Sova: 'Initiator', Skye: 'Initiator', Breach: 'Initiator', 'KAY/O': 'Initiator', Fade: 'Initiator', Gekko: 'Initiator', Tejo: 'Initiator',
+  Brimstone: 'Controller', Omen: 'Controller', Viper: 'Controller', Astra: 'Controller', Harbor: 'Controller', Clove: 'Controller', Miks: 'Controller',
+  Sage: 'Sentinel', Cypher: 'Sentinel', Killjoy: 'Sentinel', Chamber: 'Sentinel', Deadlock: 'Sentinel', Vyse: 'Sentinel', Veto: 'Sentinel'
+};
+const slug = (n) => String(n || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+export function agentNameFromSlug(s) { return Object.keys(VALORANT_AGENT_ROLES).find((n) => slug(n) === s) || ''; }
+
+export function syncValorantRoster(game, rosterKey = 'varsity', { threshold = NAME_MATCH, fillEmpty = true } = {}) {
+  const live = game?.valorantBoard?.live?.teams;
+  if (!live) return [];
+  const changes = [];
+  const apply = (side, player, field, value) => {
+    if (!value || player[field] === value) return;
+    changes.push({ side, handle: player.handle || '', field, from: player[field] || '', to: value });
+    player[field] = value;
+  };
+  const isEmpty = (p) => p && !String(p.handle || '').trim() && !String(p.name || '').trim();
+  for (const [side, roster] of [['home', game.rosters?.[rosterKey]], ['away', game.awayRosters?.[rosterKey]]]) {
+    if (!Array.isArray(roster)) continue;
+    const rows = (live[side]?.players || []).map((r) => ({ ...r, agentName: agentNameFromSlug(r?.agent) }));
+    const pairs = matchRosterToOcr(roster, rows, threshold);
+    const matched = new Set(pairs.map((p) => p.ri));
+    for (const { pi, ri } of pairs) { apply(side, roster[pi], 'character', rows[ri].agentName); apply(side, roster[pi], 'role', VALORANT_AGENT_ROLES[rows[ri].agentName]); }
+    if (!fillEmpty) continue;
+    for (const [ri, row] of rows.entries()) {
+      if (matched.has(ri) || !row?.name) continue;
+      const slot = roster.find(isEmpty); if (!slot) break;
+      changes.push({ side, handle: row.name, field: 'handle', from: '', to: row.name });
+      slot.handle = row.name; slot.autoAdded = true;
+      apply(side, slot, 'character', row.agentName); apply(side, slot, 'role', VALORANT_AGENT_ROLES[row.agentName]);
+    }
+  }
+  return changes;
 }

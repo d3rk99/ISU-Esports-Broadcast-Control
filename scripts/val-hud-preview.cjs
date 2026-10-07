@@ -5,7 +5,8 @@ app.commandLine.appendSwitch('force-device-scale-factor', '1');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
-const [outDir, roundArg, growingArg] = process.argv.slice(2).filter((a) => !a.endsWith('.cjs'));
+const [outArg, roundArg, growingArg] = process.argv.slice(2).filter((a) => !a.endsWith('.cjs') && !a.startsWith('--'));
+const outDir = process.env.VAL_OUT || outArg;
 const round = Number(roundArg) || 9;
 const growing = growingArg === '1';
 const winners = ['attack', 'defense', 'attack', 'attack', 'defense', 'defense', 'attack', 'defense', 'attack', 'attack', 'defense', 'attack', 'defense', 'attack', 'defense', 'attack', 'attack', 'defense', 'defense', 'attack', 'attack', 'defense', 'attack'];
@@ -24,6 +25,8 @@ const game = {
   valorantGrowingRounds: growing,
   valorantOcr: { live: { status: 'running', observer3: { roundTimeline: { currentRound: round, rounds }, teams: { home: { players: [0, 1, 2, 3, 4].map(player) }, away: { players: [5, 6, 7, 8, 9].map(player) } } } } }
 };
+// VAL_BOARD=<snapshot.json>: feed the rebuilt scoreboard reader's output (game.valorantBoard).
+if (process.env.VAL_BOARD) game.valorantBoard = { live: JSON.parse(fs.readFileSync(process.env.VAL_BOARD, 'utf8')) };
 const state = { selectedGame: 'valorant', activeRoster: 'varsity', games: { valorant: game } };
 const server = http.createServer((req, res) => {
   if (req.url.startsWith('/api/state')) { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(state)); return; }
@@ -41,5 +44,7 @@ app.whenReady().then(async () => {
   await new Promise((resolve) => setTimeout(resolve, 3200));
   fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, `hud-r${round}${growing ? '-grow' : ''}.png`), (await win.webContents.capturePage()).toPNG());
+  const cards = await win.webContents.executeJavaScript(`[...document.querySelectorAll('.val-player-card')].map((c) => [c.querySelector('strong')?.textContent, c.querySelector('.val-player-kda')?.textContent, c.querySelector('.val-player-credits')?.textContent, c.querySelector('.val-weapon-slot img:not(.val-shield)')?.getAttribute('src')?.split('/').pop(), c.querySelector('.val-shield')?.className.split('--')[1] || '', c.classList.contains('has-agent') ? (getComputedStyle(c).getPropertyValue('--val-agent-art').match(/agents\\/([a-z-]+)/) || [])[1] : '', c.querySelector('.val-ult')?.dataset.ultCurrent + '/' + c.querySelector('.val-ult')?.dataset.ultRequired].join(' | '))`);
+  fs.writeFileSync(path.join(outDir, 'cards.txt'), cards.join('\n'));
   app.exit(0);
 }).catch((error) => { console.error(error); app.exit(1); });

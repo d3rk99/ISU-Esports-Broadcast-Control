@@ -89,3 +89,26 @@ test('station player card: Varsity and JV on stage together (each station finds 
   const page = loadStation(2, jvOpen); page.render(jvOpen); await new Promise((r) => setTimeout(r, 20));
   assert.equal(page.$('player-handle').textContent, 'VARS2');
 });
+
+test('station player card (VALORANT): agent art + live K/D/A, creds, ult, gun from the scoreboard reader', async () => {
+  const state = {
+    selectedGame: 'valorant', activeRoster: 'varsity', displays: { stations: { 1: { preset: 'player', team: '' } } },
+    games: { valorant: {
+      teams: [{ name: 'IDAHO STATE', color: '#f47920' }, { name: 'LCU', color: '#2d6cdf' }],
+      characterArt: { 'KAY/O': { url: '/assets/valorant/agents/kay-o.webp' }, Viper: { url: '/assets/valorant/agents/viper.webp' } },
+      rosters: { varsity: [{ handle: 'Sn0wfal', stageStation: 1, role: 'Controller', character: '' }] },
+      awayRosters: { varsity: [] },
+      valorantBoard: { live: { teams: { home: { players: [
+        { row: 0, name: 'SnOwfal', agent: 'kay-o', ultimate: '3/9', kills: 3, deaths: 0, assists: 0, credits: 2600, weapon: 'vandal', shield: 'heavy' }
+      ] }, away: { players: [] } } } }
+    } }
+  };
+  const page = loadStation(1, state);
+  page.render(state);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(page.$('player-hero-img').getAttribute('src'), '/assets/valorant/agents/kay-o.webp', 'agent from the board (KAY/O slug kay-o)');
+  assert.equal(page.$('player-stats-label').textContent, 'THIS MAP · LIVE');
+  const stats = page.$('player-stats').children.map((d) => d.children.map((c) => c.textContent).join(' '));
+  assert.deepEqual(stats, ['3 KILLS', '0 DEATHS', '0 ASSISTS', '2,600 CREDS', '3/9 ULT', 'VANDAL WEAPON']);
+  assert.ok(page.$('player-meta').textContent.includes('KAY/O'));
+});
