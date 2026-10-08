@@ -98,6 +98,7 @@
     "wait-on": "^8.0.4"
   },
   "optionalDependencies": {
-    "@stagetimerio/grandiose": "^0.2.0"
+    "@stagetimerio/grandiose": "^0.2.0",
+    "@screen-capture/node-win32-x64-msvc": "1.1.0"
   }
 }
