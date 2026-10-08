@@ -129,3 +129,20 @@ test('spectate: free cam (portrait box gone) clears the camera after 2 reads, no
   now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', 'one empty frame is not enough');
   now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '', 'cleared after 2 empty reads (0.5 s)');
 });
+
+// Regression (Derk 2026-10-08, live): after the free-cam change players were almost never found.
+// Cause: when the portrait box colour was not seen (shifted capture, shading, no agents/sides from
+// the controller) the tracker called it "free cam" and skipped the name read entirely. Now a name
+// in the name box is ALWAYS read; "nobody" needs no box AND an empty name box.
+test('spectate: portrait box not recognised but a name is on screen -> still read by name (never "free cam")', async () => {
+  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
+  let now = 0; let calls = 0;
+  const ocr = { recognize: async () => { calls += 1; return { text: 'Ishnarb', confidence: 0.95 }; } };
+  const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
+  t.setCandidates([{ name: 'Ishnarb', station: 5, side: 'home', agent: 'sova' }, { name: 'nyv', station: 7, side: 'away', agent: 'breach' }]);
+  // Dark gameplay everywhere (no red/teal box), white name text in the name box.
+  const rgb = (x, y) => (x >= ROI.x + 10 && x < ROI.x + 60 && y >= ROI.y + 10 && y < ROI.y + 25 && (x % 3) ? [245, 245, 245] : [40, 45, 50]);
+  for (let i = 0; i < 4; i += 1) { now += 250; await t.sweep(rgb, ROI, { x: 20, y: 800, s: 80 }); }
+  assert.ok(calls > 0, 'the name was read');
+  assert.equal(t.snapshot().name, 'Ishnarb');
+});

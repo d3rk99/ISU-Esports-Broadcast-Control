@@ -93,6 +93,21 @@ const VARIANTS = [
   { mode: 'edge', thr: 170 }, { mode: 'thr', thr: 215 }
 ];
 
+// Red/teal portrait box colour: 4 small patches (top-left, top-right, mid-left, mid-right edge
+// strips) each vote; the box wins with 2+ agreeing votes. One 8x8 spot was too fragile live.
+function patchColor(rgb, x0, y0) {
+  let r = 0; let g = 0; let b = 0; let n = 0;
+  for (let y = y0; y < y0 + 6; y += 1) for (let x = x0; x < x0 + 6; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+  r /= n; g /= n; b /= n;
+  return r > g + 40 && r > b + 40 ? 'red' : g > r + 40 && b > r + 25 ? 'teal' : '';
+}
+function boxColor(rgb, box) {
+  const s = box.s; const spots = [[3, 3], [s - 9, 3], [3, Math.round(s / 2)], [s - 9, Math.round(s / 2)]];
+  const votes = { red: 0, teal: 0 };
+  for (const [dx, dy] of spots) { const c = patchColor(rgb, box.x + dx, box.y + dy); if (c) votes[c] += 1; }
+  return votes.red >= 2 && votes.red > votes.teal ? 'red' : votes.teal >= 2 && votes.teal > votes.red ? 'teal' : '';
+}
+
 class SpectateTracker {
   constructor({ ocr, agents = null, now = () => Date.now(), minScore = 0.62, minMargin = 0.12, confirm = 3, window = 4, holdMs = 4000, lang = 'eng' } = {}) {
     Object.assign(this, { ocr, agents, now, minScore, minMargin, confirm, window, holdMs, lang });
@@ -128,15 +143,17 @@ class SpectateTracker {
       const p = this.readPortrait(rgb, portrait);
       if (p.player) return this.report({ name: p.player.name, score: 1, via: 'portrait' }, { portrait: p, fast: true });
       this.lastPortrait = p;
-      // Free cam / no POV: the red/teal portrait box is gone. That is a clear "nobody" (a POV
-      // always shows it), so skip the OCR and let 2 such reads in a row clear the camera.
-      if (!p.color) return this.report(null, { portrait: p, empty: true });
-    } else if (portrait && this.portraitBoxGone(rgb, portrait)) {
-      return this.report(null, { empty: true });
     }
+    // Free cam / no POV = BOTH signs: no red/teal portrait box AND no text in the name box.
+    // The box colour alone is not enough: a slightly shifted capture, dark shading or the agent
+    // art over the corner made it miss on live feeds (2026-10-08: players almost never found),
+    // and skipping the name read then hid every player. So: text in the name box -> always read it.
+    const crops = VARIANTS.map((v) => ({ v, crop: cleanCrop(rgb, roi, v) }));
+    const hasText = crops.some(({ crop }) => crop.inkShare >= 0.004 && crop.inkShare <= 0.45);
+    const boxGone = portrait ? (this.lastPortrait ? !this.lastPortrait.color : this.portraitBoxGone(rgb, portrait)) : true;
+    if (!hasText && boxGone) return this.report(null, { portrait: this.lastPortrait || null, empty: true });
     const reads = [];
-    for (const v of VARIANTS) {
-      const crop = cleanCrop(rgb, roi, v);
+    for (const { v, crop } of crops) {
       if (crop.inkShare < 0.004 || crop.inkShare > 0.45) { reads.push({ variant: `${v.mode}${v.thr}`, text: '', skipped: crop.inkShare }); continue; }
       const r = await this.ocr.recognize(crop.image, { kind: 'text', fieldId: `spectate-${v.mode}`, allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#-', lang: this.lang });
       const text = String(r?.text || '').trim();
@@ -155,21 +172,13 @@ class SpectateTracker {
   }
 
   // No agents loaded: still detect the missing red/teal box (free cam).
-  portraitBoxGone(rgb, box) {
-    let r = 0; let g = 0; let b = 0; let n = 0;
-    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
-    r /= n; g /= n; b /= n;
-    return !(r > g + 50 && r > b + 50) && !(g > r + 50 && b > r + 30);
-  }
+  portraitBoxGone(rgb, box) { return !boxColor(rgb, box); }
 
   // Portrait box (x,y = top-left of the square, s = side). Box colour from the corner strip,
   // agent from the official icon. -> { agent, color, side, player|null, ms }
   readPortrait(rgb, box) {
     const t0 = Date.now();
-    let r = 0; let g = 0; let b = 0; let n = 0;
-    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
-    r /= n; g /= n; b /= n;
-    const color = r > g + 50 && r > b + 50 ? 'red' : g > r + 50 && b > r + 30 ? 'teal' : '';
+    const color = boxColor(rgb, box);
     const m = this.agents.matchBox(rgb, box);
     const side = color && this.sides ? this.sides[color] : '';
     let player = null;
