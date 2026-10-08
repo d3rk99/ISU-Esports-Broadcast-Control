@@ -95,6 +95,7 @@ class UniversalGameBridge {
     // Agent icons for the fast portrait read (VALORANT); missing = name OCR only.
     let agents = null; try { agents = AgentMatcher ? new AgentMatcher() : null; } catch (error) { agentLoadError = error.message || String(error); }
     this.spectate = new SpectateTracker({ ocr, agents });
+    try { const { PortraitMatcher } = require('./valorant-portrait-match.cjs'); this.spectate.portraits = new PortraitMatcher(); } catch (error) { this.spectate.portraitError = error.message || String(error); }
     // Say it loudly in the Bridge if the agent icons did not load (a missing file in the package
     // silently disabled the icon path once: no reads at all in icon-only mode).
     this.spectate.agentLoadError = agents ? '' : (agentLoadError || 'agent matcher not available');

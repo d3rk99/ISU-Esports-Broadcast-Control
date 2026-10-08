@@ -197,11 +197,14 @@ class SpectateTracker {
   // agent from the official icon. -> { agent, color, side, player|null, ms }
   readPortrait(rgb, box) {
     const t0 = Date.now();
-    const color = boxColor(rgb, box);
     // Compare only against the agents in this match (from the scoreboard reader): fewer
     // look-alikes and ~3x less work than all 29.
     const only = [...new Set(this.candidates.map((c) => c.agent).filter(Boolean))];
-    const m = this.agents.matchBox(rgb, box, { only });
+    let m; let color;
+    if (this.portraits) {
+      // Two references per agent (on teal and on red): one match = agent AND colour.
+      m = this.portraits.match(rgb, box, { only }); color = m.color;
+    } else { color = boxColor(rgb, box); m = this.agents.matchBox(rgb, box, { only }); }
     const side = color && this.sides ? this.sides[color] : '';
     let player = null;
     if (m.agent && side) {

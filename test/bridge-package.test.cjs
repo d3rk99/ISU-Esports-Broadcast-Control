@@ -16,5 +16,5 @@ test('bridge package: every electron/*.cjs the Bridge requires (recursively) is 
   }
   const missing = [...seen].filter((f) => !files.includes(f));
   assert.deepEqual(missing, [], 'missing from the Bridge package');
-  for (const data of ['electron/valorant-agent-templates.json', 'electron/valorant-agent-templates.bin']) assert.ok(files.includes(data), data);
+  for (const data of ['electron/valorant-agent-templates.json', 'electron/valorant-agent-templates.bin', 'electron/valorant-agent-portraits.json', 'electron/valorant-agent-portraits.bin']) assert.ok(files.includes(data), data);
 });

@@ -19,7 +19,10 @@
     "electron/valorant-board-parse.cjs",
     "electron/valorant-agent-templates.json",
     "electron/valorant-agent-templates.bin",
-    "electron/ocr-models/**/*"
+    "electron/ocr-models/**/*",
+    "electron/valorant-portrait-match.cjs",
+    "electron/valorant-agent-portraits.json",
+    "electron/valorant-agent-portraits.bin"
   ],
   "asarUnpack": [
     "node_modules/bmp-js/**/*",

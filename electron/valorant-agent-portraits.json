@@ -1,0 +1,250 @@
+{
+ "size": 32,
+ "source": "valorant.fandom.com Category:Agent_Icons, composited on the live POV box colours",
+ "colors": {
+  "teal": [
+   99,
+   181,
+   159
+  ],
+  "red": [
+   216,
+   109,
+   104
+  ]
+ },
+ "items": [
+  {
+   "agent": "astra",
+   "color": "teal"
+  },
+  {
+   "agent": "astra",
+   "color": "red"
+  },
+  {
+   "agent": "breach",
+   "color": "teal"
+  },
+  {
+   "agent": "breach",
+   "color": "red"
+  },
+  {
+   "agent": "brimstone",
+   "color": "teal"
+  },
+  {
+   "agent": "brimstone",
+   "color": "red"
+  },
+  {
+   "agent": "chamber",
+   "color": "teal"
+  },
+  {
+   "agent": "chamber",
+   "color": "red"
+  },
+  {
+   "agent": "clove",
+   "color": "teal"
+  },
+  {
+   "agent": "clove",
+   "color": "red"
+  },
+  {
+   "agent": "cypher",
+   "color": "teal"
+  },
+  {
+   "agent": "cypher",
+   "color": "red"
+  },
+  {
+   "agent": "deadlock",
+   "color": "teal"
+  },
+  {
+   "agent": "deadlock",
+   "color": "red"
+  },
+  {
+   "agent": "fade",
+   "color": "teal"
+  },
+  {
+   "agent": "fade",
+   "color": "red"
+  },
+  {
+   "agent": "gekko",
+   "color": "teal"
+  },
+  {
+   "agent": "gekko",
+   "color": "red"
+  },
+  {
+   "agent": "harbor",
+   "color": "teal"
+  },
+  {
+   "agent": "harbor",
+   "color": "red"
+  },
+  {
+   "agent": "iso",
+   "color": "teal"
+  },
+  {
+   "agent": "iso",
+   "color": "red"
+  },
+  {
+   "agent": "jett",
+   "color": "teal"
+  },
+  {
+   "agent": "jett",
+   "color": "red"
+  },
+  {
+   "agent": "kay-o",
+   "color": "teal"
+  },
+  {
+   "agent": "kay-o",
+   "color": "red"
+  },
+  {
+   "agent": "killjoy",
+   "color": "teal"
+  },
+  {
+   "agent": "killjoy",
+   "color": "red"
+  },
+  {
+   "agent": "miks",
+   "color": "teal"
+  },
+  {
+   "agent": "miks",
+   "color": "red"
+  },
+  {
+   "agent": "neon",
+   "color": "teal"
+  },
+  {
+   "agent": "neon",
+   "color": "red"
+  },
+  {
+   "agent": "omen",
+   "color": "teal"
+  },
+  {
+   "agent": "omen",
+   "color": "red"
+  },
+  {
+   "agent": "phoenix",
+   "color": "teal"
+  },
+  {
+   "agent": "phoenix",
+   "color": "red"
+  },
+  {
+   "agent": "raze",
+   "color": "teal"
+  },
+  {
+   "agent": "raze",
+   "color": "red"
+  },
+  {
+   "agent": "reyna",
+   "color": "teal"
+  },
+  {
+   "agent": "reyna",
+   "color": "red"
+  },
+  {
+   "agent": "sage",
+   "color": "teal"
+  },
+  {
+   "agent": "sage",
+   "color": "red"
+  },
+  {
+   "agent": "skye",
+   "color": "teal"
+  },
+  {
+   "agent": "skye",
+   "color": "red"
+  },
+  {
+   "agent": "sova",
+   "color": "teal"
+  },
+  {
+   "agent": "sova",
+   "color": "red"
+  },
+  {
+   "agent": "tejo",
+   "color": "teal"
+  },
+  {
+   "agent": "tejo",
+   "color": "red"
+  },
+  {
+   "agent": "veto",
+   "color": "teal"
+  },
+  {
+   "agent": "veto",
+   "color": "red"
+  },
+  {
+   "agent": "viper",
+   "color": "teal"
+  },
+  {
+   "agent": "viper",
+   "color": "red"
+  },
+  {
+   "agent": "vyse",
+   "color": "teal"
+  },
+  {
+   "agent": "vyse",
+   "color": "red"
+  },
+  {
+   "agent": "waylay",
+   "color": "teal"
+  },
+  {
+   "agent": "waylay",
+   "color": "red"
+  },
+  {
+   "agent": "yoru",
+   "color": "teal"
+  },
+  {
+   "agent": "yoru",
+   "color": "red"
+  }
+ ]
+}

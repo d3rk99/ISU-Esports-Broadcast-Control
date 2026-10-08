@@ -160,3 +160,17 @@ test('spectate: red/teal from the box EDGE - Derk\'s live Waylay (thin red frame
   assert.equal(boxColorOf(live, { x: 10, y: 10, s: 80 }), 'red');
   assert.equal(boxColorOf(() => [40, 45, 50], { x: 10, y: 10, s: 80 }), '', 'grey gameplay = no colour');
 });
+
+test('spectate: two references per agent (teal + red box) -> agent AND colour in one match, on live crops', () => {
+  const { PortraitMatcher } = require('../electron/valorant-portrait-match.cjs');
+  const pm = new PortraitMatcher();
+  assert.equal(pm.refs.length, 58, '29 agents x 2 colours');
+  const sova = loadRgb(path.join(DIR, '..', 'val-pov-live-sova-teal.png'));
+  const m1 = pm.match(sova, { x: 0, y: 0, s: 74 }); assert.equal(m1.agent, 'sova'); assert.equal(m1.color, 'teal');
+  const red = loadRgb(path.join(DIR, '..', 'val-pov-live-red-2.png'));
+  assert.equal(pm.match(red, { x: 0, y: 0, s: 74 }).color, 'red');
+  const breach = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
+  const m3 = pm.match(breach, { x: 20, y: 20, s: 80 }); assert.equal(m3.agent, 'breach'); assert.equal(m3.color, 'red');
+  // only the agents in this match: still right
+  assert.equal(pm.match(sova, { x: 0, y: 0, s: 74 }, { only: ['sova', 'gekko', 'breach'] }).color, 'teal');
+});
