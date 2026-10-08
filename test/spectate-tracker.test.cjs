@@ -140,3 +140,15 @@ test('spectate experiment: ICON ONLY - only the agents in this match are compare
   now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '');
   now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', '2 frames (~33 ms at 60 fps)');
 });
+
+test('spectate: the Bridge says in plain words WHY nobody is matched (names, agents, red/teal, box)', () => {
+  const t = new SpectateTracker({ ocr: null });
+  assert.match(t.whyNot(), /No player names/);
+  t.setCandidates([{ name: 'Sn0wfal', side: 'home' }]);
+  assert.match(t.whyNot(), /NO agents/, 'reader off = names without agents');
+  t.setCandidates([{ name: 'Sn0wfal', side: 'home', agent: 'breach' }]);
+  assert.match(t.whyNot(), /red\/teal/);
+  t.setSides({ red: 'home', teal: 'away' });
+  t.lastPortrait = { color: '', candidate: 'breach' };
+  assert.match(t.whyNot(), /colour not red\/teal/);
+});

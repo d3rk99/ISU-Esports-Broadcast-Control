@@ -44,6 +44,24 @@ function normalizeSpectateSettings(raw = {}, game = 'valorant') {
   };
 }
 
+
+// Small RGB sampler over one region of the frame (native image crop -> one small bitmap).
+// Falls back to the full-frame sampler when the frame has no image (tests, fake captures).
+function regionSampler(frame, box, full) {
+  const m = 14; const x0 = Math.max(0, box.x - m); const y0 = Math.max(0, box.y - m); const w = box.s + m * 2; const h = box.s + m * 2;
+  try {
+    if (!frame?.image?.crop) return full;
+    const img = frame.image.crop({ x: x0, y: y0, width: w, height: h });
+    const sz = img.getSize(); const bmp = img.toBitmap();
+    if (!sz.width || bmp.length < sz.width * sz.height * 4) return full;
+    return (x, y) => {
+      const lx = x - x0; const ly = y - y0;
+      if (lx < 0 || ly < 0 || lx >= sz.width || ly >= sz.height) return full(x, y);
+      const o = (ly * sz.width + lx) * 4; return [bmp[o + 2], bmp[o + 1], bmp[o]];
+    };
+  } catch { return full; }
+}
+
 function createGameEnvelope(game, payload, sequence, capturedAt = Date.now()) {
   return {
     type: game === 'rocketleague' ? 'game-telemetry' : 'game-state',
@@ -140,7 +158,7 @@ class UniversalGameBridge {
       if (changed || !this.lastSpectateUiAt || Date.now() - this.lastSpectateUiAt > 250) {
         this.lastSpectateUiAt = Date.now();
         this.onOcrState({ spectate: { ...spectated, last: this.spectate.last } });
-        const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}${spectated.via ? ` · by ${spectated.via}` : ''}` : (this.spectate.candidates.length ? 'No known player in view' : 'Waiting for player names from the controller');
+        const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}${spectated.via ? ` · by ${spectated.via}` : ''}` : this.spectate.whyNot();
         this.spectateStatus = { state: 'reading', message: `${who} · ${Date.now() - started} ms/read` };
         this.reportSource(this.spectateStatus);
       }
@@ -150,12 +168,16 @@ class UniversalGameBridge {
       const started = Date.now();
       try {
         if (!this.capture) throw new Error('Capture is unavailable');
-        const frame = await this.capture.capture(cfg.windowName, { newerThan: lastFrame, captureFps: 60 });
+        const frame = await this.capture.capture(cfg.windowName, { newerThan: lastFrame, captureFps: 30 });
         if (frame === lastFrame) { this.spectateTimer = setTimeout(loop, 4); return; }
         lastFrame = frame;
         if (frame.width !== 1920 || frame.height !== 1080) throw new Error(`Captured ${frame.width}x${frame.height}; use a 16:9 window`);
-        const rgb = (x, y) => this.capture.rgb(frame, x, y);
-        const fast = this.spectate.portraitStep(rgb, cfg.portrait);
+        // Only copy the pixels we need: the portrait square (+ margin for the shift search), not
+        // the whole 1920x1080 frame (that full copy every frame was the ~500 ms/read on Windows).
+        const full = (x, y) => this.capture.rgb(frame, x, y);
+        const rgbPortrait = cfg.portrait ? regionSampler(frame, cfg.portrait, full) : full;
+        const rgb = full;
+        const fast = this.spectate.portraitStep(rgbPortrait, cfg.portrait);
         if (fast) send(fast, started);
         else if (cfg.method === 'icon') {
           // Icon only: nothing matched this frame = an empty read (keeps the vote history honest).

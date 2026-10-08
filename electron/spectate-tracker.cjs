@@ -92,6 +92,20 @@ const VARIANTS = [
   { mode: 'edge', thr: 170 }, { mode: 'thr', thr: 215 }
 ];
 
+
+// Red/teal team box: 4 small patches just inside the box edges (top-left, top-right, mid-left,
+// mid-right; the badge covers the bottom-left), majority vote. One patch alone misread live.
+function boxColor(rgb, box) {
+  const q = Math.max(6, Math.round(box.s * 0.1)); const votes = { red: 0, teal: 0 };
+  for (const [ox, oy] of [[3, 3], [box.s - q - 3, 3], [3, Math.round(box.s * 0.4)], [box.s - q - 3, Math.round(box.s * 0.4)]]) {
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let y = box.y + oy; y < box.y + oy + q; y += 2) for (let x = box.x + ox; x < box.x + ox + q; x += 2) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+    r /= n; g /= n; b /= n;
+    if (r > g + 45 && r > b + 45) votes.red += 1; else if (g > r + 45 && b > r + 25) votes.teal += 1;
+  }
+  return votes.red >= 2 && votes.red > votes.teal ? 'red' : votes.teal >= 2 && votes.teal > votes.red ? 'teal' : '';
+}
+
 class SpectateTracker {
   constructor({ ocr, agents = null, now = () => Date.now(), minScore = 0.62, minMargin = 0.12, confirm = 3, window = 4, holdMs = 4000, lang = 'eng' } = {}) {
     Object.assign(this, { ocr, agents, now, minScore, minMargin, confirm, window, holdMs, lang });
@@ -180,10 +194,7 @@ class SpectateTracker {
   // agent from the official icon. -> { agent, color, side, player|null, ms }
   readPortrait(rgb, box) {
     const t0 = Date.now();
-    let r = 0; let g = 0; let b = 0; let n = 0;
-    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
-    r /= n; g /= n; b /= n;
-    const color = r > g + 50 && r > b + 50 ? 'red' : g > r + 50 && b > r + 30 ? 'teal' : '';
+    const color = boxColor(rgb, box);
     // Compare only against the agents in this match (from the scoreboard reader): fewer
     // look-alikes and ~3x less work than all 29.
     const only = [...new Set(this.candidates.map((c) => c.agent).filter(Boolean))];
@@ -221,6 +232,19 @@ class SpectateTracker {
     if (this.current && t - this.lastSeenAt > this.holdMs) { this.current = null; changed = true; }
     this.last = { at: t, winner: winner?.name || null, ...detail };
     return { changed, spectated: this.snapshot() };
+  }
+
+  // Plain-words reason nothing is matched yet (shown in the Bridge), checked in order.
+  whyNot() {
+    if (!this.candidates.length) return 'No player names from the controller yet (is the receiver on and the key the same?)';
+    const withAgent = this.candidates.filter((c) => c.agent).length;
+    if (!withAgent) return 'Controller sent names but NO agents: turn on the VALORANT scoreboard reader (Observer 3) so it knows who plays what';
+    if (!this.sides) return 'No red/teal info: select VALORANT in the controller (it sends which team is red this half)';
+    const p = this.lastPortrait;
+    if (!p) return `${withAgent} players with agents · waiting for a frame`;
+    if (!p.color) return `Portrait box colour not red/teal (agent ${p.candidate || '?'}): check the portrait box position`;
+    if (!p.agent) return `${p.color} box, agent not sure (best ${p.candidate} ${p.score}): portrait box position / icon`;
+    return `${p.agent} on ${p.color} (${p.side}) but no ${p.side} player has ${p.agent} on the reader's board`;
   }
 
   snapshot() {
