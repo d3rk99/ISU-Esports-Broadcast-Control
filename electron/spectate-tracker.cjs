@@ -236,6 +236,7 @@ class SpectateTracker {
 
   // Plain-words reason nothing is matched yet (shown in the Bridge), checked in order.
   whyNot() {
+    if (!this.agents) return `AGENT ICONS NOT LOADED (${this.agentLoadError || 'matcher missing'}): rebuild the Bridge from the latest commit`;
     if (!this.candidates.length) return 'No player names from the controller yet (is the receiver on and the key the same?)';
     const withAgent = this.candidates.filter((c) => c.agent).length;
     if (!withAgent) return 'Controller sent names but NO agents: turn on the VALORANT scoreboard reader (Observer 3) so it knows who plays what';

@@ -2,7 +2,7 @@ const { WebSocket } = require('ws');
 const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } = require('./rocket-league-service.cjs');
 const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS, DEFAULT_PORTRAITS } = require('./spectate-tracker.cjs');
-let AgentMatcher = null; try { ({ AgentMatcher } = require('./valorant-board-parse.cjs')); } catch {}
+let AgentMatcher = null; let agentLoadError = ''; try { ({ AgentMatcher } = require('./valorant-board-parse.cjs')); } catch (error) { agentLoadError = error.message || String(error); }
 
 const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant', 'overwatch']);
 
@@ -93,8 +93,11 @@ class UniversalGameBridge {
     this.capture = capture;
     this.ocr = ocr;
     // Agent icons for the fast portrait read (VALORANT); missing = name OCR only.
-    let agents = null; try { agents = AgentMatcher ? new AgentMatcher() : null; } catch {}
+    let agents = null; try { agents = AgentMatcher ? new AgentMatcher() : null; } catch (error) { agentLoadError = error.message || String(error); }
     this.spectate = new SpectateTracker({ ocr, agents });
+    // Say it loudly in the Bridge if the agent icons did not load (a missing file in the package
+    // silently disabled the icon path once: no reads at all in icon-only mode).
+    this.spectate.agentLoadError = agents ? '' : (agentLoadError || 'agent matcher not available');
     this.spectateTimer = null;
     this.spectateStatus = { state: 'off', message: 'Spectated-player tracking is off' };
   }
