@@ -153,3 +153,10 @@ test('spectate: the Bridge says in plain words WHY nobody is matched (names, age
   t.lastPortrait = { color: '', candidate: 'breach' };
   assert.match(t.whyNot(), /colour not red\/teal/);
 });
+
+test('spectate: red/teal from the box EDGE - Derk\'s live Waylay (thin red frame around the icon) reads red', () => {
+  const { boxColorOf } = require('../electron/spectate-tracker.cjs');
+  const live = loadRgb(path.join(DIR, '..', 'val-pov-live-waylay-red.png'));
+  assert.equal(boxColorOf(live, { x: 10, y: 10, s: 80 }), 'red');
+  assert.equal(boxColorOf(() => [40, 45, 50], { x: 10, y: 10, s: 80 }), '', 'grey gameplay = no colour');
+});

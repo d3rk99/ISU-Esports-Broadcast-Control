@@ -76,8 +76,12 @@ class NativeValorantWindowCapture {
     const captureModule = await this.getModule();
     const target = this.selectWindow(captureModule.enumerateWindows().filter((window) => window.isValid && window.title), windowName);
     if (!target) throw captureError(`Window containing “${windowName || 'VALORANT'}” was not found`, 'WINDOW_NOT_FOUND');
-    if (this.session && this.activeHandle === target.handle && !this.sessionError) return;
+    // Reuse the session unless a caller now wants a faster frame rate than it was started with
+    // (the spectate tracker asks for 30 fps; an older 8 fps session would cap it at ~125 ms).
+    const fps = Math.max(1, Number(captureFps) || 8);
+    if (this.session && this.activeHandle === target.handle && !this.sessionError && (this.sessionFps || 0) >= fps) return;
     if (this.sessionPromise) return this.sessionPromise;
+    this.sessionFps = fps;
     this.sessionPromise = this.startSession(captureModule, target, captureFps).finally(() => { this.sessionPromise = null; });
     return this.sessionPromise;
   }

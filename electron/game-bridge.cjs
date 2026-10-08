@@ -162,7 +162,10 @@ class UniversalGameBridge {
         this.lastSpectateUiAt = Date.now();
         this.onOcrState({ spectate: { ...spectated, last: this.spectate.last } });
         const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}${spectated.via ? ` · by ${spectated.via}` : ''}` : this.spectate.whyNot();
-        this.spectateStatus = { state: 'reading', message: `${who} · ${Date.now() - started} ms/read` };
+        const tm = this.spectateTiming || {};
+        // Where the time goes: waiting for/copying the frame vs the icon check itself, and which
+        // capture engine (the Electron fallback grabs a full screenshot each time = slow).
+        this.spectateStatus = { state: 'reading', message: `${who} · frame ${tm.capMs ?? '?'} ms + icon ${tm.iconMs ?? '?'} ms · ${tm.backend || '?'}${tm.fallback ? ` (native failed: ${tm.fallback})` : ''}` };
         this.reportSource(this.spectateStatus);
       }
     };
@@ -172,6 +175,7 @@ class UniversalGameBridge {
       try {
         if (!this.capture) throw new Error('Capture is unavailable');
         const frame = await this.capture.capture(cfg.windowName, { newerThan: lastFrame, captureFps: 30 });
+        const capMs = Date.now() - started;
         if (frame === lastFrame) { this.spectateTimer = setTimeout(loop, 4); return; }
         lastFrame = frame;
         if (frame.width !== 1920 || frame.height !== 1080) throw new Error(`Captured ${frame.width}x${frame.height}; use a 16:9 window`);
@@ -180,7 +184,9 @@ class UniversalGameBridge {
         const full = (x, y) => this.capture.rgb(frame, x, y);
         const rgbPortrait = cfg.portrait ? regionSampler(frame, cfg.portrait, full) : full;
         const rgb = full;
+        const t1 = Date.now();
         const fast = this.spectate.portraitStep(rgbPortrait, cfg.portrait);
+        this.spectateTiming = { capMs, iconMs: Date.now() - t1, backend: frame.backend || this.capture.lastBackend || '?', fallback: frame.fallbackReason || '' };
         if (fast) send(fast, started);
         else if (cfg.method === 'icon') {
           // Icon only: nothing matched this frame = an empty read (keeps the vote history honest).

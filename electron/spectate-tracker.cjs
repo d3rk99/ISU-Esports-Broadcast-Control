@@ -96,14 +96,17 @@ const VARIANTS = [
 // Red/teal team box: 4 small patches just inside the box edges (top-left, top-right, mid-left,
 // mid-right; the badge covers the bottom-left), majority vote. One patch alone misread live.
 function boxColor(rgb, box) {
-  const q = Math.max(6, Math.round(box.s * 0.1)); const votes = { red: 0, teal: 0 };
-  for (const [ox, oy] of [[3, 3], [box.s - q - 3, 3], [3, Math.round(box.s * 0.4)], [box.s - q - 3, Math.round(box.s * 0.4)]]) {
-    let r = 0; let g = 0; let b = 0; let n = 0;
-    for (let y = box.y + oy; y < box.y + oy + q; y += 2) for (let x = box.x + ox; x < box.x + ox + q; x += 2) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
-    r /= n; g /= n; b /= n;
-    if (r > g + 45 && r > b + 45) votes.red += 1; else if (g > r + 45 && b > r + 25) votes.teal += 1;
-  }
-  return votes.red >= 2 && votes.red > votes.teal ? 'red' : votes.teal >= 2 && votes.teal > votes.red ? 'teal' : '';
+  // Red/teal team colour from the box EDGE: a ring of pixels within ~8% of the left, right and
+  // top edges (bottom-left = badge, skipped). The box can be solid OR just a thin frame around
+  // the icon (Derk's live feed 2026-10-08), so count coloured pixels in the ring instead of
+  // averaging a patch that may land on the icon.
+  const e = Math.max(3, Math.round(box.s * 0.08)); let red = 0; let teal = 0; let n = 0;
+  const look = (x, y) => { const [r, g, b] = rgb(x, y); n += 1; if (r > g + 60 && r > b + 50 && r > 120) red += 1; else if (g > r + 50 && b > r + 30 && g > 110) teal += 1; };
+  for (let y = box.y; y < box.y + box.s; y += 1) for (let k = 0; k < e; k += 1) { if (y < box.y + box.s * 0.6) look(box.x + k, y); look(box.x + box.s - 1 - k, y); }
+  for (let x = box.x + e; x < box.x + box.s - e; x += 1) for (let k = 0; k < e; k += 1) look(x, box.y + k);
+  if (red > n * 0.18 && red > teal * 2) return 'red';
+  if (teal > n * 0.18 && teal > red * 2) return 'teal';
+  return '';
 }
 
 class SpectateTracker {
@@ -281,4 +284,4 @@ function rocketLeagueSpectated(state = {}) {
   }
   return { name, ...hit, apiName: name, receivedAt: Date.now(), game: 'rocketleague' };
 }
-module.exports = { DEFAULT_PORTRAITS, rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };
+module.exports = { boxColorOf: boxColor, DEFAULT_PORTRAITS, rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };
