@@ -455,7 +455,13 @@
     for (let index = 0; index < shown; index += 1) {
       const round = rounds[index] || { round: index + 1 };
       const marker = document.createElement('span');
-      const winnerRole = round.winnerRole || '';
+      // Colour = who won (home/away) + which half: teams trade colours after round 12 and every
+      // OT round, same as the score numbers. winnerSide is the truth; older saves only have
+      // winnerRole, written in first-half colours for every round (defense = home) - the bug
+      // Derk saw after round 12 - so the side is recovered from that.
+      const swapped = valorantSidesSwapped(index + 1);
+      const side = round.winnerSide || (round.winnerRole === 'defense' ? 'home' : round.winnerRole === 'attack' ? 'away' : '');
+      const winnerRole = !side ? '' : (side === 'home') !== swapped ? 'defense' : 'attack';
       marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}`;
       marker.dataset.round = String(index + 1);
       marker.title = `${index + 1} ${valorantSideLabel(winnerRole)}`.trim();
@@ -532,6 +538,25 @@
     return wrap;
   }
 
+  // Agent face spots (assets/valorant/agents/faces.json: fx/fy = face centre as a share of the
+  // art, fh = face height), so every card shows the agent's face, not the top of the head.
+  let VALORANT_AGENT_FACES = {};
+  fetch('../assets/valorant/agents/faces.json', { cache: 'force-cache' }).then((r) => r.json()).then((f) => { VALORANT_AGENT_FACES = f || {}; }).catch(() => {});
+  function placeValorantAgentArt(card, agent) {
+    const f = VALORANT_AGENT_FACES[agent];
+    // ::before = right 46% of the card (285x75 -> ~131x75; mirrored for away). Measured on a
+    // real render (2026-10-07): the face box is about the whole head, so a head ~30 px tall
+    // (40% of the card) shows head + shoulders; the face centre goes to 60% across, 38% down.
+    const fh = Number(f?.fh) || 0.085; const fx = Number(f?.fx) || 0.5; const fy = Number(f?.fy) || 0.12;
+    const ar = Number(f?.ar) || 0.6;
+    const cardH = 75; const boxW = 285 * 0.46;
+    const imgH = Math.max(cardH * 1.4, Math.min(cardH * 8, (cardH * 0.4) / fh));
+    const imgW = imgH * ar;
+    card.style.setProperty('--val-agent-size', `${Math.round(imgW)}px ${Math.round(imgH)}px`);
+    card.style.setProperty('--val-agent-pos', `${Math.round(boxW * 0.6 - fx * imgW)}px ${Math.round(cardH * 0.38 - fy * imgH)}px`);
+  }
+
+
   function renderValorantPlayerCards(selector, players = [], side = 'home') {
     const container = $(selector);
     if (!container) return;
@@ -571,11 +596,29 @@
       }
       if (player?.agent) {
         card.classList.add('has-agent');
-        card.style.setProperty('--val-agent-art', `url("../assets/valorant/agents/${String(player.agent).replace(/[^a-z0-9-]/gi, '')}.webp")`);
+        const agentSlug = String(player.agent).replace(/[^a-z0-9-]/gi, '');
+        card.style.setProperty('--val-agent-art', `url("../assets/valorant/agents/${agentSlug}.webp")`);
+        placeValorantAgentArt(card, agentSlug);
       }
       card.append(valorantUltimateRing(player), name, stats, weaponWrap);
       container.append(card);
     });
+  }
+
+  // Spectated player name bar (state.spectated from the controller: Game Bridge tracker). Team
+  // colour on the left edge; hidden when nobody is known.
+  function renderValorantSpectated(state, teams) {
+    const bar = $('#val-spectated');
+    if (!bar) return;
+    const sp = state?.spectated;
+    const show = Boolean(sp?.name);
+    bar.hidden = !show;
+    if (!show) return;
+    const team = sp.side === 'away' ? teams[1] : sp.side === 'home' ? teams[0] : null;
+    bar.style.setProperty('--val-spec-color', team?.color || '#f47920');
+    if (bar.dataset.name !== sp.name) { bar.dataset.name = sp.name; bar.classList.remove('is-in'); void bar.offsetWidth; bar.classList.add('is-in'); }
+    setText('#val-spectated-name', sp.name);
+    setText('#val-spectated-team', team?.shortName || team?.name || '');
   }
 
   function renderValorantHud(selectedGame, game, teams, activeMap) {
@@ -908,6 +951,7 @@
     renderRocketLeaguePlayers(game, selectedGame);
     renderRocketLeagueStatCard(game, selectedGame, state.activeRoster);
     renderValorantHud(selectedGame, game, teams, activeMap);
+    if (selectedGame === 'valorant') renderValorantSpectated(state, teams); else { const sb = $('#val-spectated'); if (sb) sb.hidden = true; }
     renderSmashScorecard(selectedGame, game, teams);
     renderOverwatchScorecard(selectedGame, game, teams, activeMap);
     renderOverwatchPlayerCards(selectedGame, game);

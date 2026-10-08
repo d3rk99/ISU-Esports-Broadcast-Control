@@ -21,3 +21,15 @@ test('VALORANT round history: only home / away won, colour flips after round 12 
   assert.equal(ctx.valorantRoleFor('home', 26), 'attack');
   assert.equal(ctx.valorantRoleFor('', 5), null);
 });
+
+test('VALORANT overlay: round dots follow the half swap for new AND old saves; spectated bar exists', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'overlays', 'overlay.js'), 'utf8');
+  assert.match(js, /const swapped = valorantSidesSwapped\(index \+ 1\);/);
+  assert.match(js, /round\.winnerSide \|\| \(round\.winnerRole === 'defense' \? 'home'/);
+  assert.match(js, /function renderValorantSpectated\(state, teams\)/);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'overlays', 'scoreboard.html'), 'utf8');
+  assert.match(html, /id="val-spectated"/);
+  const faces = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'assets', 'valorant', 'agents', 'faces.json'), 'utf8'));
+  const agents = fs.readdirSync(path.join(__dirname, '..', 'public', 'assets', 'valorant', 'agents')).filter((f) => f.endsWith('.webp')).map((f) => f.slice(0, -5));
+  assert.deepEqual(agents.filter((a) => !faces[a]), [], 'every agent has a face spot');
+});

@@ -831,10 +831,11 @@ body[data-setup="game"] .val-native-fit .val-center {
 .val-shield--light { opacity: .75; }
 .val-player-card.has-agent::before {
   content: ""; position: absolute; inset: 0 0 0 auto; width: 46%; pointer-events: none; z-index: 0;
-  background: var(--val-agent-art) right 18% / cover no-repeat; opacity: .32;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%); mask-image: linear-gradient(90deg, transparent, #000 70%);
+  /* face-placed from faces.json (overlay.js placeValorantAgentArt); brighter than before (was .32) */
+  background: var(--val-agent-art) var(--val-agent-pos, right 18%) / var(--val-agent-size, cover) no-repeat; opacity: .62;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%);
 }
-.val-player-card--away.has-agent::before { inset: 0 auto 0 0; background-position: left 18%; transform: scaleX(-1); }
+.val-player-card--away.has-agent::before { inset: 0 auto 0 0; transform: scaleX(-1); }
 .val-player-card > * { position: relative; z-index: 1; }
 /* Ultimate: radial ring, one segment per ult point (agents need 6-9). */
 .val-ult {
@@ -2257,3 +2258,26 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 body:not([data-game="overwatch"]) .ow-players { display: none; }
 
 .ow-ban { animation: sm-logo-in 420ms 1500ms both; }
+
+/* ---- VALORANT spectated player (Game Bridge tracker) ----------------------------------------
+   Bottom centre, right above the in-game ability HUD (abilities + health sit ~y 960-1050 on a
+   1920x1080 POV). Move it with --val-spec-bottom if the HUD layout changes. */
+.val-spectated {
+  position: absolute; left: 50%; bottom: var(--val-spec-bottom, 132px); z-index: 7;
+  display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 22px 0 0;
+  transform: translateX(-50%); color: #fff;
+  background: linear-gradient(180deg, rgba(10,16,24,.92), rgba(4,8,14,.92));
+  border-bottom: 2px solid var(--val-spec-color, #f47920);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 12px 100%);
+  box-shadow: 0 8px 18px rgba(0,0,0,.4);
+}
+.val-spectated[hidden] { display: none; }
+.val-spectated i {
+  display: grid; place-items: center; align-self: stretch; min-width: 54px; padding: 0 14px 0 18px;
+  background: var(--val-spec-color, #f47920); color: #fff; font-style: normal; font-size: 14px; font-weight: 1000; letter-spacing: .08em;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+.val-spectated i:empty { min-width: 18px; padding: 0; }
+.val-spectated strong { font-size: 22px; font-weight: 1000; letter-spacing: .04em; white-space: nowrap; text-shadow: 0 2px 4px rgba(0,0,0,.6); }
+.val-spectated.is-in { animation: val-spec-in 320ms cubic-bezier(.2,.82,.18,1) both; }
+@keyframes val-spec-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }

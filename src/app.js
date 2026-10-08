@@ -943,7 +943,7 @@ function markValorantRoundWinner(roundNumber, winnerSide) {
     ...(timeline.rounds[index] || {})
   };
   if (existing.manual) return;
-  const winnerRole = valorantRoleFor(winnerSide, index + 1);
+  const winnerRole = valorantRoleFor(winnerSide, index + 1); // display colour for this round
   const winnerRow = winnerSide === 'home' ? 'top' : winnerSide === 'away' ? 'bottom' : null;
   timeline.rounds[index] = {
     ...existing,

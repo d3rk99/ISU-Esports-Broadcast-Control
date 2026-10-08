@@ -681,9 +681,19 @@ function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
   spectateReceiver?.setCandidates(spectateCandidatesFrom(nextState));
-  overlayClients.publish(broadcastState);
+  overlayClients.publish(withSpectated(broadcastState));
   companionApiService?.publish(broadcastState);
 }
+
+// Overlays get who is being spectated (Game Bridge tracker / RL API) next to the game state, so
+// the spectated-player name bar can follow it. Stale (> 10 s) = nobody.
+function withSpectated(state) {
+  const sp = currentSpectated();
+  const fresh = sp?.name && Date.now() - Number(sp.receivedAt || 0) < 10000;
+  return { ...state, spectated: fresh ? { name: sp.name, station: sp.station || null, side: sp.side || '', team: sp.team || '' } : null };
+}
+// The spectated name changes on its own (not through a controller state publish): push it too.
+function publishSpectated() { if (broadcastState && Object.keys(broadcastState).length) overlayClients.publish(withSpectated(broadcastState)); }
 
 // Rocket League exposes the spectated player in its own Stats API (Game.Target), so it needs no
 // OCR tracker: take the name from the live feed and find that player's roster station. Other
@@ -835,7 +845,7 @@ function startOverlayServer() {
       return;
     }
     if (requestUrl.pathname === '/api/state') {
-      writeJson(response, 200, broadcastState);
+      writeJson(response, 200, withSpectated(broadcastState));
       return;
     }
     if (requestUrl.pathname === '/api/health') {
@@ -1250,12 +1260,13 @@ app.whenReady().then(async () => {
       spectatedPlayer = { ...spectatedPlayer, ...spectated };
       for (const window of BrowserWindow.getAllWindows()) window.webContents.send('spectated:update', spectatedPlayer);
       companionApiService?.publish(broadcastState);
+      publishSpectated();
     },
     onStatus: (status) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('spectate-receiver:status', status); }
   });
   spectateReceiver.configure(readSpectateReceiverSettings());
   // Spectated name goes stale if the bridge stops sending: re-publish so Companion clears it.
-  setInterval(() => { if (spectatedPlayer.name && Date.now() - spectatedPlayer.receivedAt > 10000) { spectatedPlayer = { ...spectatedPlayer, name: '', station: null }; companionApiService?.publish(broadcastState); } }, 3000).unref?.();
+  setInterval(() => { if (spectatedPlayer.name && Date.now() - spectatedPlayer.receivedAt > 10000) { spectatedPlayer = { ...spectatedPlayer, name: '', station: null }; companionApiService?.publish(broadcastState); publishSpectated(); } }, 3000).unref?.();
   // Overwatch scoreboard OCR shares the window-capture stack and Tesseract engine design with
   // VALORANT but has its own engine instance (its own worker pool) and its own window.
   overwatchOcrService = new OverwatchOcrService({
