@@ -26,11 +26,11 @@ function matchLine(m) {
 
 // Player-POV spectator: the Game Bridge on that PC reads which player is watched and sends it
 // here; the controller turns it into the Companion variables spectated_name / spectated_station.
-function spectatePanel(sp = {}, addresses = []) {
+export function spectatePanel(sp = {}, addresses = []) {
   const s = sp.settings || {}; const st = sp.status || {}; const who = sp.spectated || {};
   const tone = ['connected', 'listening'].includes(st.state) ? (st.state === 'connected' ? 'ok' : '') : st.state === 'error' ? 'bad' : '';
   return `<div class="vb-spectate">
-    <h3>SPECTATED PLAYER (player-POV spectator → Companion)</h3>
+    <h3>SPECTATED PLAYER (player-POV spectator → Companion) · VALORANT &amp; Overwatch</h3>
     <div class="ow-ocr-controls">
       <label class="rl-enable-toggle"><input type="checkbox" data-sp-cfg="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>SPECTATED PLAYER RECEIVER</b><small>For the Game Bridge on the player-view spectator PC</small></span></label>
       <label class="field"><span>PORT</span><input type="number" min="1024" max="65535" data-sp-cfg="port" value="${Number(s.port) || 3175}"></label>

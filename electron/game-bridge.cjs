@@ -4,7 +4,7 @@ const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } 
 const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS, DEFAULT_PORTRAITS } = require('./spectate-tracker.cjs');
 let AgentMatcher = null; try { ({ AgentMatcher } = require('./valorant-board-parse.cjs')); } catch {}
 
-const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant']);
+const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant', 'overwatch']);
 
 function safePort(value, fallback = 3175) {
   const parsed = Number(value);
@@ -116,6 +116,9 @@ class UniversalGameBridge {
   startSpectate() {
     const generation = this.generation;
     const cfg = this.settings.spectate;
+    // Name font: Overwatch = BigNoodle (trained 'ow' model), VALORANT = DIN-like (trained 'val').
+    this.spectate.lang = this.settings.game === 'overwatch' ? 'ow' : this.settings.game === 'valorant' ? 'val' : 'eng';
+    this.spectate.clear();
     this.spectateStatus = { state: 'starting', message: `Looking for the "${cfg.windowName}" window` };
     this.reportSource(this.spectateStatus);
     const loop = async () => {
@@ -183,7 +186,7 @@ class UniversalGameBridge {
       if (generation !== this.generation) return socket.terminate?.();
       // Detect a dead link (cable pull / Wi-Fi drop) and fall into the normal 3 s reconnect.
       keepAlive(socket);
-      this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT (spectated player)' : 'Rocket League'}` };
+      this.remoteStatus = { state: 'connected', message: `Connected to Graphics PC for ${this.settings.game === 'valorant' ? 'VALORANT (spectated player)' : this.settings.game === 'overwatch' ? 'Overwatch (spectated player)' : 'Rocket League'}` };
       this.report();
     });
     // The controller sends the names to look for (rosters + scoreboard) whenever they change.

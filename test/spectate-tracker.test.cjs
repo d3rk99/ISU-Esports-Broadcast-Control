@@ -63,6 +63,9 @@ test('spectate: Rocket League uses the Stats API target (no OCR) -> roster stati
     rocketLeague: { blueTeam: 0, live: { status: 'connected', dataAgeMs: 100, ...live } } } } });
   assert.deepEqual((({ name, station, side, team }) => ({ name, station, side, team }))(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99' }))), { name: 'D3RK99', station: 2, side: 'home', team: 'IDAHO STATE' });
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'JVGuy' })).station, 6, 'JV roster too');
+  const fuzzy = rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK_99' }));
+  assert.equal(fuzzy.station, 2, 'gamertag slips (>= 90%) still link to the roster');
+  assert.equal(fuzzy.name, 'D3RK99', 'reported as the roster name');
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'Bronco' })).side, 'away');
   const stranger = rocketLeagueSpectated(state({ spectatedPlayer: 'Rando', players: [{ name: 'Rando', teamNum: 1 }] }));
   assert.equal(stranger.station, null); assert.equal(stranger.side, 'away', 'side from the RL team number');
@@ -109,4 +112,20 @@ test('spectate: 2 portrait reads in a row switch the camera (name OCR still need
   step('Sn0wfal', 'portrait'); assert.equal(t.snapshot().name, 'Sn0wfal'); assert.equal(t.snapshot().via, 'portrait');
   step('nyv', 'name'); step('nyv', 'name'); assert.equal(t.snapshot().name, 'Sn0wfal', 'name OCR still needs 3');
   step('nyv', 'name'); assert.equal(t.snapshot().name, 'nyv');
+});
+
+test('spectate: free cam (portrait box gone) clears the camera after 2 reads, not 4 s', async () => {
+  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
+  const { DEFAULT_PORTRAITS } = require('../electron/spectate-tracker.cjs');
+  const pov = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
+  let freecam = false;
+  const rgb = (x, y) => (freecam ? [40, 45, 50] : pov(x, y - 780)); // free cam: plain gameplay, no red/teal box
+  let now = 0; const ocr = { recognize: async () => ({ text: '', confidence: 0 }) };
+  const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
+  t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }]); t.setSides({ red: 'home', teal: 'away' });
+  for (let i = 0; i < 2; i += 1) { now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); }
+  assert.equal(t.snapshot().name, 'Sn0wfal');
+  freecam = true;
+  now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', 'one empty frame is not enough');
+  now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '', 'cleared after 2 empty reads (0.5 s)');
 });

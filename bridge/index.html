@@ -14,7 +14,7 @@
   <main class="shell">
     <div class="brand"><div class="mark">ISU</div><div><span>GAME PC COMPANION</span><strong>UNIVERSAL ESPORTS BRIDGE</strong></div></div>
     <section class="panel">
-      <header><div><span class="eyebrow">NETWORK TELEMETRY</span><h1>Send live game data to Broadcast Control</h1><p>One bridge for Rocket League and VALORANT.</p></div><label class="mode"><span>ACTIVE GAME ADAPTER</span><select id="game"><option value="rocketleague">Rocket League</option><option value="valorant">VALORANT (spectated player)</option></select></label></header>
+      <header><div><span class="eyebrow">NETWORK TELEMETRY</span><h1>Send live game data to Broadcast Control</h1><p>One bridge for Rocket League, VALORANT and Overwatch.</p></div><label class="mode"><span>ACTIVE GAME ADAPTER</span><select id="game"><option value="rocketleague">Rocket League</option><option value="valorant">VALORANT (spectated player)</option><option value="overwatch">Overwatch (spectated player)</option></select></label></header>
       <div class="fields">
         <label><span>GRAPHICS PC IP ADDRESS</span><input id="graphicsHost" placeholder="192.168.1.50"></label>
         <label><span>BRIDGE PORT</span><input id="bridgePort" type="number" value="3175"></label>
@@ -61,13 +61,18 @@
 
     function renderMode() {
       const game = $('#game').value;
-      document.documentElement.style.setProperty('--game', game === 'valorant' ? '#ff4655' : '#2d8cff');
+      document.documentElement.style.setProperty('--game', game === 'valorant' ? '#ff4655' : game === 'overwatch' ? '#f06414' : '#2d8cff');
+      // Name box default per game when the box is still on another game's default.
+      const boxDefaults = { valorant: [113, 816, 213, 41], overwatch: [660, 930, 600, 60] };
+      const cur = ['spectateX','spectateY','spectateW','spectateH'].map((id) => Number($('#'+id).value));
+      if (boxDefaults[game] && Object.values(boxDefaults).some((d) => d.join() === cur.join())) ['spectateX','spectateY','spectateW','spectateH'].forEach((id, i) => { $('#'+id).value = boxDefaults[game][i]; });
+      $('#spectateWindow').value = $('#spectateWindow').value === 'VALORANT' || $('#spectateWindow').value === 'Overwatch' ? (game === 'overwatch' ? 'Overwatch' : 'VALORANT') : $('#spectateWindow').value;
       $('#rocketleagueSettings').classList.toggle('hidden', game !== 'rocketleague');
       // Rocket League sends the spectated player in its own API, so no name tracker there.
       $('#spectateSettings').classList.toggle('hidden', game === 'rocketleague');
-      $('#setupNote').innerHTML = game === 'valorant'
-        ? '<b>SETUP:</b> On the Graphics PC (Broadcast Control → VALORANT → Scoreboard reader panel), turn on <b>SPECTATED PLAYER RECEIVER</b>, generate a bridge key, and use the same port and key here. The scoreboard, score and timer are read on the Graphics PC.'
-        : '<b>SETUP:</b> On the Graphics PC, choose Rocket League, set Data Source to Game PC Bridge, and use the same port and key.';
+      $('#setupNote').innerHTML = game !== 'rocketleague'
+        ? '<b>SETUP:</b> On the Graphics PC (Broadcast Control → Settings → Spectated player receiver), turn the receiver on, generate a bridge key, and use the same port and key here. Place the name box on the spectated player\'s name with CAPTURE FRAME.'
+        : '<b>SETUP:</b> On the Graphics PC, choose Rocket League, set Data Source to Game PC Bridge, and use the same port and key. The spectated player comes from the Rocket League API; no name box needed.';
       showStatuses(lastStatus);
     }
 
@@ -120,7 +125,7 @@
 
     function showStatuses(status = {}) {
       lastStatus = status;
-      const gameLabel = ($('#game').value === 'valorant' ? 'SPECTATED PLAYER' : 'ROCKET LEAGUE');
+      const gameLabel = ($('#game').value === 'rocketleague' ? 'ROCKET LEAGUE' : 'SPECTATED PLAYER');
       if (status.remote) show('remoteStatus','GRAPHICS PC',status.remote);
       if (status.source) show('sourceStatus',gameLabel,status.source);
       simulatorRunning = status.source?.state === 'simulating';

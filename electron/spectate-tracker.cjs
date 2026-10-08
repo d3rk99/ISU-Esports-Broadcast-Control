@@ -23,6 +23,7 @@ const DEFAULT_ROIS = {
   // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent
   // portrait. Measured by Derk on a live POV feed (2026-10-07). Adjustable in the Bridge.
   valorant: { x: 113, y: 816, w: 213, h: 41 },
+  // Overwatch player POV: guessed (no POV screenshot yet) - place it in the Bridge.
   overwatch: { x: 660, y: 930, w: 600, h: 60 },
   rocketleague: { x: 660, y: 930, w: 600, h: 60 }
 };
@@ -127,6 +128,11 @@ class SpectateTracker {
       const p = this.readPortrait(rgb, portrait);
       if (p.player) return this.report({ name: p.player.name, score: 1, via: 'portrait' }, { portrait: p, fast: true });
       this.lastPortrait = p;
+      // Free cam / no POV: the red/teal portrait box is gone. That is a clear "nobody" (a POV
+      // always shows it), so skip the OCR and let 2 such reads in a row clear the camera.
+      if (!p.color) return this.report(null, { portrait: p, empty: true });
+    } else if (portrait && this.portraitBoxGone(rgb, portrait)) {
+      return this.report(null, { empty: true });
     }
     const reads = [];
     for (const v of VARIANTS) {
@@ -146,6 +152,14 @@ class SpectateTracker {
     const ranked = [...votes.entries()].sort((a, b) => b[1].n - a[1].n || b[1].score - a[1].score);
     const winner = ranked[0] ? { name: ranked[0][0], ...ranked[0][1] } : null;
     return this.report(winner, { reads, portrait: this.lastPortrait || null });
+  }
+
+  // No agents loaded: still detect the missing red/teal box (free cam).
+  portraitBoxGone(rgb, box) {
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+    r /= n; g /= n; b /= n;
+    return !(r > g + 50 && r > b + 50) && !(g > r + 50 && b > r + 30);
   }
 
   // Portrait box (x,y = top-left of the square, s = side). Box colour from the corner strip,
@@ -170,6 +184,8 @@ class SpectateTracker {
     const t = this.now();
     this.history.push(winner?.name || null);
     if (this.history.length > this.window) this.history.shift();
+    // Count reads in a row that clearly show NO player (portrait box gone = free cam).
+    this.emptyRun = detail.empty ? (this.emptyRun || 0) + 1 : 0;
     // Portrait reads (agent + team colour) are near-certain: 2 in a row switch the camera,
     // instead of 3 of 4 for name OCR.
     this.portraitRun = winner?.via === 'portrait' ? (this.portraitLast === winner.name ? (this.portraitRun || 0) + 1 : 1) : 0;
@@ -185,7 +201,8 @@ class SpectateTracker {
       this.current = { ...c, score: winner?.name === pick ? winner.score : (this.current?.score || 0), via: winner?.name === pick ? winner.via || 'name' : 'name', since: t };
       changed = true;
     } else if (this.current && winner?.name === this.current.name) this.current.score = winner.score;
-    if (this.current && t - this.lastSeenAt > this.holdMs) { this.current = null; changed = true; }
+    // Nobody: 2 clear "no POV" reads (~0.5 s at 250 ms) or nothing readable for holdMs.
+    if (this.current && (this.emptyRun >= 2 || t - this.lastSeenAt > this.holdMs)) { this.current = null; this.history = []; changed = true; }
     this.last = { at: t, winner: winner?.name || null, ...detail };
     return { changed, spectated: this.snapshot() };
   }
@@ -204,11 +221,14 @@ function rocketLeagueSpectated(state = {}) {
   const name = String(live.spectatedPlayer || '').trim();
   const fresh = ['connected', 'simulating'].includes(live.status) && (live.dataAgeMs ?? 0) < 10000;
   if (!name || !fresh || live.replay) return { name: '', station: null, side: '', team: '', receivedAt: Date.now(), game: 'rocketleague' };
-  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  let hit = null;
+  // Roster link by gamertag, same >= 90% match as the player cards ('D3RK_99' = 'D3RK99').
+  let hit = null; let best = 0.9;
   for (const [side, rosters, team] of [['home', game.rosters, game.teams?.[0]], ['away', game.awayRosters, game.teams?.[1]]]) {
     for (const key of ['varsity', 'jv']) for (const p of rosters?.[key] || []) {
-      if (!hit && [p?.handle, p?.name].some((n) => norm(n) && norm(n) === norm(name))) hit = { station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '' };
+      for (const tag of [p?.handle, p?.name]) {
+        const sc = tag ? similarity(tag, name) : 0;
+        if (sc >= best) { best = sc; hit = { name: p.handle || p.name, station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '' }; }
+      }
     }
   }
   // Not in a roster: still give the side from the RL team number (blue/orange mapped to home/away).
@@ -218,6 +238,6 @@ function rocketLeagueSpectated(state = {}) {
     const teamIndex = player ? (Number(player.teamNum) === 0 ? blue : 1 - blue) : -1;
     hit = { station: null, side: teamIndex === 0 ? 'home' : teamIndex === 1 ? 'away' : '', team: game.teams?.[teamIndex]?.name || '' };
   }
-  return { name, ...hit, receivedAt: Date.now(), game: 'rocketleague' };
+  return { name, ...hit, apiName: name, receivedAt: Date.now(), game: 'rocketleague' };
 }
 module.exports = { DEFAULT_PORTRAITS, rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };

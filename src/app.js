@@ -9,7 +9,7 @@ import { GAME_CONFIGS, GAME_ORDER, createGameState, createPlayer, rocketLeagueAr
 import { advanceGameMatch, applyCompanionAction, saveLastGameStats, swapGameTeams, swapGameTeamsPreservingSideScores } from './companion-actions.js';
 import { deepClone, loadState, saveState } from './store.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
-import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel, syncValorantRoster } from './valorant-board-panel.js';
+import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel, spectatePanel, syncValorantRoster } from './valorant-board-panel.js';
 
 const root = document.querySelector('#app');
 let state = loadState();
@@ -785,6 +785,8 @@ function renderSettings() {
       </div>
       <footer><strong>Output scale</strong><span>Each app output window is created as a 1920 &times; 1080 source and then fullscreened on the selected display.</span><span>Use Preview for setup checks; Open Dual takes over both selected screens.</span></footer>
     </article>
+    <div class="section-heading companion-heading"><div><span class="section-number">02b</span><div><h2>Spectated player receiver</h2><p>For the Game Bridge on a player-POV spectator PC (VALORANT and Overwatch). Rocket League gets the spectated player from its API. Companion: <b>$(isu:spectated_station)</b>, <b>$(isu:spectated_name)</b></p></div></div></div>
+    <article class="panel">${spectatePanel(spectateInfo, networkAddresses)}</article>
     <div class="section-heading companion-heading"><div><span class="section-number">03</span><div><h2>Bitfocus Companion API</h2><p>Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules</p></div></div></div>
     <article class="panel companion-api-panel">
       <header><div><span>REMOTE CONTROL SERVICE</span><h3>Companion connection</h3><p>The API is disabled until you turn it on. Keep the private key out of screenshots and public profiles.</p></div><span class="api-status ${companionStatus.listening ? 'online' : companionStatus.error ? 'error' : ''}"><i></i>${apiState}</span></header>
@@ -1269,8 +1271,9 @@ let valorantBoard = emptyValorantBoard();
 // Spectated-player receiver (Game Bridge on the player-view spectator PC).
 let spectateInfo = { settings: {}, status: {}, spectated: {} };
 window.isuDesktop?.getSpectateReceiver?.().then((info) => { spectateInfo = { ...spectateInfo, ...info }; if (state.selectedGame === 'valorant') render(); }).catch(() => {});
-window.isuDesktop?.onSpectated?.((sp) => { spectateInfo = { ...spectateInfo, spectated: sp }; if (state.selectedGame === 'valorant' && state.activeView === 'control') render(); });
-window.isuDesktop?.onSpectateReceiverStatus?.((st) => { spectateInfo = { ...spectateInfo, status: st }; if (state.selectedGame === 'valorant' && state.activeView === 'control') render(); });
+const spectateRerender = () => { if ((state.selectedGame === 'valorant' && state.activeView === 'control') || state.activeView === 'settings') render(); };
+window.isuDesktop?.onSpectated?.((sp) => { spectateInfo = { ...spectateInfo, spectated: sp }; spectateRerender(); });
+window.isuDesktop?.onSpectateReceiverStatus?.((st) => { spectateInfo = { ...spectateInfo, status: st }; spectateRerender(); });
 let valorantBoardRenderTimer = null;
 function publishValorantBoard() {
   if (state.games.valorant) state.games.valorant.valorantBoard = { live: valorantBoard.live };

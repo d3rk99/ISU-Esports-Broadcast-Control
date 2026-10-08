@@ -60,3 +60,11 @@ test('VALORANT bridge: spectate tracker sends who is watched to the Graphics PC 
   assert.equal(got.find((s) => s.name)?.name, 'Sn0wfal');
   assert.equal(got.find((s) => s.name)?.station, 1);
 });
+
+test('bridge Overwatch mode: spectate tracker with the trained Overwatch name model', () => {
+  const s = normalizeBridgeSettings({ game: 'overwatch', graphicsHost: '10.0.0.2', bridgeToken: 'k' });
+  assert.equal(s.game, 'overwatch');
+  assert.equal(s.spectate.enabled, true, 'tracker on for Overwatch');
+  assert.equal(s.spectate.windowName, 'Overwatch');
+  assert.equal(s.spectate.portrait, null, 'no portrait fast path for Overwatch (name only)');
+});
