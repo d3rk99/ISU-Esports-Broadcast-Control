@@ -1,24 +1,24 @@
 {
   "appId": "edu.isu.esports.gamebridge",
   "productName": "ISU Esports Game Bridge",
-  "directories": { "output": "release/bridge" },
+  "directories": {
+    "output": "release/bridge"
+  },
   "files": [
     "bridge/**/*",
     "electron/bridge-main.cjs",
     "electron/bridge-preload.cjs",
     "electron/game-bridge.cjs",
     "electron/bridge-link.cjs",
-    "electron/valorant-observer-consensus.cjs",
     "electron/rocket-league-service.cjs",
     "electron/valorant-capture.cjs",
     "electron/valorant-native-capture.cjs",
     "electron/valorant-ocr-engine.cjs",
-    "electron/valorant-ocr-profiles.cjs",
-    "electron/valorant-ocr-profiles.json",
-    "electron/valorant-ocr-service.cjs",
-    "electron/valorant-ocr-state.cjs",
-    "electron/valorant-timer-state.cjs",
-    "package.json"
+    "package.json",
+    "electron/spectate-tracker.cjs",
+    "electron/valorant-agent-templates.json",
+    "electron/valorant-agent-templates.bin",
+    "electron/ocr-models/**/*"
   ],
   "asarUnpack": [
     "node_modules/bmp-js/**/*",
@@ -35,12 +35,24 @@
     "node_modules/wasm-feature-detect/**/*",
     "node_modules/webidl-conversions/**/*",
     "node_modules/whatwg-url/**/*",
-    "node_modules/zlibjs/**/*"
+    "node_modules/zlibjs/**/*",
+    "electron/ocr-models/**/*"
   ],
-  "extraMetadata": { "main": "electron/bridge-main.cjs" },
+  "extraMetadata": {
+    "main": "electron/bridge-main.cjs"
+  },
   "win": {
     "icon": "build/icon.svg",
-    "target": [{ "target": "portable", "arch": ["x64"] }]
+    "target": [
+      {
+        "target": "portable",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
   },
-  "portable": { "artifactName": "${productName}-Portable-${version}-${arch}.${ext}" }
+  "portable": {
+    "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+  }
 }

@@ -69,3 +69,44 @@ test('spectate: Rocket League uses the Stats API target (no OCR) -> roster stati
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99', replay: true })).name, '', 'replay = nobody');
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99', status: 'disconnected' })).name, '', 'no feed = nobody');
 });
+
+// Derk's live POV crops (2026-10-07): the portrait (agent icon on the red/teal team box) gives
+// the agent in ~1-10 ms; agent + the team's CURRENT colour -> one player, no OCR needed.
+function loadRgb(file) {
+  const raw = execFileSync('python3', ['-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('RGB');print(im.size[0]);sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())`, file], { maxBuffer: 1e8 });
+  const nl = raw.indexOf(10); const w = Number(raw.subarray(0, nl)); const px = raw.subarray(nl + 1);
+  return (x, y) => { const o = (y * w + x) * 3; return [px[o] || 0, px[o + 1] || 0, px[o + 2] || 0]; };
+}
+test('spectate: POV portraits -> agent (Breach, Neon, Waylay, Sova, Yoru, Sova), team badge corner ignored', () => {
+  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
+  const am = new AgentMatcher();
+  const want = { 1: 'neon', 2: 'waylay', 3: 'sova', 4: 'yoru', 5: 'sova' };
+  const boxes = { 1: { x: 6, y: 4, s: 76 }, 2: { x: 2, y: 2, s: 79 }, 3: { x: 6, y: 4, s: 79 }, 4: { x: 6, y: 4, s: 78 }, 5: { x: 2, y: 2, s: 78 } };
+  for (const i of [1, 2, 3, 4, 5]) assert.equal(am.matchBox(loadRgb(path.join(DIR, '..', `val-pov-tag${i}.png`)), boxes[i]).agent, want[i], `tag${i}`);
+  const pov = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
+  assert.equal(am.matchBox((x, y) => pov(x, y - 780), { x: 20, y: 800, s: 80 }).agent, 'breach');
+});
+
+test('spectate: agent + current red/teal side -> the right player with no OCR; sides swap at the half', async () => {
+  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
+  const { DEFAULT_PORTRAITS } = require('../electron/spectate-tracker.cjs');
+  const pov = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
+  const rgb = (x, y) => pov(x, y - 780);
+  let calls = 0; const ocr = { recognize: async () => { calls += 1; return { text: '', confidence: 0 }; } };
+  const cands = [{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }, { name: 'nyv', station: 7, side: 'away', agent: 'breach' }, { name: 'santi', station: 6, side: 'away', agent: 'neon' }];
+  const run = async (sides) => { const t = new SpectateTracker({ ocr, agents: new AgentMatcher() }); t.setCandidates(cands); t.setSides(sides); await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); return t.last.winner; };
+  assert.equal(await run({ red: 'home', teal: 'away' }), 'Sn0wfal', 'second half: home wears red');
+  assert.equal(await run({ red: 'away', teal: 'home' }), 'nyv', 'first half: away wears red');
+  assert.equal(calls, 0, 'portrait path needs no OCR');
+  assert.equal(await run(null), null, 'without side info it does not guess (name OCR takes over)');
+});
+
+test('spectate: 2 portrait reads in a row switch the camera (name OCR still needs 3 of 4)', () => {
+  let now = 0; const t = new SpectateTracker({ ocr: null, now: () => now });
+  t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home' }, { name: 'nyv', station: 7, side: 'away' }]);
+  const step = (name, via) => { now += 250; return t.report(name ? { name, score: 1, via } : null); };
+  step('Sn0wfal', 'portrait'); assert.equal(t.snapshot().name, '', 'one read is not enough');
+  step('Sn0wfal', 'portrait'); assert.equal(t.snapshot().name, 'Sn0wfal'); assert.equal(t.snapshot().via, 'portrait');
+  step('nyv', 'name'); step('nyv', 'name'); assert.equal(t.snapshot().name, 'Sn0wfal', 'name OCR still needs 3');
+  step('nyv', 'name'); assert.equal(t.snapshot().name, 'nyv');
+});

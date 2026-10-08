@@ -97,7 +97,8 @@
     function renderSpectate(sp) {
       if (!sp) return;
       const reads = (sp.last?.reads || []).map((r) => `${escapeHtml(r.variant)}: “${escapeHtml(r.text || '')}”${r.best ? ` → ${escapeHtml(r.best)} ${Math.round((r.score||0)*100)}%` : ''}`).join(' · ');
-      $('#spectateNow').innerHTML = `SPECTATING <b>${escapeHtml(sp.name || '—')}</b>${sp.station ? ` · STATION <b>${sp.station}</b>` : ''} · ${sp.candidates || 0} NAMES FROM CONTROLLER<br><small>${reads}</small>`;
+      const pt = sp.last?.portrait; const portrait = pt ? `PORTRAIT ${escapeHtml(pt.agent || pt.candidate || '?')} · ${escapeHtml(pt.color || '?')} box${pt.player ? ` → ${escapeHtml(pt.player.name)}` : ''} (${pt.ms} ms)` : '';
+      $('#spectateNow').innerHTML = `SPECTATING <b>${escapeHtml(sp.name || '—')}</b>${sp.station ? ` · STATION <b>${sp.station}</b>` : ''}${sp.via ? ` · BY ${escapeHtml(sp.via.toUpperCase())}` : ''} · ${sp.candidates || 0} NAMES FROM CONTROLLER<br><small>${portrait}${portrait && reads ? '<br>' : ''}${reads}</small>`;
     }
     function spectateBox() {
       const r = { x: Number($('#spectateX').value), y: Number($('#spectateY').value), w: Number($('#spectateW').value), h: Number($('#spectateH').value) };

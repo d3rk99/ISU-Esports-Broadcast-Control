@@ -18,7 +18,7 @@ class SpectateReceiver {
   constructor({ onSpectated = () => {}, onStatus = () => {}, now = () => Date.now() } = {}) {
     Object.assign(this, { onSpectated, onStatus, now });
     this.settings = normalizeSettings();
-    this.server = null; this.clients = new Set(); this.candidates = [];
+    this.server = null; this.clients = new Set(); this.candidates = []; this.sides = null;
     this.status = { state: 'disabled', message: 'Spectated-player receiver is off', clients: 0 };
   }
 
@@ -46,7 +46,7 @@ class SpectateReceiver {
       if (!bridgeKeyMatches(this.settings.token, url.searchParams.get('token'))) { client.close(1008, 'Invalid bridge key'); return; }
       this.clients.add(client); keepAlive(client);
       this.setStatus('connected', 'Spectator Game Bridge connected');
-      if (this.candidates.length) client.send(JSON.stringify({ type: 'spectate-candidates', candidates: this.candidates }));
+      if (this.candidates.length) client.send(JSON.stringify({ type: 'spectate-candidates', candidates: this.candidates, sides: this.sides || null }));
       client.on('message', (raw) => {
         try {
           const packet = JSON.parse(String(raw));
@@ -67,12 +67,14 @@ class SpectateReceiver {
   }
 
   // Names the tracker may report, pushed to every connected bridge when they change.
-  setCandidates(list = []) {
+  // sides: { red: 'home'|'away', teal: 'home'|'away', round } = which team has which colour now.
+  setCandidates(list = [], sides = null) {
     const next = (Array.isArray(list) ? list : []).filter((c) => c && String(c.name || '').trim()).slice(0, 40)
-      .map((c) => ({ name: String(c.name).trim().slice(0, 40), station: Number(c.station) || null, side: c.side === 'away' ? 'away' : c.side === 'home' ? 'home' : '', team: String(c.team || '').slice(0, 60) }));
-    if (JSON.stringify(next) === JSON.stringify(this.candidates)) return next.length;
-    this.candidates = next;
-    for (const client of this.clients) { try { client.send(JSON.stringify({ type: 'spectate-candidates', candidates: next })); } catch {} }
+      .map((c) => ({ name: String(c.name).trim().slice(0, 40), station: Number(c.station) || null, side: c.side === 'away' ? 'away' : c.side === 'home' ? 'home' : '', team: String(c.team || '').slice(0, 60), agent: String(c.agent || '').replace(/[^a-z0-9-]/g, '').slice(0, 20) }));
+    const nextSides = sides && ['home', 'away'].includes(sides.red) ? { red: sides.red, teal: sides.teal, round: Number(sides.round) || 0 } : null;
+    if (JSON.stringify(next) === JSON.stringify(this.candidates) && JSON.stringify(nextSides) === JSON.stringify(this.sides)) return next.length;
+    this.candidates = next; this.sides = nextSides;
+    for (const client of this.clients) { try { client.send(JSON.stringify({ type: 'spectate-candidates', candidates: next, sides: nextSides })); } catch {} }
     return next.length;
   }
 }

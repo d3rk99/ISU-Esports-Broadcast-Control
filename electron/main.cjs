@@ -680,7 +680,7 @@ function serveRocketLeagueLoadoutAsset(response, requestPath) {
 function publishBroadcastState(nextState) {
   if (!nextState || typeof nextState !== 'object') return;
   broadcastState = nextState;
-  spectateReceiver?.setCandidates(spectateCandidatesFrom(nextState));
+  spectateReceiver?.setCandidates(spectateCandidatesFrom(nextState), spectateSidesFrom(nextState));
   overlayClients.publish(withSpectated(broadcastState));
   companionApiService?.publish(broadcastState);
 }
@@ -707,15 +707,30 @@ function currentSpectated() {
 function spectateCandidatesFrom(state = {}) {
   const game = state.games?.[state.selectedGame] || {};
   const out = [];
+  // Agent per player from the scoreboard reader (by gamertag), so the bridge can identify the
+  // spectated player from the portrait (agent + red/teal box) in ~1 ms, not only by OCR.
+  const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live?.teams : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live?.teams : null;
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const agentOf = (side, name) => (live?.[side]?.players || []).find((p) => p?.name && norm(p.name) === norm(name))?.agent || '';
   for (const [side, rosters, team] of [['home', game.rosters, game.teams?.[0]], ['away', game.awayRosters, game.teams?.[1]]]) {
     for (const key of ['varsity', 'jv']) for (const p of rosters?.[key] || []) {
       const name = String(p?.handle || p?.name || '').trim();
-      if (name) out.push({ name, station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '' });
+      if (name) out.push({ name, station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '', agent: agentOf(side, name) });
     }
   }
-  const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live?.teams : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live?.teams : null;
-  for (const side of ['home', 'away']) for (const p of live?.[side]?.players || []) if (p?.name) out.push({ name: p.name, station: null, side, team: '' });
+  for (const side of ['home', 'away']) for (const p of live?.[side]?.players || []) if (p?.name) out.push({ name: p.name, station: null, side, team: '', agent: p.agent || '' });
   return out;
+}
+
+// Which colour each team has RIGHT NOW (VALORANT swaps at round 13 and every OT round):
+// first half home = teal (defense), away = red (attack). Sent to the bridge with the names.
+function spectateSidesFrom(state = {}) {
+  const game = state.games?.valorant;
+  if (state.selectedGame !== 'valorant' || !game) return null;
+  const h = Number(game.teams?.[0]?.detailScore) || 0; const a = Number(game.teams?.[1]?.detailScore) || 0;
+  const round = Number(game.valorantOcr?.live?.observer3?.roundTimeline?.currentRound) || h + a + 1;
+  const swapped = round <= 12 ? false : round <= 24 ? true : (round - 25) % 2 === 1;
+  return { round, red: swapped ? 'home' : 'away', teal: swapped ? 'away' : 'home' };
 }
 
 function spectateReceiverSettingsPath() { return path.join(app.getPath('userData'), 'spectate-receiver.json'); }

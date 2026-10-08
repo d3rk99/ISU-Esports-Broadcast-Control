@@ -158,6 +158,34 @@ class AgentMatcher {
     this.templates = this.names.map((name, i) => ({ name, px: bin.subarray(i * n * 4, (i + 1) * n * 4) }));
   }
 
+  // Big portrait (VALORANT POV, ~80 px square): sample the box down to the template size, try a
+  // few small shifts/zooms (the icon sits a little inside its box), same scoring as match().
+  matchBox(rgbAt, box, { maxScore = 46, minGap = 9 } = {}) {
+    const S = this.size; const scores = [];
+    const tries = [];
+    for (const inset of [0, 4, 8]) for (const dx of [-3, 0, 3]) for (const dy of [-3, 0, 3]) tries.push({ x: box.x + inset + dx, y: box.y + inset + dy, s: box.s - inset * 2 });
+    for (const t of this.templates) {
+      let best = Infinity;
+      for (const b of tries) {
+        let sum = 0; let wsum = 0; const k = b.s / S;
+        for (let y = 0; y < S; y += 2) for (let x = 0; x < S; x += 2) {
+          // the team badge covers the bottom-left corner of the POV portrait: skip it
+          if (x < S * 0.4 && y > S * 0.6) continue;
+          const o = (y * S + x) * 4; const a = t.px[o + 3] / 255; if (a < 0.1) continue;
+          const p = rgbAt(Math.round(b.x + (x + 0.5) * k), Math.round(b.y + (y + 0.5) * k));
+          for (let c = 0; c < 3; c += 1) { const d = p[c] * a - t.px[o + c] * a; sum += d * d; }
+          wsum += a * 3;
+        }
+        const sc = Math.sqrt(sum / (wsum || 1)); if (sc < best) best = sc;
+      }
+      scores.push([best, t.name]);
+    }
+    scores.sort((a, b) => a[0] - b[0]);
+    const [score, agent] = scores[0]; const runnerUp = scores[1];
+    const ok = score <= maxScore && runnerUp[0] - score >= minGap;
+    return { agent: ok ? agent : null, candidate: agent, score: Math.round(score * 10) / 10, runnerUp: runnerUp[1], runnerUpScore: Math.round(runnerUp[0] * 10) / 10 };
+  }
+
   match(rgbAt, cx, cy, { search = 4, maxScore = 46, minGap = 9 } = {}) {
     const S = this.size; const half = S / 2;
     const scores = [];

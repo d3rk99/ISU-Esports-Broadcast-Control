@@ -1,7 +1,8 @@
 const { WebSocket } = require('ws');
 const { keepAlive } = require('./bridge-link.cjs');
 const { RocketLeagueService, normalizeSettings: normalizeRocketLeagueSettings } = require('./rocket-league-service.cjs');
-const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS } = require('./spectate-tracker.cjs');
+const { SpectateTracker, DEFAULT_ROIS: SPECTATE_ROIS, DEFAULT_PORTRAITS } = require('./spectate-tracker.cjs');
+let AgentMatcher = null; try { ({ AgentMatcher } = require('./valorant-board-parse.cjs')); } catch {}
 
 const SUPPORTED_GAMES = Object.freeze(['rocketleague', 'valorant']);
 
@@ -34,7 +35,9 @@ function normalizeSpectateSettings(raw = {}, game = 'valorant') {
     // Off = the normal scoreboard OCR; on = THIS PC watches player POVs and only tracks the name.
     windowName: String(raw?.windowName || (game === 'valorant' ? 'VALORANT' : game === 'overwatch' ? 'Overwatch' : 'Rocket League')).slice(0, 120),
     intervalMs: n(raw?.intervalMs, 250, 120, 2000),
-    roi: { x: n(r.x, def.x, 0, 1900), y: n(r.y, def.y, 0, 1060), w: n(r.w, def.w, 20, 1920), h: n(r.h, def.h, 10, 300) }
+    roi: { x: n(r.x, def.x, 0, 1900), y: n(r.y, def.y, 0, 1060), w: n(r.w, def.w, 20, 1920), h: n(r.h, def.h, 10, 300) },
+    // Agent portrait square (fast ~1-10 ms read: agent icon + red/teal team box). null = name only.
+    portrait: DEFAULT_PORTRAITS[game] ? (() => { const pd = DEFAULT_PORTRAITS[game]; const pr = raw?.portrait || {}; return { x: n(pr.x, pd.x, 0, 1900), y: n(pr.y, pd.y, 0, 1060), s: n(pr.s, pd.s, 20, 300) }; })() : null
   };
 }
 
@@ -68,7 +71,9 @@ class UniversalGameBridge {
     });
     this.capture = capture;
     this.ocr = ocr;
-    this.spectate = new SpectateTracker({ ocr });
+    // Agent icons for the fast portrait read (VALORANT); missing = name OCR only.
+    let agents = null; try { agents = AgentMatcher ? new AgentMatcher() : null; } catch {}
+    this.spectate = new SpectateTracker({ ocr, agents });
     this.spectateTimer = null;
     this.spectateStatus = { state: 'off', message: 'Spectated-player tracking is off' };
   }
@@ -120,7 +125,7 @@ class UniversalGameBridge {
         if (!this.capture) throw new Error('Capture is unavailable');
         const frame = await this.capture.capture(cfg.windowName);
         if (frame.width !== 1920 || frame.height !== 1080) throw new Error(`Captured ${frame.width}x${frame.height}; use a 16:9 window`);
-        const { changed, spectated } = await this.spectate.sweep((x, y) => this.capture.rgb(frame, x, y), cfg.roi);
+        const { changed, spectated } = await this.spectate.sweep((x, y) => this.capture.rgb(frame, x, y), cfg.roi, cfg.portrait);
         if (changed || !this.lastSpectateSentAt || Date.now() - this.lastSpectateSentAt > 2000) {
           this.forwardRaw({ type: 'spectated', game: this.settings.game, version: 1, payload: spectated });
           this.lastSpectateSentAt = Date.now();
@@ -185,7 +190,7 @@ class UniversalGameBridge {
     socket.on('message', (raw) => {
       try {
         const msg = JSON.parse(String(raw));
-        if (msg.type === 'spectate-candidates' && Array.isArray(msg.candidates)) this.spectate.setCandidates(msg.candidates);
+        if (msg.type === 'spectate-candidates' && Array.isArray(msg.candidates)) { this.spectate.setCandidates(msg.candidates); this.spectate.setSides(msg.sides || null); }
       } catch {}
     });
     socket.on('error', () => {});

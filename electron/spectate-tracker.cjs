@@ -15,6 +15,10 @@
 //      Nothing readable for `holdMs` = report nobody (the cam stays where it was on the switcher).
 // Game-agnostic: the box + candidates are per game, so Overwatch / Rocket League can reuse it.
 
+// VALORANT POV portrait square (agent icon on the red/teal team box), 1920x1080, measured on
+// Derk's live POV feed 2026-10-07.
+const DEFAULT_PORTRAITS = { valorant: { x: 20, y: 800, s: 80 } };
+
 const DEFAULT_ROIS = {
   // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent
   // portrait. Measured by Derk on a live POV feed (2026-10-07). Adjustable in the Bridge.
@@ -89,8 +93,8 @@ const VARIANTS = [
 ];
 
 class SpectateTracker {
-  constructor({ ocr, now = () => Date.now(), minScore = 0.62, minMargin = 0.12, confirm = 3, window = 4, holdMs = 4000, lang = 'eng' } = {}) {
-    Object.assign(this, { ocr, now, minScore, minMargin, confirm, window, holdMs, lang });
+  constructor({ ocr, agents = null, now = () => Date.now(), minScore = 0.62, minMargin = 0.12, confirm = 3, window = 4, holdMs = 4000, lang = 'eng' } = {}) {
+    Object.assign(this, { ocr, agents, now, minScore, minMargin, confirm, window, holdMs, lang });
     this.candidates = [];
     this.history = [];
     this.current = null; // { name, station, side, score, since }
@@ -99,20 +103,31 @@ class SpectateTracker {
   }
 
   // [{ name, station?, side? }] from the controller. Blank names dropped, duplicates merged.
+  // sides = { red: 'home'|'away', teal: 'home'|'away' }: which team wears which colour right now.
+  setSides(sides) { this.sides = sides && ['home', 'away'].includes(sides.red) ? sides : null; }
+
   setCandidates(list = []) {
     const seen = new Map();
     for (const c of list) {
       const name = String(c?.name || '').trim();
       if (!name || seen.has(name.toLowerCase())) continue;
-      seen.set(name.toLowerCase(), { name, station: Number(c.station) || null, side: c.side || '', team: c.team || '' });
+      seen.set(name.toLowerCase(), { name, station: Number(c.station) || null, side: c.side || '', team: c.team || '', agent: String(c.agent || '') });
     }
     this.candidates = [...seen.values()];
     return this.candidates.length;
   }
 
   // One read of the box. rgb(x,y) -> [r,g,b] on the 1920x1080 grid.
-  async sweep(rgb, roi) {
+  async sweep(rgb, roi, portrait = null) {
     if (!this.candidates.length) return this.report(null, { reason: 'no candidate names from the controller' });
+    // Fast path (~1 ms): the POV portrait = agent icon on a red/teal box. Agent + current team
+    // colour -> one player (the scoreboard reader told the controller who plays which agent).
+    // Only used when it names exactly one candidate; otherwise fall through to the name OCR.
+    if (portrait && this.agents) {
+      const p = this.readPortrait(rgb, portrait);
+      if (p.player) return this.report({ name: p.player.name, score: 1, via: 'portrait' }, { portrait: p, fast: true });
+      this.lastPortrait = p;
+    }
     const reads = [];
     for (const v of VARIANTS) {
       const crop = cleanCrop(rgb, roi, v);
@@ -130,20 +145,44 @@ class SpectateTracker {
     }
     const ranked = [...votes.entries()].sort((a, b) => b[1].n - a[1].n || b[1].score - a[1].score);
     const winner = ranked[0] ? { name: ranked[0][0], ...ranked[0][1] } : null;
-    return this.report(winner, { reads });
+    return this.report(winner, { reads, portrait: this.lastPortrait || null });
+  }
+
+  // Portrait box (x,y = top-left of the square, s = side). Box colour from the corner strip,
+  // agent from the official icon. -> { agent, color, side, player|null, ms }
+  readPortrait(rgb, box) {
+    const t0 = Date.now();
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+    r /= n; g /= n; b /= n;
+    const color = r > g + 50 && r > b + 50 ? 'red' : g > r + 50 && b > r + 30 ? 'teal' : '';
+    const m = this.agents.matchBox(rgb, box);
+    const side = color && this.sides ? this.sides[color] : '';
+    let player = null;
+    if (m.agent && side) {
+      const hits = this.candidates.filter((c) => c.agent === m.agent && c.side === side);
+      if (hits.length === 1) player = hits[0];
+    }
+    return { agent: m.agent, candidate: m.candidate, score: m.score, color, side, player: player ? { name: player.name, station: player.station } : null, ms: Date.now() - t0 };
   }
 
   report(winner, detail = {}) {
     const t = this.now();
     this.history.push(winner?.name || null);
     if (this.history.length > this.window) this.history.shift();
+    // Portrait reads (agent + team colour) are near-certain: 2 in a row switch the camera,
+    // instead of 3 of 4 for name OCR.
+    this.portraitRun = winner?.via === 'portrait' ? (this.portraitLast === winner.name ? (this.portraitRun || 0) + 1 : 1) : 0;
+    this.portraitLast = winner?.via === 'portrait' ? winner.name : null;
     if (winner) this.lastSeenAt = t;
     const counts = new Map(); for (const n of this.history) if (n) counts.set(n, (counts.get(n) || 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
     let changed = false;
-    if (top && top[1] >= Math.min(this.confirm, this.window) && top[0] !== this.current?.name) {
-      const c = this.candidates.find((x) => x.name === top[0]) || { name: top[0] };
-      this.current = { ...c, score: winner?.name === top[0] ? winner.score : (this.current?.score || 0), since: t };
+    const fast = this.portraitRun >= 2 && winner.name !== this.current?.name ? winner.name : null;
+    if ((fast || (top && top[1] >= Math.min(this.confirm, this.window))) && (fast || top[0]) !== this.current?.name) {
+      const pick = fast || top[0];
+      const c = this.candidates.find((x) => x.name === pick) || { name: pick };
+      this.current = { ...c, score: winner?.name === pick ? winner.score : (this.current?.score || 0), via: winner?.name === pick ? winner.via || 'name' : 'name', since: t };
       changed = true;
     } else if (this.current && winner?.name === this.current.name) this.current.score = winner.score;
     if (this.current && t - this.lastSeenAt > this.holdMs) { this.current = null; changed = true; }
@@ -152,7 +191,7 @@ class SpectateTracker {
   }
 
   snapshot() {
-    return { name: this.current?.name || '', station: this.current?.station || null, side: this.current?.side || '', team: this.current?.team || '', score: Math.round((this.current?.score || 0) * 100) / 100, since: this.current?.since || 0, updatedAt: this.now(), candidates: this.candidates.length };
+    return { via: this.current?.via || '', name: this.current?.name || '', station: this.current?.station || null, side: this.current?.side || '', team: this.current?.team || '', score: Math.round((this.current?.score || 0) * 100) / 100, since: this.current?.since || 0, updatedAt: this.now(), candidates: this.candidates.length };
   }
 
   clear() { this.history = []; this.current = null; this.lastSeenAt = 0; }
@@ -181,4 +220,4 @@ function rocketLeagueSpectated(state = {}) {
   }
   return { name, ...hit, receivedAt: Date.now(), game: 'rocketleague' };
 }
-module.exports = { rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };
+module.exports = { DEFAULT_PORTRAITS, rocketLeagueSpectated, SpectateTracker, matchCandidates, similarity, cleanCrop, DEFAULT_ROIS, VARIANTS };
