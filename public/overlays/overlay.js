@@ -446,6 +446,8 @@
     const timeline = live?.observer3?.roundTimeline || {};
     const rounds = Array.isArray(timeline.rounds) ? timeline.rounds : [];
     const currentRound = Number(timeline.currentRound) || 0;
+    // The round being played now (same number the score colours use for sides-swapped).
+    const liveRound = Number(fallbackRound) || currentRound || 1;
     // Growing mode (experimental, controller toggle): only rounds 1..current are drawn and the
     // bar widens with each round until it is full width at round 24.
     const shown = growing ? Math.max(1, Math.min(24, currentRound || fallbackRound || 1)) : 24;
@@ -455,11 +457,11 @@
     for (let index = 0; index < shown; index += 1) {
       const round = rounds[index] || { round: index + 1 };
       const marker = document.createElement('span');
-      // Colour = who won (home/away) + which half: teams trade colours after round 12 and every
-      // OT round, same as the score numbers. winnerSide is the truth; older saves only have
-      // winnerRole, written in first-half colours for every round (defense = home) - the bug
-      // Derk saw after round 12 - so the side is recovered from that.
-      const swapped = valorantSidesSwapped(index + 1);
+      // Colour = the winning team's colour RIGHT NOW, like the game: when sides swap at round 13
+      // (and each OT round) every past dot changes colour together with the score numbers.
+      // winnerSide is the truth; older saves only have winnerRole (first-half colour, defense =
+      // home), so the side is recovered from that.
+      const swapped = valorantSidesSwapped(liveRound);
       const side = round.winnerSide || (round.winnerRole === 'defense' ? 'home' : round.winnerRole === 'attack' ? 'away' : '');
       const winnerRole = !side ? '' : (side === 'home') !== swapped ? 'defense' : 'attack';
       marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}`;
