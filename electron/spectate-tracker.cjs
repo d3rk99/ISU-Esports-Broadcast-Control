@@ -16,9 +16,9 @@
 // Game-agnostic: the box + candidates are per game, so Overwatch / Rocket League can reuse it.
 
 const DEFAULT_ROIS = {
-  // Guessed default for 1920x1080 VALORANT player POV (bottom centre, above the ability bar).
-  // Adjust it in the Bridge (drag the box on a debug frame); it is saved per game.
-  valorant: { x: 660, y: 930, w: 600, h: 60 },
+  // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent
+  // portrait. Measured by Derk on a live POV feed (2026-10-07). Adjustable in the Bridge.
+  valorant: { x: 113, y: 816, w: 213, h: 41 },
   overwatch: { x: 660, y: 930, w: 600, h: 60 },
   rocketleague: { x: 660, y: 930, w: 600, h: 60 }
 };
