@@ -142,7 +142,8 @@ test('spectate experiment: ICON ONLY - only the agents in this match are compare
 });
 
 test('spectate: the Bridge says in plain words WHY nobody is matched (names, agents, red/teal, box)', () => {
-  const t = new SpectateTracker({ ocr: null });
+  assert.match(new SpectateTracker({ ocr: null }).whyNot(), /AGENT ICONS NOT LOADED/, 'missing matcher is reported first');
+  const t = new SpectateTracker({ ocr: null, agents: {} });
   assert.match(t.whyNot(), /No player names/);
   t.setCandidates([{ name: 'Sn0wfal', side: 'home' }]);
   assert.match(t.whyNot(), /NO agents/, 'reader off = names without agents');
