@@ -35,6 +35,9 @@ function normalizeSpectateSettings(raw = {}, game = 'valorant') {
     // Off = the normal scoreboard OCR; on = THIS PC watches player POVs and only tracks the name.
     windowName: String(raw?.windowName || (game === 'valorant' ? 'VALORANT' : game === 'overwatch' ? 'Overwatch' : 'Rocket League')).slice(0, 120),
     intervalMs: n(raw?.intervalMs, 250, 120, 2000),
+    // Experiment (Derk 2026-10-08): 'icon' = agent icon + red/teal box ONLY, no name OCR at all.
+    // 'both' = icon first, name OCR alongside as fallback. Overwatch has no icon path -> always name.
+    method: game === 'valorant' && raw?.method === 'icon' ? 'icon' : 'both',
     roi: { x: n(r.x, def.x, 0, 1900), y: n(r.y, def.y, 0, 1060), w: n(r.w, def.w, 20, 1920), h: n(r.h, def.h, 10, 300) },
     // Agent portrait square (fast ~1-10 ms read: agent icon + red/teal team box). null = name only.
     portrait: DEFAULT_PORTRAITS[game] ? (() => { const pd = DEFAULT_PORTRAITS[game]; const pr = raw?.portrait || {}; return { x: n(pr.x, pd.x, 0, 1900), y: n(pr.y, pd.y, 0, 1060), s: n(pr.s, pd.s, 20, 300) }; })() : null
@@ -154,7 +157,10 @@ class UniversalGameBridge {
         const rgb = (x, y) => this.capture.rgb(frame, x, y);
         const fast = this.spectate.portraitStep(rgb, cfg.portrait);
         if (fast) send(fast, started);
-        else if (!nameBusy) {
+        else if (cfg.method === 'icon') {
+          // Icon only: nothing matched this frame = an empty read (keeps the vote history honest).
+          send(this.spectate.report(null, { portrait: this.spectate.lastPortrait || null, iconOnly: true }), started);
+        } else if (!nameBusy) {
           nameBusy = true;
           this.spectate.readName(rgb, cfg.roi).then(({ winner, reads }) => {
             if (generation !== this.generation) return;

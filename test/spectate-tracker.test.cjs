@@ -125,3 +125,18 @@ test('spectate speed: name cleanups read in parallel; a 4/4 name read counts as 
   const r2 = await t.readName(rgb, roi); now += 30; t.report(r2.winner, { reads: r2.reads });
   assert.equal(t.snapshot().name, 'Sn0wfal', '2 sure reads switch');
 });
+
+test('spectate experiment: ICON ONLY - only the agents in this match are compared, no OCR, fast switch', () => {
+  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
+  const { DEFAULT_PORTRAITS } = require('../electron/spectate-tracker.cjs');
+  const pov = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
+  const rgb = (x, y) => pov(x, y - 780);
+  let now = 0; const ocr = { recognize: async () => { throw new Error('icon-only must not OCR'); } };
+  const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
+  t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }, { name: 'nyv', station: 7, side: 'away', agent: 'neon' }, { name: 'santi', station: 6, side: 'away', agent: 'sova' }]);
+  t.setSides({ red: 'home', teal: 'away' });
+  const m = new AgentMatcher().matchBox(rgb, DEFAULT_PORTRAITS.valorant, { only: ['breach', 'neon', 'sova'] });
+  assert.equal(m.agent, 'breach');
+  now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '');
+  now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', '2 frames (~33 ms at 60 fps)');
+});

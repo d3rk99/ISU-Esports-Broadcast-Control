@@ -39,6 +39,7 @@
         <div class="fields three">
           <label><span>WINDOW TITLE CONTAINS</span><input id="spectateWindow" value="VALORANT"></label>
           <label><span>READ EVERY (MS)</span><input id="spectateInterval" type="number" min="120" max="2000" step="10" value="250"></label>
+          <label><span>HOW TO FIND THE PLAYER</span><select id="spectateMethod"><option value="both">Agent icon, then name (OCR)</option><option value="icon">Agent icon only (experiment, no OCR)</option></select></label>
           <label><span>NAME BOX X</span><input id="spectateX" type="number" value="113"></label>
           <label><span>NAME BOX Y</span><input id="spectateY" type="number" value="816"></label>
           <label><span>NAME BOX W × H</span><span class="pair"><input id="spectateW" type="number" value="213"><input id="spectateH" type="number" value="41"></span></label>
@@ -83,7 +84,7 @@
         bridgePort: Number($('#bridgePort').value),
         bridgeToken: $('#bridgeToken').value.trim(),
         rocketLeague: {transport:$('#transport').value,host:$('#host').value.trim(),tcpPort:Number($('#tcpPort').value),webPort:Number($('#webPort').value)},
-        spectate: {enabled:true,windowName:$('#spectateWindow').value.trim(),intervalMs:Number($('#spectateInterval').value),roi:{x:Number($('#spectateX').value),y:Number($('#spectateY').value),w:Number($('#spectateW').value),h:Number($('#spectateH').value)}},
+        spectate: {enabled:true,method:$('#spectateMethod').value,windowName:$('#spectateWindow').value.trim(),intervalMs:Number($('#spectateInterval').value),roi:{x:Number($('#spectateX').value),y:Number($('#spectateY').value),w:Number($('#spectateW').value),h:Number($('#spectateH').value)}},
       };
     }
 
@@ -95,6 +96,7 @@
       const sp = config.spectate || {};
       if (sp.windowName) $('#spectateWindow').value = sp.windowName;
       if (sp.intervalMs) $('#spectateInterval').value = sp.intervalMs;
+      if (sp.method) $('#spectateMethod').value = sp.method;
       for (const [id, k] of [['spectateX','x'],['spectateY','y'],['spectateW','w'],['spectateH','h']]) if (sp.roi?.[k] !== undefined) $('#'+id).value = sp.roi[k];
       renderMode();
     }
@@ -141,7 +143,7 @@
       catch (error) { show('sourceStatus','SPECTATE',{state:'error',message:error.message}); }
     });
     for (const id of ['spectateX','spectateY','spectateW','spectateH']) $('#'+id).addEventListener('input', () => { const f = $('#spectateFrame'); const img = f.querySelector('img'); if (img) f.innerHTML = img.outerHTML + spectateBox(); });
-    for (const id of ['spectateWindow','spectateInterval','spectateX','spectateY','spectateW','spectateH']) $('#'+id).addEventListener('change', async () => showStatuses(await window.isuBridge.updateConfig(read())));
+    for (const id of ['spectateWindow','spectateInterval','spectateMethod','spectateX','spectateY','spectateW','spectateH']) $('#'+id).addEventListener('change', async () => showStatuses(await window.isuBridge.updateConfig(read())));
     $('#game').addEventListener('change', renderMode);
     $('#start').addEventListener('click', async () => showStatuses(await window.isuBridge.start(read())));
     $('#stop').addEventListener('click', async () => showStatuses(await window.isuBridge.stop()));

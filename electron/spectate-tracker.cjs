@@ -184,7 +184,10 @@ class SpectateTracker {
     for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
     r /= n; g /= n; b /= n;
     const color = r > g + 50 && r > b + 50 ? 'red' : g > r + 50 && b > r + 30 ? 'teal' : '';
-    const m = this.agents.matchBox(rgb, box);
+    // Compare only against the agents in this match (from the scoreboard reader): fewer
+    // look-alikes and ~3x less work than all 29.
+    const only = [...new Set(this.candidates.map((c) => c.agent).filter(Boolean))];
+    const m = this.agents.matchBox(rgb, box, { only });
     const side = color && this.sides ? this.sides[color] : '';
     let player = null;
     if (m.agent && side) {

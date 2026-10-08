@@ -160,11 +160,13 @@ class AgentMatcher {
 
   // Big portrait (VALORANT POV, ~80 px square): sample the box down to the template size, try a
   // few small shifts/zooms (the icon sits a little inside its box), same scoring as match().
-  matchBox(rgbAt, box, { maxScore = 46, minGap = 9 } = {}) {
+  // only: optional list of agent names to compare against (e.g. the 10 in this match).
+  matchBox(rgbAt, box, { maxScore = 46, minGap = 9, only = null } = {}) {
     const S = this.size; const scores = [];
+    const pool = only && only.length >= 2 ? this.templates.filter((t) => only.includes(t.name)) : this.templates;
     const tries = [];
     for (const inset of [0, 4, 8]) for (const dx of [-3, 0, 3]) for (const dy of [-3, 0, 3]) tries.push({ x: box.x + inset + dx, y: box.y + inset + dy, s: box.s - inset * 2 });
-    for (const t of this.templates) {
+    for (const t of pool) {
       let best = Infinity;
       for (const b of tries) {
         let sum = 0; let wsum = 0; const k = b.s / S;

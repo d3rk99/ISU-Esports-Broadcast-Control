@@ -68,3 +68,9 @@ test('bridge Overwatch mode: spectate tracker with the trained Overwatch name mo
   assert.equal(s.spectate.windowName, 'Overwatch');
   assert.equal(s.spectate.portrait, null, 'no portrait fast path for Overwatch (name only)');
 });
+
+test('bridge spectate method: "icon" only for VALORANT, Overwatch always reads names', () => {
+  assert.equal(normalizeBridgeSettings({ game: 'valorant', spectate: { method: 'icon' } }).spectate.method, 'icon');
+  assert.equal(normalizeBridgeSettings({ game: 'valorant' }).spectate.method, 'both');
+  assert.equal(normalizeBridgeSettings({ game: 'overwatch', spectate: { method: 'icon' } }).spectate.method, 'both');
+});
