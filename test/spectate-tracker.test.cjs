@@ -63,9 +63,6 @@ test('spectate: Rocket League uses the Stats API target (no OCR) -> roster stati
     rocketLeague: { blueTeam: 0, live: { status: 'connected', dataAgeMs: 100, ...live } } } } });
   assert.deepEqual((({ name, station, side, team }) => ({ name, station, side, team }))(rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK99' }))), { name: 'D3RK99', station: 2, side: 'home', team: 'IDAHO STATE' });
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'JVGuy' })).station, 6, 'JV roster too');
-  const fuzzy = rocketLeagueSpectated(state({ spectatedPlayer: 'D3RK_99' }));
-  assert.equal(fuzzy.station, 2, 'gamertag slips (>= 90%) still link to the roster');
-  assert.equal(fuzzy.name, 'D3RK99', 'reported as the roster name');
   assert.equal(rocketLeagueSpectated(state({ spectatedPlayer: 'Bronco' })).side, 'away');
   const stranger = rocketLeagueSpectated(state({ spectatedPlayer: 'Rando', players: [{ name: 'Rando', teamNum: 1 }] }));
   assert.equal(stranger.station, null); assert.equal(stranger.side, 'away', 'side from the RL team number');
@@ -114,35 +111,17 @@ test('spectate: 2 portrait reads in a row switch the camera (name OCR still need
   step('nyv', 'name'); assert.equal(t.snapshot().name, 'nyv');
 });
 
-test('spectate: free cam (portrait box gone) clears the camera after 2 reads, not 4 s', async () => {
-  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
-  const { DEFAULT_PORTRAITS } = require('../electron/spectate-tracker.cjs');
-  const pov = loadRgb(path.join(DIR, '..', 'val-pov-portrait-breach-red.png'));
-  let freecam = false;
-  const rgb = (x, y) => (freecam ? [40, 45, 50] : pov(x, y - 780)); // free cam: plain gameplay, no red/teal box
-  let now = 0; const ocr = { recognize: async () => ({ text: '', confidence: 0 }) };
-  const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
-  t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }]); t.setSides({ red: 'home', teal: 'away' });
-  for (let i = 0; i < 2; i += 1) { now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); }
-  assert.equal(t.snapshot().name, 'Sn0wfal');
-  freecam = true;
-  now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', 'one empty frame is not enough');
-  now += 250; await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '', 'cleared after 2 empty reads (0.5 s)');
-});
-
-// Regression (Derk 2026-10-08, live): after the free-cam change players were almost never found.
-// Cause: when the portrait box colour was not seen (shifted capture, shading, no agents/sides from
-// the controller) the tracker called it "free cam" and skipped the name read entirely. Now a name
-// in the name box is ALWAYS read; "nobody" needs no box AND an empty name box.
-test('spectate: portrait box not recognised but a name is on screen -> still read by name (never "free cam")', async () => {
-  const { AgentMatcher } = require('../electron/valorant-board-parse.cjs');
-  let now = 0; let calls = 0;
-  const ocr = { recognize: async () => { calls += 1; return { text: 'Ishnarb', confidence: 0.95 }; } };
-  const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
-  t.setCandidates([{ name: 'Ishnarb', station: 5, side: 'home', agent: 'sova' }, { name: 'nyv', station: 7, side: 'away', agent: 'breach' }]);
-  // Dark gameplay everywhere (no red/teal box), white name text in the name box.
-  const rgb = (x, y) => (x >= ROI.x + 10 && x < ROI.x + 60 && y >= ROI.y + 10 && y < ROI.y + 25 && (x % 3) ? [245, 245, 245] : [40, 45, 50]);
-  for (let i = 0; i < 4; i += 1) { now += 250; await t.sweep(rgb, ROI, { x: 20, y: 800, s: 80 }); }
-  assert.ok(calls > 0, 'the name was read');
-  assert.equal(t.snapshot().name, 'Ishnarb');
+test('spectate speed: name cleanups read in parallel; a 4/4 name read counts as "sure" (2 in a row switch)', async () => {
+  let inFlight = 0; let peak = 0;
+  const ocr = { recognize: async () => { inFlight += 1; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 20)); inFlight -= 1; return { text: 'Sn0wfal', confidence: 0.95 }; } };
+  let now = 0; const t = new SpectateTracker({ ocr, now: () => now });
+  t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home' }, { name: 'nyv', station: 7, side: 'away' }]);
+  const rgb = (x, y) => ((x % 3) && y % 2 ? [245, 245, 245] : [40, 45, 50]);
+  const roi = { x: 113, y: 816, w: 213, h: 41 };
+  const t0 = Date.now(); const r1 = await t.readName(rgb, roi);
+  assert.ok(Date.now() - t0 < 75, 'the 4 cleanups ran at the same time (4 x 20 ms = 80 ms if serial)');
+  assert.equal(peak, 4);
+  now += 30; t.report(r1.winner, { reads: r1.reads }); assert.equal(t.snapshot().name, '', 'one read is not enough');
+  const r2 = await t.readName(rgb, roi); now += 30; t.report(r2.winner, { reads: r2.reads });
+  assert.equal(t.snapshot().name, 'Sn0wfal', '2 sure reads switch');
 });

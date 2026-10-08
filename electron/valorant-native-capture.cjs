@@ -157,7 +157,8 @@ class NativeValorantWindowCapture {
   async capture(windowName = 'VALORANT', options = {}) {
     await this.ensureSession(windowName, options.captureFps);
     if (this.sessionError) throw this.sessionError;
-    if (this.latestFrame && this.now() - this.latestFrame.capturedAt < 1500) return this.latestFrame;
+    // newerThan: wait for a frame other than this one (frame-driven loops, e.g. the spectate tracker).
+    if (this.latestFrame && this.latestFrame !== options.newerThan && this.now() - this.latestFrame.capturedAt < 1500) return this.latestFrame;
     return new Promise((resolve, reject) => {
       const waiter = { resolve, reject, timer: null };
       waiter.timer = setTimeout(() => {

@@ -121,26 +121,53 @@ class UniversalGameBridge {
     this.spectate.clear();
     this.spectateStatus = { state: 'starting', message: `Looking for the "${cfg.windowName}" window` };
     this.reportSource(this.spectateStatus);
+    // Two loops on the same capture:
+    //  - FAST: every new frame (capture runs at ~60 fps) -> portrait read (agent + red/teal box,
+    //    ~4 ms, no OCR). 2 matching frames switch the camera: ~35 ms after the POV changes.
+    //  - NAME: the 4 name cleanups OCR'd in parallel, back to back, as the fallback when the
+    //    portrait can't name a player (reader off, same agent on both teams...).
+    let lastFrame = null; let nameBusy = false;
+    const send = (result, started) => {
+      const { changed, spectated } = result;
+      if (changed || !this.lastSpectateSentAt || Date.now() - this.lastSpectateSentAt > 2000) {
+        this.forwardRaw({ type: 'spectated', game: this.settings.game, version: 1, payload: spectated });
+        this.lastSpectateSentAt = Date.now();
+      }
+      // UI updates are throttled; the switch itself is not.
+      if (changed || !this.lastSpectateUiAt || Date.now() - this.lastSpectateUiAt > 250) {
+        this.lastSpectateUiAt = Date.now();
+        this.onOcrState({ spectate: { ...spectated, last: this.spectate.last } });
+        const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}${spectated.via ? ` · by ${spectated.via}` : ''}` : (this.spectate.candidates.length ? 'No known player in view' : 'Waiting for player names from the controller');
+        this.spectateStatus = { state: 'reading', message: `${who} · ${Date.now() - started} ms/read` };
+        this.reportSource(this.spectateStatus);
+      }
+    };
     const loop = async () => {
       if (generation !== this.generation || !this.settings?.spectate?.enabled) return;
       const started = Date.now();
       try {
         if (!this.capture) throw new Error('Capture is unavailable');
-        const frame = await this.capture.capture(cfg.windowName);
+        const frame = await this.capture.capture(cfg.windowName, { newerThan: lastFrame, captureFps: 60 });
+        if (frame === lastFrame) { this.spectateTimer = setTimeout(loop, 4); return; }
+        lastFrame = frame;
         if (frame.width !== 1920 || frame.height !== 1080) throw new Error(`Captured ${frame.width}x${frame.height}; use a 16:9 window`);
-        const { changed, spectated } = await this.spectate.sweep((x, y) => this.capture.rgb(frame, x, y), cfg.roi, cfg.portrait);
-        if (changed || !this.lastSpectateSentAt || Date.now() - this.lastSpectateSentAt > 2000) {
-          this.forwardRaw({ type: 'spectated', game: this.settings.game, version: 1, payload: spectated });
-          this.lastSpectateSentAt = Date.now();
+        const rgb = (x, y) => this.capture.rgb(frame, x, y);
+        const fast = this.spectate.portraitStep(rgb, cfg.portrait);
+        if (fast) send(fast, started);
+        else if (!nameBusy) {
+          nameBusy = true;
+          this.spectate.readName(rgb, cfg.roi).then(({ winner, reads }) => {
+            if (generation !== this.generation) return;
+            send(this.spectate.report(winner, { reads, portrait: this.spectate.lastPortrait || null }), started);
+          }).catch(() => {}).finally(() => { nameBusy = false; });
         }
-        this.onOcrState({ spectate: { ...spectated, last: this.spectate.last } });
-        const who = spectated.name ? `Spectating ${spectated.name}${spectated.station ? ` (station ${spectated.station})` : ''}` : (this.spectate.candidates.length ? 'No known player name in the box' : 'Waiting for player names from the controller');
-        this.spectateStatus = { state: 'reading', message: `${who} · ${Date.now() - started} ms/read` };
       } catch (error) {
         this.spectateStatus = { state: 'error', message: error.message || String(error) };
+        this.reportSource(this.spectateStatus);
+        this.spectateTimer = setTimeout(loop, 500); return;
       }
-      this.reportSource(this.spectateStatus);
-      this.spectateTimer = setTimeout(loop, Math.max(0, cfg.intervalMs - (Date.now() - started)));
+      // Frame-driven: no fixed wait. intervalMs is only an upper bound kept for old configs.
+      this.spectateTimer = setTimeout(loop, 0);
     };
     this.spectateTimer = setTimeout(loop, 0);
   }

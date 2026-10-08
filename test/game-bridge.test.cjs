@@ -49,11 +49,11 @@ test('VALORANT bridge: spectate tracker sends who is watched to the Graphics PC 
   rx.configure({ enabled: true, port, token: 'key-123' });
   t.after(() => rx.stop());
   // fake capture + fake OCR that always "reads" the name: 3 sweeps -> confirmed
-  const capture = { capture: async () => ({ width: 1920, height: 1080 }), rgb: () => [255, 255, 255] };
+  const capture = { capture: async () => { await new Promise((r) => setTimeout(r, 16)); return { width: 1920, height: 1080 }; }, rgb: () => [255, 255, 255] };
   const ocr = { recognize: async () => ({ text: 'Sn0wfal', confidence: 0.9 }) };
   const bridge = new UniversalGameBridge({ capture, ocr });
   t.after(() => bridge.stop());
-  bridge.spectate.sweep = async function () { return this.report({ name: 'Sn0wfal', score: 0.95 }, {}); };
+  bridge.spectate.readName = async () => ({ winner: { name: 'Sn0wfal', score: 0.95, n: 4 }, reads: [] });
   bridge.start({ game: 'valorant', graphicsHost: '127.0.0.1', bridgePort: port, bridgeToken: 'key-123', spectate: { intervalMs: 120 } });
   for (let i = 0; i < 40 && !got.some((s) => s.name); i += 1) await new Promise((r) => setTimeout(r, 50));
   assert.equal(bridge.spectate.candidates.length, 1, 'bridge got the names from the controller');

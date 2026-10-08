@@ -23,7 +23,6 @@ const DEFAULT_ROIS = {
   // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent
   // portrait. Measured by Derk on a live POV feed (2026-10-07). Adjustable in the Bridge.
   valorant: { x: 113, y: 816, w: 213, h: 41 },
-  // Overwatch player POV: guessed (no POV screenshot yet) - place it in the Bridge.
   overwatch: { x: 660, y: 930, w: 600, h: 60 },
   rocketleague: { x: 660, y: 930, w: 600, h: 60 }
 };
@@ -93,21 +92,6 @@ const VARIANTS = [
   { mode: 'edge', thr: 170 }, { mode: 'thr', thr: 215 }
 ];
 
-// Red/teal portrait box colour: 4 small patches (top-left, top-right, mid-left, mid-right edge
-// strips) each vote; the box wins with 2+ agreeing votes. One 8x8 spot was too fragile live.
-function patchColor(rgb, x0, y0) {
-  let r = 0; let g = 0; let b = 0; let n = 0;
-  for (let y = y0; y < y0 + 6; y += 1) for (let x = x0; x < x0 + 6; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
-  r /= n; g /= n; b /= n;
-  return r > g + 40 && r > b + 40 ? 'red' : g > r + 40 && b > r + 25 ? 'teal' : '';
-}
-function boxColor(rgb, box) {
-  const s = box.s; const spots = [[3, 3], [s - 9, 3], [3, Math.round(s / 2)], [s - 9, Math.round(s / 2)]];
-  const votes = { red: 0, teal: 0 };
-  for (const [dx, dy] of spots) { const c = patchColor(rgb, box.x + dx, box.y + dy); if (c) votes[c] += 1; }
-  return votes.red >= 2 && votes.red > votes.teal ? 'red' : votes.teal >= 2 && votes.teal > votes.red ? 'teal' : '';
-}
-
 class SpectateTracker {
   constructor({ ocr, agents = null, now = () => Date.now(), minScore = 0.62, minMargin = 0.12, confirm = 3, window = 4, holdMs = 4000, lang = 'eng' } = {}) {
     Object.assign(this, { ocr, agents, now, minScore, minMargin, confirm, window, holdMs, lang });
@@ -134,6 +118,34 @@ class SpectateTracker {
   }
 
   // One read of the box. rgb(x,y) -> [r,g,b] on the 1920x1080 grid.
+  // Fast path only (~4 ms, no OCR): agent icon + red/teal box -> a player, or null.
+  // The bridge runs this on EVERY captured frame; name OCR runs separately in the background.
+  portraitStep(rgb, portrait) {
+    if (!portrait || !this.agents || !this.candidates.length) return null;
+    const p = this.readPortrait(rgb, portrait);
+    this.lastPortrait = p;
+    return p.player ? this.report({ name: p.player.name, score: 1, via: 'portrait' }, { portrait: p, fast: true }) : null;
+  }
+
+  // Name path only: the 4 cleanups are read IN PARALLEL (one OCR worker each), not one after
+  // another (229 ms -> ~10-90 ms). Returns the winner without touching the vote history.
+  async readName(rgb, roi) {
+    const crops = VARIANTS.map((v) => ({ v, crop: cleanCrop(rgb, roi, v) }));
+    const reads = await Promise.all(crops.map(async ({ v, crop }, i) => {
+      if (crop.inkShare < 0.004 || crop.inkShare > 0.45) return { variant: `${v.mode}${v.thr}`, text: '', skipped: crop.inkShare };
+      const r = await this.ocr.recognize(crop.image, { kind: 'text', fieldId: `spectate-lane-${i}`, allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#-', lang: this.lang });
+      const text = String(r?.text || '').trim();
+      const m = text ? matchCandidates(text, this.candidates) : { best: null, runnerUp: null };
+      return { variant: `${v.mode}${v.thr}`, text, conf: r?.confidence || 0, best: m.best?.name || '', score: m.best?.score || 0, margin: (m.best?.score || 0) - (m.runnerUp?.score || 0) };
+    }));
+    const votes = new Map();
+    for (const r of reads) if (r.best && r.score >= this.minScore && r.margin >= this.minMargin) {
+      const v = votes.get(r.best) || { n: 0, score: 0 }; v.n += 1; v.score = Math.max(v.score, r.score); votes.set(r.best, v);
+    }
+    const ranked = [...votes.entries()].sort((a, b) => b[1].n - a[1].n || b[1].score - a[1].score);
+    return { winner: ranked[0] ? { name: ranked[0][0], ...ranked[0][1] } : null, reads };
+  }
+
   async sweep(rgb, roi, portrait = null) {
     if (!this.candidates.length) return this.report(null, { reason: 'no candidate names from the controller' });
     // Fast path (~1 ms): the POV portrait = agent icon on a red/teal box. Agent + current team
@@ -144,16 +156,9 @@ class SpectateTracker {
       if (p.player) return this.report({ name: p.player.name, score: 1, via: 'portrait' }, { portrait: p, fast: true });
       this.lastPortrait = p;
     }
-    // Free cam / no POV = BOTH signs: no red/teal portrait box AND no text in the name box.
-    // The box colour alone is not enough: a slightly shifted capture, dark shading or the agent
-    // art over the corner made it miss on live feeds (2026-10-08: players almost never found),
-    // and skipping the name read then hid every player. So: text in the name box -> always read it.
-    const crops = VARIANTS.map((v) => ({ v, crop: cleanCrop(rgb, roi, v) }));
-    const hasText = crops.some(({ crop }) => crop.inkShare >= 0.004 && crop.inkShare <= 0.45);
-    const boxGone = portrait ? (this.lastPortrait ? !this.lastPortrait.color : this.portraitBoxGone(rgb, portrait)) : true;
-    if (!hasText && boxGone) return this.report(null, { portrait: this.lastPortrait || null, empty: true });
     const reads = [];
-    for (const { v, crop } of crops) {
+    for (const v of VARIANTS) {
+      const crop = cleanCrop(rgb, roi, v);
       if (crop.inkShare < 0.004 || crop.inkShare > 0.45) { reads.push({ variant: `${v.mode}${v.thr}`, text: '', skipped: crop.inkShare }); continue; }
       const r = await this.ocr.recognize(crop.image, { kind: 'text', fieldId: `spectate-${v.mode}`, allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#-', lang: this.lang });
       const text = String(r?.text || '').trim();
@@ -171,14 +176,14 @@ class SpectateTracker {
     return this.report(winner, { reads, portrait: this.lastPortrait || null });
   }
 
-  // No agents loaded: still detect the missing red/teal box (free cam).
-  portraitBoxGone(rgb, box) { return !boxColor(rgb, box); }
-
   // Portrait box (x,y = top-left of the square, s = side). Box colour from the corner strip,
   // agent from the official icon. -> { agent, color, side, player|null, ms }
   readPortrait(rgb, box) {
     const t0 = Date.now();
-    const color = boxColor(rgb, box);
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let y = box.y + 3; y < box.y + 11; y += 1) for (let x = box.x + 3; x < box.x + 11; x += 1) { const p = rgb(x, y); r += p[0]; g += p[1]; b += p[2]; n += 1; }
+    r /= n; g /= n; b /= n;
+    const color = r > g + 50 && r > b + 50 ? 'red' : g > r + 50 && b > r + 30 ? 'teal' : '';
     const m = this.agents.matchBox(rgb, box);
     const side = color && this.sides ? this.sides[color] : '';
     let player = null;
@@ -193,12 +198,12 @@ class SpectateTracker {
     const t = this.now();
     this.history.push(winner?.name || null);
     if (this.history.length > this.window) this.history.shift();
-    // Count reads in a row that clearly show NO player (portrait box gone = free cam).
-    this.emptyRun = detail.empty ? (this.emptyRun || 0) + 1 : 0;
     // Portrait reads (agent + team colour) are near-certain: 2 in a row switch the camera,
     // instead of 3 of 4 for name OCR.
-    this.portraitRun = winner?.via === 'portrait' ? (this.portraitLast === winner.name ? (this.portraitRun || 0) + 1 : 1) : 0;
-    this.portraitLast = winner?.via === 'portrait' ? winner.name : null;
+    // A "strong" name read (3+ of the 4 cleanups agree) counts like a portrait read.
+    const sure = winner && (winner.via === 'portrait' || (winner.n || 0) >= 3);
+    this.portraitRun = sure ? (this.portraitLast === winner.name ? (this.portraitRun || 0) + 1 : 1) : 0;
+    this.portraitLast = sure ? winner.name : null;
     if (winner) this.lastSeenAt = t;
     const counts = new Map(); for (const n of this.history) if (n) counts.set(n, (counts.get(n) || 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -210,8 +215,7 @@ class SpectateTracker {
       this.current = { ...c, score: winner?.name === pick ? winner.score : (this.current?.score || 0), via: winner?.name === pick ? winner.via || 'name' : 'name', since: t };
       changed = true;
     } else if (this.current && winner?.name === this.current.name) this.current.score = winner.score;
-    // Nobody: 2 clear "no POV" reads (~0.5 s at 250 ms) or nothing readable for holdMs.
-    if (this.current && (this.emptyRun >= 2 || t - this.lastSeenAt > this.holdMs)) { this.current = null; this.history = []; changed = true; }
+    if (this.current && t - this.lastSeenAt > this.holdMs) { this.current = null; changed = true; }
     this.last = { at: t, winner: winner?.name || null, ...detail };
     return { changed, spectated: this.snapshot() };
   }
