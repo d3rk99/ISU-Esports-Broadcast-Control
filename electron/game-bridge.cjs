@@ -216,7 +216,19 @@ class UniversalGameBridge {
   async spectateSnapshot() {
     const cfg = this.settings?.spectate || normalizeSpectateSettings({}, this.settings?.game);
     const frame = await this.capture.capture(cfg.windowName);
-    return { frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', roi: cfg.roi, width: frame.width, height: frame.height, last: this.spectate.last, capturedAt: Date.now() };
+    // Icon box debug: a zoomed copy of exactly what is inside the agent icon box, and what the
+    // matcher says about it right now (agent, colour, scores, player).
+    let icon = null;
+    if (cfg.portrait) {
+      try {
+        const p = cfg.portrait;
+        const crop = frame.image?.crop ? frame.image.crop({ x: p.x, y: p.y, width: p.s, height: p.s }) : null;
+        const rgb = (x, y) => this.capture.rgb(frame, x, y);
+        const pt = this.spectate.portraits || this.spectate.agents ? this.spectate.readPortrait(rgb, p) : null;
+        icon = { cropDataUrl: crop?.toDataURL ? crop.toDataURL() : '', ...(pt || { error: this.spectate.agentLoadError || this.spectate.portraitError || 'icon matcher not loaded' }), player: pt?.player?.name || '' };
+      } catch (error) { icon = { error: error.message || String(error) }; }
+    }
+    return { frameDataUrl: frame.image?.toDataURL ? frame.image.toDataURL() : '', roi: cfg.roi, portrait: cfg.portrait, icon, width: frame.width, height: frame.height, last: this.spectate.last, capturedAt: Date.now() };
   }
 
   stop() {

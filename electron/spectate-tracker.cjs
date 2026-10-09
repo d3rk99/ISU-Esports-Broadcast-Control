@@ -211,7 +211,7 @@ class SpectateTracker {
       const hits = this.candidates.filter((c) => c.agent === m.agent && c.side === side);
       if (hits.length === 1) player = hits[0];
     }
-    return { agent: m.agent, candidate: m.candidate, score: m.score, color, side, player: player ? { name: player.name, station: player.station } : null, ms: Date.now() - t0 };
+    return { agent: m.agent, candidate: m.candidate, candidateColor: m.candidateColor || color, runnerUp: m.runnerUp, runnerUpScore: m.runnerUpScore, otherColorScore: m.otherColorScore, score: m.score, color, side, player: player ? { name: player.name, station: player.station } : null, ms: Date.now() - t0 };
   }
 
   report(winner, detail = {}) {
