@@ -810,7 +810,11 @@ body[data-setup="game"] .val-native-fit .val-center {
 }
 .val-player-card--away .val-player-stats { grid-column: 1; flex-direction: row-reverse; }
 .val-player-kda { color: #e3e9ef; font-size: 16px; letter-spacing: .02em; white-space: nowrap; }
-.val-player-credits { color: #ffe3a3; font-size: 16px; white-space: nowrap; }
+/* Credits sit on the weapon line, bottom outer corner, BELOW the agent face (row 2 put them right
+   over the face, Derk 2026-10-08). Positioned against the card, not the stats row. */
+.val-player-credits { position: absolute; z-index: 1; bottom: 4px; right: 10px; padding: 2px 6px 2px 5px; color: #ffe3a3; font-size: 15px; line-height: 1; white-space: nowrap; background: rgba(5,8,12,.78); border: 1px solid rgba(255,227,163,.35); border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,.6); text-shadow: 0 1px 2px rgba(0,0,0,.9); }
+.val-player-card--away .val-player-credits { right: auto; left: 10px; }
+.val-player-stats { position: static !important; }
 .val-player-credits::before { content: "\00A4"; margin-right: 2px; color: #b8a77f; }
 .val-weapon-slot {
   grid-column: 2; grid-row: 3;
