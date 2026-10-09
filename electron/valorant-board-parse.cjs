@@ -25,7 +25,8 @@ const PROFILE = {
   columns: {
     agent: { x: 567, w: 32, kind: 'icon' },
     name: { x: 634, w: 190, kind: 'text', lang: 'val', allowedChars: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 _.#' },
-    ultimate: { x: 842, w: 56, kind: 'ult', allowedChars: '0123456789/' },
+    // Letters allowed too: a full ult shows the word READY (digits-only OCR squeezed it into '1/7').
+    ultimate: { x: 842, w: 56, kind: 'ult', allowedChars: '0123456789/READY' },
     kills: { h: 14, threshold: 150, x: 936, w: 24, kind: 'count', allowedChars: '0123456789' },
     deaths: { h: 14, threshold: 150, x: 976, w: 24, kind: 'count', allowedChars: '0123456789' },
     assists: { h: 14, threshold: 150, x: 1016, w: 24, kind: 'count', allowedChars: '0123456789' },
@@ -317,8 +318,13 @@ function parseCell(field, text) {
     return name.length >= 2 ? name : null;
   }
   if (field === 'ultimate') {
-    if (/READY/i.test(raw)) return 'READY';
-    const m = raw.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+    // READY, or most of its letters (one sweep can drop a letter: 'REDY', 'EADY').
+    if (/READY|R?EAD?Y|RE?ADY/i.test(raw) || (raw.replace(/[^A-Z]/gi, '').length >= 4 && !/\d/.test(raw))) return 'READY';
+    let t = raw.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').replace(/[A-Z]/gi, '');
+    // The slash is often read as a 7 or 1 ('1/77', '379', '61/9'): a costed ult is 'c/N' with
+    // N = 5-9, so take the LAST digit as N and the first as c when there is no clean c/N.
+    let m = t.match(/^(\d)\s*\/\s*(\d)$/);
+    if (!m) { const d = t.replace(/[^0-9]/g, ''); if (d.length >= 3 && d.length <= 4) m = [null, d[0], d[d.length - 1]]; }
     if (!m) return null;
     const cur = Number(m[1]); const req = Number(m[2]);
     if (req < 5 || req > 9 || cur > req) return null; // ult costs are 5-9 points

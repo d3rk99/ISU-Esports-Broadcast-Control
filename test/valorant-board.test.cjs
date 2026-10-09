@@ -220,3 +220,35 @@ test('VALORANT top HUD: bright map behind the HUD (Derk 2026-10-07): 0 - 3, time
   assert.equal(r.homeScore, 0); assert.equal(r.awayScore, 3);
   assert.equal(r.timer?.display, '0:11'); assert.equal(r.timer?.seconds, 11);
 });
+
+// Real broadcast frames (Derk's YouTube VOD, 2026-10-08): READY was read as '1/7' because the
+// ult cell only allowed digits. Truth below read off the pixels, rows top team 1-5 then bottom 1-5.
+test('VALORANT board: ult column on real broadcast frames - READY reads READY, slash misreads fixed', { timeout: 180000 }, async () => {
+  const { alignBoard, cellRois, readCell, PROFILE } = require('../electron/valorant-board-parse.cjs');
+  const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
+  const { cellImage } = require('./valorant-board-fixtures.cjs');
+  const { execFileSync } = require('node:child_process');
+  const TRUTH = {
+    '0031': ['1/8', 'READY', '4/8', '6/9', '4/7', 'READY', 'READY', '6/7', '6/8', '5/8'],
+    '0042': ['5/8', '4/8', 'READY', 'READY', '8/9', 'READY', 'READY', 'READY', 'READY', 'READY'],
+    '0088': ['5/8', 'READY', 'READY', '2/8', 'READY', 'READY', '5/8', 'READY', 'READY', '8/9']
+  };
+  const ocr = new TesseractOcrEngine();
+  try {
+    let right = 0; const wrong = [];
+    for (const [f, want] of Object.entries(TRUTH)) {
+      const file = require('node:path').join(__dirname, 'fixtures', 'val-ult', `${f}.png`);
+      const raw = execFileSync('python3', ['-c', 'from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert("L");sys.stdout.write(f"{im.width} {im.height}\\n");sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())', file], { maxBuffer: 1e8 });
+      const nl = raw.indexOf(10); const [w, h] = raw.slice(0, nl).toString().split(' ').map(Number); const px = raw.slice(nl + 1);
+      const lum = (x, y) => { x -= 480; y -= 250; return x < 0 || y < 0 || x >= w || y >= h ? 0 : px[y * w + x]; };
+      const cells = cellRois(PROFILE, alignBoard(lum)).filter((c) => c.field === 'ultimate');
+      for (const [i, c] of cells.entries()) {
+        const v = await readCell(ocr, lum, c, (roi, s, t) => cellImage(lum, roi, s, t));
+        if (v === want[i]) right += 1; else if (v !== null) wrong.push(`${f} row${i + 1}: ${v} (board ${want[i]})`);
+      }
+    }
+    console.log(`ult on real frames: ${right}/30 right; wrong: ${wrong.join(', ') || 'none'}`);
+    assert.deepEqual(wrong, [], 'never a wrong ult (READY as 1/7 was the bug)');
+    assert.ok(right >= 28, `most ult cells read (${right}/30)`);
+  } finally { await ocr.close(); }
+});
