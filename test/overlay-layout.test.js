@@ -98,3 +98,11 @@ test('Valorant scoreboard has a dedicated OCR HUD with first-class loadout icons
   assert.match(overlayJs, /loadout\.status !== 'matched'/);
   assert.match(overlayJs, /VALORANT_WEAPON_ICON_BY_SLUG/);
 });
+
+test('Valorant player card tint follows the ATK/DEF side and swaps after round 12 (like the score numbers)', () => {
+  const css = readFileSync(new URL('../public/overlays/overlay.css', import.meta.url), 'utf8');
+  assert.match(css, /\.valorant-hud\.sides-swapped \.val-player-card--home \{ --val-card-tint: var\(--val-coral\); \}/);
+  assert.match(css, /\.valorant-hud\.sides-swapped \.val-player-card--away \{ --val-card-tint: var\(--val-teal\); \}/);
+  assert.match(css, /var\(--val-card-tint, var\(--val-teal\)\)/, 'home card background uses the tint');
+  assert.match(css, /var\(--val-card-tint, var\(--val-coral\)\)/, 'away card background uses the tint');
+});

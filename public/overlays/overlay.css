@@ -428,6 +428,12 @@ body[data-game="valorant"] .paired-key-scene .scoreboard {
 .valorant-hud.sides-swapped .val-team--away > b { color: var(--val-teal-soft); }
 .valorant-hud.sides-swapped .val-timer-chevron--home { color: var(--val-coral); }
 .valorant-hud.sides-swapped .val-timer-chevron--away { color: var(--val-teal); }
+/* Player card tint = the side's current colour (ATK/DEF): teal/red in rounds 1-12, swapped after
+   the half (and every OT round), exactly like the score numbers above. */
+.val-player-card--home { --val-card-tint: var(--val-teal); }
+.val-player-card--away { --val-card-tint: var(--val-coral); }
+.valorant-hud.sides-swapped .val-player-card--home { --val-card-tint: var(--val-coral); }
+.valorant-hud.sides-swapped .val-player-card--away { --val-card-tint: var(--val-teal); }
 .val-native-fit .val-team--home > b { right: 8px; }
 .val-native-fit .val-team--away > b { left: 8px; }
 .val-native-fit .val-series-dots {
@@ -757,7 +763,7 @@ body[data-setup="game"] .val-native-fit .val-center {
   overflow: hidden;
   background:
     linear-gradient(110deg, rgba(255,255,255,.08), transparent 34%),
-    linear-gradient(90deg, color-mix(in srgb, var(--val-teal) 18%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
+    linear-gradient(90deg, color-mix(in srgb, var(--val-card-tint, var(--val-teal)) 18%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
   border: 1px solid color-mix(in srgb, var(--home-color, var(--val-teal)) 68%, rgba(255,255,255,.16));
   border-left: 5px solid var(--home-color, var(--val-teal));
   clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
@@ -770,7 +776,7 @@ body[data-setup="game"] .val-native-fit .val-center {
   text-align: right;
   background:
     linear-gradient(250deg, rgba(255,255,255,.08), transparent 34%),
-    linear-gradient(270deg, color-mix(in srgb, var(--val-coral) 20%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
+    linear-gradient(270deg, color-mix(in srgb, var(--val-card-tint, var(--val-coral)) 20%, rgba(5,10,16,.9)), rgba(5,10,16,.74));
   border-color: color-mix(in srgb, var(--away-color, var(--val-coral)) 68%, rgba(255,255,255,.16));
   border-right: 5px solid var(--away-color, var(--val-coral));
   border-left-width: 1px;
