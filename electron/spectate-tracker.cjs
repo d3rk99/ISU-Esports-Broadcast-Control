@@ -17,7 +17,8 @@
 
 // VALORANT POV portrait square (agent icon on the red/teal team box), 1920x1080, measured on
 // Derk's live POV feed 2026-10-07.
-const DEFAULT_PORTRAITS = { valorant: { x: 20, y: 800, s: 80 } };
+// Measured on full 1080p POV frames of a real ISU VALORANT broadcast (2026-10-08).
+const DEFAULT_PORTRAITS = { valorant: { x: 31, y: 794, s: 81 } };
 
 const DEFAULT_ROIS = {
   // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent

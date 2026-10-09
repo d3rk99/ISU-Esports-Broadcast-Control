@@ -94,7 +94,7 @@ test('spectate: agent + current red/teal side -> the right player with no OCR; s
   const rgb = (x, y) => pov(x, y - 780);
   let calls = 0; const ocr = { recognize: async () => { calls += 1; return { text: '', confidence: 0 }; } };
   const cands = [{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }, { name: 'nyv', station: 7, side: 'away', agent: 'breach' }, { name: 'santi', station: 6, side: 'away', agent: 'neon' }];
-  const run = async (sides) => { const t = new SpectateTracker({ ocr, agents: new AgentMatcher() }); t.setCandidates(cands); t.setSides(sides); await t.sweep(rgb, ROI, DEFAULT_PORTRAITS.valorant); return t.last.winner; };
+  const run = async (sides) => { const t = new SpectateTracker({ ocr, agents: new AgentMatcher() }); t.setCandidates(cands); t.setSides(sides); await t.sweep(rgb, ROI, { x: 20, y: 800, s: 80 } /* old fixture crops */); return t.last.winner; };
   assert.equal(await run({ red: 'home', teal: 'away' }), 'Sn0wfal', 'second half: home wears red');
   assert.equal(await run({ red: 'away', teal: 'home' }), 'nyv', 'first half: away wears red');
   assert.equal(calls, 0, 'portrait path needs no OCR');
@@ -135,10 +135,10 @@ test('spectate experiment: ICON ONLY - only the agents in this match are compare
   const t = new SpectateTracker({ ocr, agents: new AgentMatcher(), now: () => now });
   t.setCandidates([{ name: 'Sn0wfal', station: 2, side: 'home', agent: 'breach' }, { name: 'nyv', station: 7, side: 'away', agent: 'neon' }, { name: 'santi', station: 6, side: 'away', agent: 'sova' }]);
   t.setSides({ red: 'home', teal: 'away' });
-  const m = new AgentMatcher().matchBox(rgb, DEFAULT_PORTRAITS.valorant, { only: ['breach', 'neon', 'sova'] });
+  const m = new AgentMatcher().matchBox(rgb, { x: 20, y: 800, s: 80 } /* old fixture crops */, { only: ['breach', 'neon', 'sova'] });
   assert.equal(m.agent, 'breach');
-  now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, '');
-  now += 17; t.portraitStep(rgb, DEFAULT_PORTRAITS.valorant); assert.equal(t.snapshot().name, 'Sn0wfal', '2 frames (~33 ms at 60 fps)');
+  now += 17; t.portraitStep(rgb, { x: 20, y: 800, s: 80 } /* old fixture crops */); assert.equal(t.snapshot().name, '');
+  now += 17; t.portraitStep(rgb, { x: 20, y: 800, s: 80 } /* old fixture crops */); assert.equal(t.snapshot().name, 'Sn0wfal', '2 frames (~33 ms at 60 fps)');
 });
 
 test('spectate: the Bridge says in plain words WHY nobody is matched (names, agents, red/teal, box)', () => {
@@ -173,4 +173,17 @@ test('spectate: two references per agent (teal + red box) -> agent AND colour in
   const m3 = pm.match(breach, { x: 20, y: 20, s: 80 }); assert.equal(m3.agent, 'breach'); assert.equal(m3.color, 'red');
   // only the agents in this match: still right
   assert.equal(pm.match(sova, { x: 0, y: 0, s: 74 }, { only: ['sova', 'gekko', 'breach'] }).color, 'teal');
+});
+
+test('spectate: real 1080p broadcast frames - portrait box at x31 y794 s81 reads agent + colour, empty frames stay blank', () => {
+  const { PortraitMatcher } = require('../electron/valorant-portrait-match.cjs');
+  const { DEFAULT_PORTRAITS } = require('../electron/spectate-tracker.cjs');
+  const pm = new PortraitMatcher(); const vdir = path.join(DIR, '..', 'spectate-video');
+  for (const f of fs.readdirSync(vdir)) {
+    const crop = loadRgb(path.join(vdir, f)); const rgb = (x, y) => crop(x, y - 760); // crops start at y 760
+    const m = pm.match(rgb, DEFAULT_PORTRAITS.valorant);
+    const want = f.replace(/^\d+-/, '').replace('.png', '');
+    if (want === 'none') assert.equal(m.color, '', `${f}: no portrait = no colour`);
+    else assert.equal(`${m.agent}-${m.color}`, want, f);
+  }
 });
