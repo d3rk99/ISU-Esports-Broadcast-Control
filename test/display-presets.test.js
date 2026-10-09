@@ -85,3 +85,18 @@ test('last game stats: saved per station when a game ends (VALORANT K/D/A, RL st
   assert.equal(ow.lastGameStats[3].map, 'Busan');
   assert.equal(ow.overwatchLastMapStats[3].hero, 'Tracer');
 });
+
+test('VALORANT round history bar clears on NEXT MATCH and on reset, also through Companion', async () => {
+  const state = createInitialState(); state.selectedGame = 'valorant';
+  const fill = () => {
+    const g = state.games.valorant;
+    g.valorantOcr.live = { observer3: { roundTimeline: { currentRound: 6, rounds: Array.from({ length: 24 }, (_v, i) => ({ round: i + 1, winnerSide: i < 5 ? 'home' : null, winnerRole: i < 5 ? 'defense' : null })) } } };
+  };
+  const won = () => state.games.valorant.valorantOcr.live.observer3.roundTimeline.rounds.filter((r) => r.winnerSide || r.winnerRole).length;
+  fill(); assert.equal(won(), 5);
+  applyCompanionAction(state, { action: 'match.next' });
+  assert.equal(won(), 0, 'Companion NEXT MATCH clears the bar');
+  assert.equal(state.games.valorant.valorantOcr.live.observer3.roundTimeline.currentRound, 1);
+  fill(); applyCompanionAction(state, { action: 'scores.reset' });
+  assert.equal(won(), 0, 'Companion reset clears the bar');
+});

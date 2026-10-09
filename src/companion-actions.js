@@ -48,10 +48,27 @@ function resetDetailScores(game, gameKey) {
   game.teams.forEach((team) => { team.detailScore = resetValue; });
 }
 
+
+// VALORANT round history bar (valorantOcr.live.observer3.roundTimeline): cleared on a new map and
+// on a score reset. Lives here (not only in the controller buttons) so Companion's match.next /
+// scores.reset clear it too; before, only the on-screen buttons did (Derk 2026-10-08).
+export function resetValorantRoundTimeline(game) {
+  const ocr = game?.valorantOcr;
+  if (!ocr) return;
+  const live = ocr.live || {};
+  const observer3 = live.observer3 || {};
+  const existing = observer3.roundTimeline || {};
+  ocr.live = { ...live, observer3: { ...observer3, roundTimeline: {
+    ...existing, currentRound: 1,
+    rounds: Array.from({ length: 24 }, (_v, i) => ({ round: i + 1, winnerRow: null, winnerRole: null, winnerSide: null, method: null, current: i === 0, locked: false, manual: false, confidence: 0, updatedAt: null }))
+  } } };
+}
+
 function resetAllScores(game, gameKey) {
   resetDetailScores(game, gameKey);
   game.teams.forEach((team) => { team.score = 0; });
   if (gameKey === 'valorant' || gameKey === 'rocketleague') resetMapResults(game, gameKey);
+  if (gameKey === 'valorant') resetValorantRoundTimeline(game);
 }
 
 function seriesLength(game) {
@@ -169,6 +186,7 @@ export function advanceGameMatch(game, gameKey, rosterKey = 'varsity') {
   saveActiveMapResult(game, gameKey);
   game.activeMap = nextIndex;
   resetDetailScores(game, gameKey);
+  if (gameKey === 'valorant') resetValorantRoundTimeline(game);
   game.mapRows.forEach((row, rowIndex) => {
     row.status = row.winner !== null ? 'complete' : (rowIndex === nextIndex ? 'ready' : 'upcoming');
   });
