@@ -1,121 +1,100 @@
 # ISU Esports Broadcast Control
 
-## ISU Stream Server (separate application)
+A local-first broadcast production suite for Idaho State Esports. It runs the on-air graphics, reads live game data, drives the stage screens in the arena, and lets a Bitfocus Companion / Stream Deck operator run the show from buttons. Everything runs on your own PCs on the local network; there is no cloud service.
 
-The Director PC stream-server scaffold runs independently: `npm --prefix stream-server start` after installing this repository's dependencies. Build its Windows executable with `npm --prefix stream-server run build`. It currently uses simulation only and sends no media. See [the architecture and developer handoff](stream-server/ARCHITECTURE.md) for all commands, file responsibilities, safety interlocks and the future capture → encode once → delay → multistream design.
+Supported titles: **Overwatch 2, VALORANT, Rocket League, Smash Bros. Ultimate, Call of Duty.**
 
-A local-first desktop control center for Idaho State Esports broadcasts. This foundation release provides game-aware scorekeeping, match/map planning, and Varsity/JV roster management for:
+Version: **v0.6.2** (Broadcast Control) · Companion module **0.1.3** · ISU Stream Server **0.3.0**
 
-- Overwatch 2
-- VALORANT
-- Rocket League
-- Smash Bros. Ultimate
-- Call of Duty
+## What it does
 
-## Current milestone - v0.6.2
+### Match control and scorekeeping
+- One control screen per game, with that game's formats, modes, maps, score limits, roles and roster sizes.
+- Series score, in-game score and per-map winners; map results add up to the series score automatically.
+- Live/off-air toggle, team swap, score reset and one-step undo.
+- **Next Match** moves to the next map/game and clears the in-game score, round history and player stats while keeping the series score.
+- Destructive buttons need a second click within 3 s (no pop-up ever freezes the controller on air).
+- Map planning: VALORANT veto with duplicate-safe picks and one-click reset, Overwatch hero bans per map, and map pools for Overwatch, Rocket League, Smash and Call of Duty.
 
-- Secure Electron desktop shell
-- Official ISU Roarange/Bengal Black-inspired control interface
-- Persistent per-game match state
-- Per-game formats, modes, maps, score limits, roles, and roster sizes
-- Live/off-air state, team swapping, score reset, and one-step undo
-- Map results that automatically calculate series score
-- Separate Varsity and JV rosters for both Home and Away teams
-- Optional Away-roster mode with a timed camera-slide transition from Home to Away
-- Game-specific Hero, Agent, Fighter, Car, and Operator dropdowns
-- Shared per-game character artwork library: upload a PNG once and reuse it for every player using that character
-- Optional team secondary colors carried through the scoreboard, map, and roster graphics
-- Higher-contrast game selector with a dark native dropdown menu
-- Duplicate-safe Valorant veto dropdowns with one-click map-selection reset
-- Green Next Match control that advances the active map/game and resets in-game scores while preserving the series score
-- Local overlay server with real-time state updates
-- Game-aware scoreboard overlay that changes with the selected title
-- Valorant map veto overlay adapted from the Hero Bans visual system
-- Game-aware map pool layout for Overwatch, Rocket League, Smash, and Call of Duty
-- Roster overlay with player portrait → character artwork transition after seven seconds
-- Per-player portrait selection and shared character artwork metadata
-- Copyable OBS URLs and built-in overlay preview windows
-- Official Rocket League Stats API integration over WebSocket or TCP
-- Live Rocket League goals, clock, overtime, arena, player stats, spectated player, and boost
-- Duplicate-safe automatic Rocket League series scoring and next-game advancement
-- Built-in Rocket League test feed for broadcast setup without a running match
-- Authenticated two-PC Rocket League bridge with a separate portable Game PC companion
-- Accurate Live/Idle/Disconnected bridge status, current packet rate, and stale-feed detection
-- Unthrottled background telemetry publishing so OBS stays current while the Controller is minimized or behind another app
-- Rate-limited live publishing that cannot be starved by Rocket League's high-frequency packet stream
-- Stable Controller scrolling and form editing while live telemetry continues updating
-- Operator-selectable Rocket League boost update interval from 1–50 ms, with source-rate-aware game configuration
-- Rocket League connection details backed up outside browser storage for rebuild and forced-restart recovery
-- Opt-in, token-authenticated Bitfocus Companion LAN API on port 3176
-- Companion-ready score, next-match, live, map, game-selection, and team-side actions
-- Flat live variables plus game-aware capabilities and server-sent event endpoints
-- Valorant Observer 3 OCR lab with scoreboard rows, score detection, trained loadout templates, and transparent in-game timer pass-through overlay work
-- Stage Display Manager and Stage Display Client subsystem for LAN-controlled audience displays, presets, wall/span graphics, station previews, blackout, cursor lock, and client update pushes
-- Rocket League Car Render Lab for API-driven loadout previews using locally extracted Rocket League assets
+### Teams and rosters
+- Home and Away teams, each with separate **Varsity and JV** rosters (both can be on stage at the same time).
+- Team colors (primary + optional secondary) carried through every graphic.
+- Per-player headshot, handle, name, role and **station number** (which stage PC they sit at).
+- Game-specific character pickers (heroes, agents, fighters, cars, operators) with a shared character art library: upload a character image once and every player who uses that character gets it.
+- HD transparent hero art for Overwatch and face-aligned agent art for VALORANT.
 
-## Developer handoff
+### On-air graphics (OBS)
+Transparent 1920 × 1080 browser-source pages served by the app, updated live over WebSocket (no OBS reloads):
+- **Scoreboard**: changes layout with the selected game. Shows the spectated player's live stats where the game provides them.
+- **Map pool / veto**
+- **Roster**: player portrait, then the character art after seven seconds
+- **Player cards** (inside the scoreboard HUD and on the stage screens): name, character art and stats per player; between matches they show the last finished game
+- **Program output**: switches between scoreboard, roster, map pool and a clean feed, with **fill / key / pair** outputs for hardware keying
+- The Outputs page copies every URL and opens preview windows.
 
-Start here when onboarding a new developer or another AI coding task:
+### Live game data
+- **Rocket League**: the official Stats API (TCP or WebSocket) gives goals, clock, overtime, arena, player stats, boost and the spectated player. Series scoring and next-game advance are automatic and duplicate-safe. A built-in test feed lets you check the graphics without a match.
+- **VALORANT**: an OCR scoreboard reader (Observer 3) reads player names, agents, ultimates, K/D/A, credits, guns, shields, round score and timer, and feeds the HUD player cards, station cards and roster. A round history bar follows the side swap after round 12 and in overtime.
+- **Overwatch 2**: an OCR scoreboard reader reads names, heroes and stat columns with auto-alignment to the board, a trained name model, the perk layout and per-map hero bans. Names can be fixed by hand and OCR will never overwrite them.
+- **Spectated player tracking**: the app knows whose camera the observer is on (Rocket League from the Stats API; VALORANT from the agent portrait and side colour, or the on-screen name; Overwatch from the name). Companion gets the player, station, side and team, so a camera switch can follow the observer.
 
-- `docs/developer-handoff.md` - project map, ports, build commands, subsystem notes, and repo hygiene
-- `docs/rocket-league-car-renderer.md` - current Rocket League render lab behavior and limitations
-- `docs/rocket-league-loadout-assets.md` - local asset pack path, hash, layout, and why the 7.56 GB zip is not in git
-- `docs/display-client-install.md` - display client (game mirror / NDI) install and station setup
-- `docs/valorant-observer3-ocr-plan.md` - Valorant Observer 3 OCR design notes
+### ISU Esports Game Bridge (Game PC)
+A separate portable app for the game/observer PC. It connects to Broadcast Control over an authenticated link with live / idle / disconnected status and packet rate.
+- Rocket League mode: forwards the Stats API to the graphics PC.
+- VALORANT / Overwatch modes: native Windows Graphics Capture (keeps working when the game window is behind another window), with debug capture tools to line up the read boxes.
 
-## Large asset packs
+### Stage displays (arena screens)
+- **ISU Display Client** runs on every station PC, full screen on the audience-facing monitor, from the tray, starting with Windows. It bundles the NDI runtime.
+- The controller's **Stage** page switches each station (or stations 1-5 / 6-10, or all) between **Game mirror** (that PC's own player monitor) and **NDI** (a graphic from OBS).
+- NDI presets: idle, team intro, player cards (the roster player at that station), team banners spanning five screens, series score, black.
+- **Set up OBS** builds the ten NDI scenes for you (OBS 31.1+ with DistroAV).
+- Cursor lock keeps the mouse on the player monitor, and the controller can play pink noise on the player headsets.
 
-The Rocket League extracted loadout asset zip is currently about 7.56 GB:
+### Bitfocus Companion / Stream Deck
+- A native **Companion 5 module** (`companion-module/`, v0.1.3) with actions, feedbacks, presets and live variables over a live event connection.
+- A token-authenticated **LAN API** (port 3176) for Generic HTTP if you'd rather use that.
+- Actions: score up/down/set, detail score, live toggle, Next Match, team swap, game select, map activate/winner/reset, veto reset, Overwatch bans, output select, stage display mode/preset and pink noise.
+- Variables: scores, maps, live state, Rocket League player names and spectated slot (`rl_spectated_slot`, ...), spectated player/station/side/team, and `display_N_*` per station.
+
+### Rocket League Car Render Lab (experimental)
+- Reads each player's loadout from the Stats API and renders their car (body, decal, wheels, paint) in WebGL from a locally extracted asset pack, then saves a transparent PNG for the player cards.
+- Garage colors per player can be saved, because the Stats API doesn't send them.
+- See `docs/rocket-league-car-renderer.md` for what works and its limits.
+
+### ISU Stream Server (Director PC, separate app)
+A standalone streaming app in `stream-server/`:
+- Capture: video capture devices the way OBS does it (webcams, capture cards, Blackmagic Web Presenter, OBS Virtual Camera, DeckLink through DirectShow), a file, or a test pattern.
+- **One** H.264/AAC encode (NVENC or x264), then a **broadcast delay** (default 300 s, up to 24 h), then the same stream to any number of RTMP/RTMPS destinations.
+- Fails closed: nothing is ever sent before the delay is full, and an encoder or disk error stops every output.
+- Each destination reconnects on its own and can't slow the others down.
+- Live recording, a program preview, audio meters, A/V sync offset, stream keys encrypted with Windows DPAPI, and its own Companion API (port 3180).
+- Details: `stream-server/ARCHITECTURE.md`.
+
+## Network ports
+
+| Port | What |
+| --- | --- |
+| 3174 | Overlay and state server (OBS pages, stage preset pages) |
+| 3176 | Companion LAN API (off until enabled) |
+| 3178 | Stage Display Manager (display clients) |
+| 3180 | Stream Server API (off until enabled) |
+| 49123 / 49124 | Rocket League Stats API (TCP / WebSocket) |
+
+## Quick start
+
+### OBS browser sources
+Keep Broadcast Control running. In OBS add a 1920 × 1080 Browser Source:
 
 ```text
-assests/rl-loadout-assets.zip
-SHA256: 31BB61D57C5F9EA3385A8F4672E80159215CB957958508040835738D685813C9
+http://127.0.0.1:3174/overlays/scoreboard.html
+http://127.0.0.1:3174/overlays/map-pool.html
+http://127.0.0.1:3174/overlays/roster.html?program=varsity
+http://127.0.0.1:3174/overlays/roster.html?program=jv
+http://127.0.0.1:3174/overlays/program.html?output=fill   (or key / pair)
 ```
 
-That file is intentionally not committed because it exceeds GitHub file limits. Keep it local at the path above, or extract it to `assests/rl-loadout-assets/`. The small item database `assests/rocket-league-items.csv` is committed and should stay in source control.
-
-## Bitfocus Companion remote control
-
-Open **Settings → Bitfocus Companion API**, turn on **Enable LAN API**, then copy the displayed base URL and private API key. The service listens on the Graphics PC only while Broadcast Control is open and the API toggle is enabled.
-
-In Companion, add a **Generic HTTP** connection:
-
-- Base URL: the URL shown in Broadcast Control, such as `http://192.168.1.50:3176/api/companion`
-- Header on each action: `{"X-ISU-API-Key":"paste-your-private-key"}`
-- Score button: `POST /action`, content type `application/json`, body `{"action":"score.increment","team":"home"}`
-- Next Match button: `POST /action`, body `{"action":"match.next"}`
-- Read variables: `GET /variables`; disable JSON stringification in Companion to access nested response values
-
-Common action bodies:
-
-```json
-{"action":"score.decrement","team":"away"}
-{"action":"score.set","team":"home","value":2}
-{"action":"detail_score.increment","team":"home"}
-{"action":"match.live.toggle"}
-{"action":"teams.swap"}
-{"action":"game.select","game":"rocketleague"}
-{"action":"map.activate","number":2}
-{"action":"map.winner.set","number":1,"team":"home"}
-{"action":"maps.reset"}
-{"action":"veto.reset","game":"valorant"}
-```
-
-Use `GET /capabilities` to discover actions for the selected game, `GET /state` for the authenticated full broadcast state, and `GET /events` for server-sent live variable updates. The query-string form `?token=...` is supported for clients that cannot set headers, but the header is preferred because URLs may appear in logs.
-
-### Native Companion module
-
-Companion 5 users can import the packaged `idahostate-esports-broadcast-control-0.1.0.tgz` from **Modules → Import module package**. After importing it:
-
-1. Add an **ISU Esports Broadcast Control** connection.
-2. Enter the Controller PC address, API port, and private API key shown in Broadcast Control.
-3. Add the included presets or choose the module's named actions directly.
-
-The native module maintains a live event connection, so its variables and feedbacks update automatically without Generic HTTP polling. Source is in `companion-module/`; rebuild it with `npm run package:companion`.
-
-## Rocket League live data
-
-Before launching Rocket League, edit `<Rocket League Install>\TAGame\Config\TAStatsAPI.ini` (or `DefaultStatsAPI.ini` when the first file does not exist):
+### Rocket League live data
+Before launching Rocket League, edit `<Rocket League Install>\TAGame\Config\TAStatsAPI.ini` (or `DefaultStatsAPI.ini` if the first does not exist):
 
 ```ini
 [TAGame.MatchStatsExporter_TA]
@@ -124,84 +103,101 @@ Port=49123
 WebPort=49124
 ```
 
-Restart Rocket League after changing the file. In Broadcast Control, select **Rocket League → Match Control**, enable **Live Data**, and choose one of these modes:
+Restart Rocket League. In Broadcast Control: **Rocket League → Match Control → Live Data**, then pick:
+- **This PC / direct**: the game and Broadcast Control are on the same PC.
+- **Game PC bridge**: generate a bridge key, run the Game Bridge on the game PC, choose Rocket League and enter the graphics PC's IPv4 address and the key.
 
-- **This PC / direct:** Broadcast Control and Rocket League are on the same computer.
-- **Game PC bridge:** Broadcast Control is on the Graphics PC. Generate a private bridge key, then run the ISU Esports Game Bridge on the Game PC, choose Rocket League, and enter the Graphics PC's displayed IPv4 address and matching key.
+Boost is only sent while the game client is spectating.
 
-Player boost is supplied by Rocket League while the game client is spectating. The test-feed button verifies scoring, clocks, players, boost meters, and OBS updates without a live match.
+### VALORANT OCR
+1. Run VALORANT at 1920 × 1080, borderless windowed, Observer 3 scoreboard view.
+2. In Broadcast Control: **VALORANT → Match Control**, Data Source **Universal Game Bridge**, generate a key, enable OCR.
+3. On the game PC: Game Bridge → **VALORANT**, enter the address, port and key.
+4. Use **Find Window** and **Capture Debug Frame** to check the read boxes, then start.
 
-## Universal Game Bridge and VALORANT OCR
+Leave **Recorded Video Test Mode** off for live matches.
 
-The same **ISU Esports Game Bridge** executable supports both Rocket League and VALORANT. Select the active game adapter before starting the bridge.
+### Companion
+- **Native module:** build it with `npm run package:companion`, then in Companion 5 use **Modules → Import module package** with the `.tgz` it makes, add an **ISU Esports Broadcast Control** connection, enter the controller address, port and API key, then use the presets.
+- **Generic HTTP:** **Settings → Bitfocus Companion API → Enable LAN API**, copy the base URL and key. Send the header `{"X-ISU-API-Key":"<key>"}` and `POST /action` with a body such as:
 
-For VALORANT on a separate Game PC:
-
-1. Run VALORANT at 1920 × 1080 in borderless windowed mode.
-2. In Broadcast Control on the Graphics PC, select **VALORANT → Match Control**, set **Data Source** to **Universal Game Bridge**, generate a bridge key, and enable OCR capture.
-3. On the Game PC, select **VALORANT OCR** in the bridge, enter the Graphics PC address, port, and matching key.
-4. Use **Find Window** and **Capture Debug Frame** to verify the three OCR regions, then start the bridge.
-
-Capture, OCR, temporal validation, ROI calibration, and the test feed run on the VALORANT PC. Only compact normalized state is sent to Broadcast Control. Rocket League continues to use its Stats API adapter in the same executable.
-
-The OCR adapter now prefers native Windows Graphics Capture, which keeps acquiring the selected window when it is behind another window. **Automatic** is the recommended capture engine; it falls back to Electron capture if native capture cannot start. Capture and OCR run on separate schedules, and home score, timer, and away score use independent OCR workers. The timer also compares three preprocessing variants before a full-confidence reading is accepted.
-
-For recorded match testing, enable **Recorded Video Test Mode** in the bridge before starting it. This mode requires repeated readings before accepting a timeline seek or lower score. Leave it disabled for live matches. A captured debug image is a manual frozen snapshot—the age and capture engine are shown above it while OCR continues live. The bridge retains its last trusted state during temporary capture failures and automatically retries the selected window.
-
-## OBS browser sources
-
-Keep the desktop application running during the broadcast. In OBS, add a Browser Source at **1920 × 1080** using one of these local URLs:
-
-```text
-http://127.0.0.1:3174/overlays/scoreboard.html
-http://127.0.0.1:3174/overlays/map-pool.html
-http://127.0.0.1:3174/overlays/roster.html?program=varsity
-http://127.0.0.1:3174/overlays/roster.html?program=jv
+```json
+{"action":"score.increment","team":"home"}
+{"action":"match.next"}
+{"action":"map.winner.set","number":1,"team":"home"}
+{"action":"game.select","game":"rocketleague"}
 ```
 
-The OBS Outputs page in the app can copy these URLs and open scaled preview windows. Score, map, roster, image, and selected-game changes are pushed to connected overlays immediately.
+`GET /capabilities` lists the actions for the selected game, `GET /variables` the variables, `GET /state` the full state and `GET /events` live updates.
+
+### Stage displays
+See `docs/display-client-install.md` (install, firewall, OBS setup, NDI).
 
 ## Development
 
-Requirements: Node.js 20 or newer on Windows.
+Requirements: Windows, Node.js 20 or newer.
 
 ```powershell
 npm install
 npm run dev
 ```
 
-## Quality checks
+Checks before handing off changes:
 
 ```powershell
 npm run check
 npm test
+npm run test:ui
+npm run test:rl-cars   # needs a graphical Windows session
 npm run build
 ```
 
-## Build the Windows app
+Packages (output in `release/`):
 
 ```powershell
-npm run package
+npm run package                 # Broadcast Control installer + portable, and the Game Bridge
+npm run package:bridge          # Game Bridge only
+npm run ndi:install             # once, before the display client
+npm run package:display-client  # ISU Display Client
+npm run package:companion       # Companion module .tgz
+npm --prefix stream-server run build   # ISU Stream Server
 ```
 
-Artifacts are generated in `release/`:
+## Large asset pack
 
-- Installable NSIS setup executable
-- Standalone portable executable
-- `release/bridge/ISU Esports Game Bridge-Portable-...exe` for Rocket League or VALORANT Game PCs
-
-## Project structure
+The Rocket League extracted loadout pack is about 7.56 GB and is **not** in git:
 
 ```text
-electron/          Electron main, secure preload, telemetry, bridge, and Companion API processes
-companion-module/  Native Bitfocus Companion 5 connection module
-public/overlays/   Transparent OBS HTML, CSS, JavaScript, and placeholders
-src/app.js         Control interface and interactions
-src/game-config.js Per-game rules and default data
-src/store.js       Local persistence helpers
-test/              Foundation data-model tests
+assests/rl-loadout-assets.zip
+SHA256: 31BB61D57C5F9EA3385A8F4672E80159215CB957958508040835738D685813C9
+```
+
+Keep it at that path or extract it to `assests/rl-loadout-assets/` (the folder name is spelled `assests`). The small `assests/rocket-league-items.csv` is committed. See `docs/rocket-league-loadout-assets.md`.
+
+## Project layout
+
+```text
+electron/            Main process: overlay server, telemetry, Game Bridge, OCR readers, Companion API
+electron/displays/   Stage Display Manager, Display Client, OBS setup, NDI
+src/                 Controller UI (app.js), game rules (game-config.js), Car Render Lab, panels
+public/overlays/     OBS pages: scoreboard (with player cards), map pool, roster, program output
+public/displays/     Stage preset pages rendered by OBS for NDI
+companion-module/    Native Bitfocus Companion 5 module
+stream-server/       ISU Stream Server (separate app)
+bridge/              Game Bridge UI
+tools/, scripts/     Training/asset tools, build and verify scripts
+test/                Automated tests
+docs/                Developer docs
 ```
 
 ## Data storage
 
-Control data persists locally in Electron's browser storage. The Electron main process hosts read-only overlay assets and state on `127.0.0.1:3174`, while state changes are sent to OBS pages with server-sent events. Companion settings are stored separately in Electron's application-data directory; its authenticated API binds to the LAN only when explicitly enabled.
+Control data is saved locally by the app. Overlays and stage pages read state from the controller on `127.0.0.1:3174` and get changes live. Companion and display settings are kept in the app's data folder; the Companion API listens on the LAN only when you turn it on.
+
+## More documentation
+
+- `docs/developer-handoff.md`: project map, ports, build commands, subsystem notes
+- `docs/display-client-install.md`: station PC install, firewall, OBS and NDI
+- `docs/rocket-league-car-renderer.md`, `docs/rocket-league-loadout-assets.md`, `docs/rocket-league-player-cameras.md`
+- `docs/valorant-observer3-ocr-plan.md`
+- `stream-server/ARCHITECTURE.md`
