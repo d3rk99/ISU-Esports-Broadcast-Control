@@ -187,3 +187,18 @@ test('spectate: real 1080p broadcast frames - portrait box at x31 y794 s81 reads
     else assert.equal(`${m.agent}-${m.color}`, want, f);
   }
 });
+
+test('spectate Overwatch: real spectator POV frames (Derk 2026-10-12) - default box reads the name bar with the trained ow model', async () => {
+  const { DEFAULT_ROIS } = require('../electron/spectate-tracker.cjs');
+  const odir = path.join(DIR, '..', 'ow-pov');
+  const ocr = new TesseractOcrEngine();
+  const t = new SpectateTracker({ ocr, lang: 'ow' });
+  t.candidates = [{ name: '1 TANK 2' }, { name: '2 DPS 1' }, { name: 'D3RK99' }, { name: 'Flipf17' }];
+  try {
+    for (const f of fs.readdirSync(odir)) {
+      const crop = loadRgb(path.join(odir, f)); const rgb = (x, y) => crop(x, y - 900); // fixtures start at y 900
+      const r = await t.readName(rgb, DEFAULT_ROIS.overwatch);
+      assert.equal(r.winner?.name, '1 TANK 2', `${f}: ${r.reads.map((x) => x.text).join(' | ')}`);
+    }
+  } finally { await ocr.close(); }
+});

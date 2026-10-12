@@ -24,7 +24,10 @@ const DEFAULT_ROIS = {
   // VALORANT player POV, 1920x1080: the spectated name sits bottom-left next to the agent
   // portrait. Measured by Derk on a live POV feed (2026-10-07). Adjustable in the Bridge.
   valorant: { x: 113, y: 816, w: 213, h: 41 },
-  overwatch: { x: 660, y: 930, w: 600, h: 60 },
+  // Overwatch spectator first-person view, 1920x1080: the spectated player's name sits bottom-left
+  // on the bar right of the hero portrait (above "TEAM n"). Measured on Derk's spectator screenshots
+  // (2026-10-12, 2560x1440 scaled to 1080p): name text y 970-990, x 165-330.
+  overwatch: { x: 150, y: 966, w: 190, h: 34 },
   rocketleague: { x: 660, y: 930, w: 600, h: 60 }
 };
 
