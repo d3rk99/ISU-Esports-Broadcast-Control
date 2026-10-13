@@ -2114,7 +2114,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   --ow-home-row-right: 567px;  /* inside end = end of the last blue card's light-blue corner (Derk 2026-10-13, measured x567) */
   --ow-away-row-left: 1353px;
   --ow-away-row-right: 1885px; /* Derk 2026-10-13: a bit longer on the far right */
-  --ow-strip-h: 46px;          /* Derk 2026-10-13: taller (was 34) */
+  --ow-strip-h: 58px;          /* Derk 2026-10-13: taller again (34 -> 46 -> 58) */
   --ow-logo-out: 14px;         /* logo/tag box sticks out past the strip ends by this much */
   --ow-core-w: 440px;          /* map + mode bar (Derk 2026-10-13: bigger) */
   --ow-core-h: 28px;
@@ -2139,6 +2139,9 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-ban[hidden] { display: none; }
 .ow-ban--home { left: calc(100% + 6px); }
 .ow-ban--away { right: calc(100% + 6px); }
+/* Derk 2026-10-13 ban preview: the ban box's drop shadow spilled ~8 px down past the strip onto the hero-card row.
+   Keep it flat (inner glow only), same size as the strip. */
+.ow-team .ow-ban { box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .ow-ban img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(.55) brightness(.85); }
 .ow-ban::after { content: ""; position: absolute; left: -20%; top: 50%; width: 140%; height: 3px; background: #e2333b; transform: rotate(-45deg); box-shadow: 0 0 6px rgba(226,51,59,.8); }
 .ow-ban small { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 1px 0; background: rgba(226,51,59,.92); color: #fff; font-size: 9px; font-weight: 1000; letter-spacing: .18em; text-align: center; line-height: 1.2; }
