@@ -2107,21 +2107,25 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   /* Where the spectator HUD draws each team's 5 hero/health icons on the 1080p screen.
      Each team strip sits right above its row (bottom edge at --ow-row-top), the ban on the
      inside end next to the centre. Tune these to the live HUD. */
-  --ow-row-top: 60px;          /* top of the in-game hero icon rows */
-  --ow-home-row-left: 518px;   /* left edge of the home hero row */
-  --ow-home-row-right: 890px;  /* right edge (inside, next to the timer) */
-  --ow-away-row-left: 1030px;
-  --ow-away-row-right: 1402px;
-  --ow-strip-h: 38px;
+  /* Measured on Derk's spectator screenshot 2026-10-12 (scaled to 1920x1080): the hero icon rows sit
+     at y 74-110, home x 43-507, away x 1354-1827. The centre (objective bar + timer) stays clear. */
+  --ow-row-top: 72px;          /* top of the in-game hero icon rows */
+  --ow-home-row-left: 40px;    /* left edge of the home hero row */
+  --ow-home-row-right: 512px;  /* right edge of the home hero row */
+  --ow-away-row-left: 1350px;
+  --ow-away-row-right: 1830px;
+  --ow-strip-h: 34px;
   position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
 }
 .ow-team {
-  position: absolute; top: calc(var(--ow-row-top) - var(--ow-strip-h) - 4px); height: var(--ow-strip-h);
+  position: absolute; top: calc(var(--ow-row-top) - var(--ow-strip-h) - 2px); height: var(--ow-strip-h);
   display: grid; align-items: stretch; gap: 0;
 }
 .ow-team--home { left: var(--ow-home-row-left); width: calc(var(--ow-home-row-right) - var(--ow-home-row-left)); grid-template-columns: var(--ow-strip-h) 1fr 52px; }
 .ow-team--away { left: var(--ow-away-row-left); width: calc(var(--ow-away-row-right) - var(--ow-away-row-left)); grid-template-columns: 52px 1fr var(--ow-strip-h); }
 .ow-team .ow-panel { height: var(--ow-strip-h); }
+/* No drop shadow under the team strips: it fell onto the hero icons right below (they start 2px under the strip). */
+.ow-team .ow-panel, .ow-team .ow-score { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 /* Ban: hero icon just inside the team strip, toward the centre, with a red slash. */
 .ow-ban { position: absolute; top: 0; width: var(--ow-strip-h); height: var(--ow-strip-h); box-sizing: border-box; border: 2px solid #e2333b; background: rgba(10,12,18,.92); overflow: hidden; box-shadow: 0 6px 14px rgba(0,0,0,.45); }
 .ow-ban[hidden] { display: none; }
