@@ -2110,11 +2110,13 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   /* Measured on Derk's live spectator screenshot 2026-10-13 (1920x1080): each team's hero cards + health bars run
      home x 41-544, away x 1353-1861, card tops at y 72. The strip spans exactly that width, right above the cards. */
   --ow-row-top: 72px;          /* top of the in-game hero cards */
-  --ow-home-row-left: 41px;    /* left edge of the home hero row */
-  --ow-home-row-right: 544px;  /* right edge of the home hero row (end of the last health bar) */
+  --ow-home-row-left: 60px;    /* Derk 2026-10-13: start a bit in from the screen edge ... */
+  --ow-home-row-right: 590px;  /* ... and run longer toward the centre */
   --ow-away-row-left: 1353px;
-  --ow-away-row-right: 1861px;
+  --ow-away-row-right: 1885px; /* Derk 2026-10-13: a bit longer on the far right */
   --ow-strip-h: 34px;
+  --ow-core-w: 440px;          /* map + mode bar (Derk 2026-10-13: bigger) */
+  --ow-core-h: 28px;
   position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
 }
 .ow-team {
@@ -2136,7 +2138,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-ban small { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; padding: 1px 0; background: rgba(226,51,59,.92); color: #fff; font-size: 9px; font-weight: 1000; letter-spacing: .18em; text-align: center; line-height: 1.2; }
 /* Map + mode: a thin bar across the very top centre, above the team strips (the centre between
    the two hero rows belongs to the in-game timer and the bans). */
-.ow-core { position: absolute; top: 0; left: calc(50% - 160px); width: 320px; }
+.ow-core { position: absolute; top: 0; left: calc(50% - var(--ow-core-w) / 2); width: var(--ow-core-w); }
 .ow-scorecard[hidden] { display: none; }
 .ow-panel {
   position: relative; box-sizing: border-box; min-width: 0; height: 64px; overflow: hidden;
@@ -2201,11 +2203,11 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 /* The OW spectator HUD draws its own timer/objective line right under the top edge in the
    centre. Keep the centre box short (map + mode only) so that line stays visible below it.
    The series score already lives in the big team-coloured score boxes. */
-.ow-core { height: 18px !important; flex-direction: row !important; gap: 10px !important; justify-content: center; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 8px 100%) !important; border-bottom: 0; }
+.ow-core { height: var(--ow-core-h) !important; flex-direction: row !important; gap: 10px !important; justify-content: center; clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 8px 100%) !important; border-bottom: 0; }
 .ow-core .ow-core-top, .ow-core .ow-progress .ow-progress-pips { display: none; }
 .ow-core .ow-progress { display: contents; }
-.ow-core strong { font-size: 12px; letter-spacing: .14em; }
-.ow-core em { font-size: 9px; }
+.ow-core strong { font-size: 17px; letter-spacing: .14em; }
+.ow-core em { font-size: 12px; }
 
 /* ---- Overwatch player stat cards (scoreboard OCR) ------------------------------------------
    VALORANT card language (team edge, angled corner, ult ring) with OW stats: E / A / D on the
