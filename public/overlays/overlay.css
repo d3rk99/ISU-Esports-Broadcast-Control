@@ -2118,7 +2118,8 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   --ow-logo-out: 14px;
   --ow-card-w: 100px;          /* one in-game hero card (ban box is the same size) */
   --ow-card-h: 62px;          /* Derk 2026-10-13: ban reaches 5 px further down than the 57 px cards */
-  --ow-card-gap: 6px;         /* logo/tag box sticks out past the strip ends by this much */
+  --ow-card-gap: 6px;
+  --ow-home-logo-shift: 11px;  /* Derk 2026-10-13: bottom of the home logo's slant ends at the outer corner of the first blue card (x43) */         /* logo/tag box sticks out past the strip ends by this much */
   --ow-core-w: 440px;          /* map + mode bar (Derk 2026-10-13: bigger) */
   --ow-core-h: 28px;
   position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
@@ -2133,7 +2134,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 /* Derk 2026-10-13: the tag/logo slot at the OUTER end of each strip extends out a bit (sideways and a little taller),
    while the name + score stay lined up with the hero row. */
 .ow-team .ow-logo { position: relative; z-index: 3; width: calc(var(--ow-strip-h) + var(--ow-logo-out)); height: calc(var(--ow-strip-h) + 8px); margin-top: -8px; } /* grows UP only, never onto the hero cards */
-.ow-team .ow-logo--home { margin-left: calc(-1 * var(--ow-logo-out)); }
+.ow-team .ow-logo--home { margin-left: calc(-1 * var(--ow-logo-out) - var(--ow-home-logo-shift)); width: calc(var(--ow-strip-h) + var(--ow-logo-out) + var(--ow-home-logo-shift)); }
 .ow-team .ow-logo--away { margin-right: calc(-1 * var(--ow-logo-out)); }
 /* No drop shadow under the team strips: it fell onto the hero icons right below (they start 2px under the strip). */
 .ow-team .ow-panel, .ow-team .ow-score { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
