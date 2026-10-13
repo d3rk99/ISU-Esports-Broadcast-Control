@@ -2114,7 +2114,8 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   --ow-home-row-right: 567px;  /* inside end = end of the last blue card's light-blue corner (Derk 2026-10-13, measured x567) */
   --ow-away-row-left: 1353px;
   --ow-away-row-right: 1885px; /* Derk 2026-10-13: a bit longer on the far right */
-  --ow-strip-h: 34px;
+  --ow-strip-h: 46px;          /* Derk 2026-10-13: taller (was 34) */
+  --ow-logo-out: 14px;         /* logo/tag box sticks out past the strip ends by this much */
   --ow-core-w: 440px;          /* map + mode bar (Derk 2026-10-13: bigger) */
   --ow-core-h: 28px;
   position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
@@ -2126,6 +2127,11 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-team--home { left: var(--ow-home-row-left); width: calc(var(--ow-home-row-right) - var(--ow-home-row-left)); grid-template-columns: var(--ow-strip-h) 1fr 52px; }
 .ow-team--away { left: var(--ow-away-row-left); width: calc(var(--ow-away-row-right) - var(--ow-away-row-left)); grid-template-columns: 52px 1fr var(--ow-strip-h); }
 .ow-team .ow-panel { height: var(--ow-strip-h); }
+/* Derk 2026-10-13: the tag/logo slot at the OUTER end of each strip extends out a bit (sideways and a little taller),
+   while the name + score stay lined up with the hero row. */
+.ow-team .ow-logo { position: relative; z-index: 3; width: calc(var(--ow-strip-h) + var(--ow-logo-out)); height: calc(var(--ow-strip-h) + 8px); margin-top: -8px; } /* grows UP only, never onto the hero cards */
+.ow-team .ow-logo--home { margin-left: calc(-1 * var(--ow-logo-out)); }
+.ow-team .ow-logo--away { margin-right: calc(-1 * var(--ow-logo-out)); }
 /* No drop shadow under the team strips: it fell onto the hero icons right below (they start 2px under the strip). */
 .ow-team .ow-panel, .ow-team .ow-score { box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 /* Ban: hero icon just inside the team strip, toward the centre, with a red slash. */
@@ -2161,7 +2167,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
 .ow-logo img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,.65)); }
 .ow-name { display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 0 18px; border-left: 1px solid rgba(189,222,255,.22); border-right: 1px solid rgba(189,222,255,.22); }
 .ow-name--away { text-align: right; }
-.ow-name strong { overflow: hidden; font-size: 20px; font-weight: 1000; font-style: italic; letter-spacing: .035em; line-height: 1.05; text-overflow: ellipsis; text-shadow: 0 3px 7px rgba(0,0,0,.65); text-transform: uppercase; white-space: nowrap; }
+.ow-name strong { overflow: hidden; font-size: 24px; font-weight: 1000; font-style: italic; letter-spacing: .035em; line-height: 1.05; text-overflow: ellipsis; text-shadow: 0 3px 7px rgba(0,0,0,.65); text-transform: uppercase; white-space: nowrap; }
 .ow-side { min-height: 12px; color: #9fb0c2; font-size: 11px; font-weight: 1000; letter-spacing: .26em; }
 .ow-side:empty { display: none; }
 .ow-name--home.is-attacking .ow-side { color: var(--home-color); }
