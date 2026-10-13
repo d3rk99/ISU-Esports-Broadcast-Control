@@ -2110,7 +2110,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   /* Measured on Derk's live spectator screenshot 2026-10-13 (1920x1080): each team's hero cards + health bars run
      home x 41-544, away x 1353-1861, card tops at y 72. The strip spans exactly that width, right above the cards. */
   --ow-row-top: 72px;          /* top of the in-game hero cards */
-  --ow-home-row-left: 60px;    /* Derk 2026-10-13: start a bit in from the screen edge ... */
+  --ow-home-row-left: 50px;    /* Derk 2026-10-13: half way between 41 (card edge) and 60 (too far in) ... */
   --ow-home-row-right: 590px;  /* ... and run longer toward the centre */
   --ow-away-row-left: 1353px;
   --ow-away-row-right: 1885px; /* Derk 2026-10-13: a bit longer on the far right */
