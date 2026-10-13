@@ -27,7 +27,7 @@ const DEFAULT_ROIS = {
   // Overwatch spectator first-person view, 1920x1080: the spectated player's name sits bottom-left
   // on the bar right of the hero portrait (above "TEAM n"). Measured on Derk's spectator screenshots
   // (2026-10-12, 2560x1440 scaled to 1080p): name text y 970-990, x 165-330.
-  overwatch: { x: 150, y: 966, w: 190, h: 34 },
+  overwatch: { x: 150, y: 954, w: 200, h: 40 }, // Derk 2026-10-13: covers the real player name bar (HÜGE) and the earlier "1 TANK 2" frames
   rocketleague: { x: 660, y: 930, w: 600, h: 60 }
 };
 

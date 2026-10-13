@@ -193,12 +193,13 @@ test('spectate Overwatch: real spectator POV frames (Derk 2026-10-12) - default 
   const odir = path.join(DIR, '..', 'ow-pov');
   const ocr = new TesseractOcrEngine();
   const t = new SpectateTracker({ ocr, lang: 'ow' });
-  t.candidates = [{ name: '1 TANK 2' }, { name: '2 DPS 1' }, { name: 'D3RK99' }, { name: 'Flipf17' }];
+  t.candidates = [{ name: 'HÜGE' }, { name: '1 TANK 2' }, { name: '2 DPS 1' }, { name: 'D3RK99' }, { name: 'Flipf17' }];
   try {
     for (const f of fs.readdirSync(odir)) {
       const crop = loadRgb(path.join(odir, f)); const rgb = (x, y) => crop(x, y - 900); // fixtures start at y 900
       const r = await t.readName(rgb, DEFAULT_ROIS.overwatch);
-      assert.equal(r.winner?.name, '1 TANK 2', `${f}: ${r.reads.map((x) => x.text).join(' | ')}`);
+      const want = f.includes('huge') ? 'HÜGE' : '1 TANK 2'; // 2026-10-13: real player name frame
+      assert.equal(r.winner?.name, want, `${f}: ${r.reads.map((x) => x.text).join(' | ')}`);
     }
   } finally { await ocr.close(); }
 });

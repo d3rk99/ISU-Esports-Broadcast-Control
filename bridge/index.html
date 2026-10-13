@@ -70,7 +70,7 @@
       document.querySelectorAll('.vo-only').forEach((el) => el.classList.toggle('hidden', game !== 'valorant'));
       document.documentElement.style.setProperty('--game', game === 'valorant' ? '#ff4655' : game === 'overwatch' ? '#f06414' : '#2d8cff');
       // Name box default per game when the box is still on another game's default.
-      const boxDefaults = { valorant: [113, 816, 213, 41], overwatch: [150, 966, 190, 34] };
+      const boxDefaults = { valorant: [113, 816, 213, 41], overwatch: [150, 954, 200, 40] };
       const cur = ['spectateX','spectateY','spectateW','spectateH'].map((id) => Number($('#'+id).value));
       if (boxDefaults[game] && Object.values(boxDefaults).some((d) => d.join() === cur.join())) ['spectateX','spectateY','spectateW','spectateH'].forEach((id, i) => { $('#'+id).value = boxDefaults[game][i]; });
       $('#spectateWindow').value = $('#spectateWindow').value === 'VALORANT' || $('#spectateWindow').value === 'Overwatch' ? (game === 'overwatch' ? 'Overwatch' : 'VALORANT') : $('#spectateWindow').value;
