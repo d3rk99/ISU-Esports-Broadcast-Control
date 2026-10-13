@@ -913,6 +913,9 @@
       const url = `/assets/overwatch/hero-icons/${slug}.png`;
       if (img.getAttribute('src') !== url) img.src = url;
       img.alt = `${hero} banned`;
+      // Derk 2026-10-13: the label shows the banned hero's name instead of "BAN"
+      const label = el.querySelector('small');
+      if (label && label.textContent !== hero) label.textContent = hero;
       el.title = `${hero} banned`;
     }
     setText('#ow-map-label', `MAP ${(game.activeMap || 0) + 1} · FIRST TO ${mapsToWin}`);
