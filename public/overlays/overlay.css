@@ -2111,7 +2111,7 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
      home x 41-544, away x 1353-1861, card tops at y 72. The strip spans exactly that width, right above the cards. */
   --ow-row-top: 72px;          /* top of the in-game hero cards */
   --ow-home-row-left: 50px;    /* Derk 2026-10-13: half way between 41 (card edge) and 60 (too far in) ... */
-  --ow-home-row-right: 528px;  /* inside end = right edge of the last blue hero card (Derk 2026-10-13, measured x528) */
+  --ow-home-row-right: 567px;  /* inside end = end of the last blue card's light-blue corner (Derk 2026-10-13, measured x567) */
   --ow-away-row-left: 1353px;
   --ow-away-row-right: 1885px; /* Derk 2026-10-13: a bit longer on the far right */
   --ow-strip-h: 34px;
