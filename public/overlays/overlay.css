@@ -2107,13 +2107,13 @@ body[data-game="overwatch"] .paired-key-scene .scoreboard { filter: brightness(0
   /* Where the spectator HUD draws each team's 5 hero/health icons on the 1080p screen.
      Each team strip sits right above its row (bottom edge at --ow-row-top), the ban on the
      inside end next to the centre. Tune these to the live HUD. */
-  /* Measured on Derk's spectator screenshot 2026-10-12 (scaled to 1920x1080): the hero icon rows sit
-     at y 74-110, home x 43-507, away x 1354-1827. The centre (objective bar + timer) stays clear. */
-  --ow-row-top: 72px;          /* top of the in-game hero icon rows */
-  --ow-home-row-left: 40px;    /* left edge of the home hero row */
-  --ow-home-row-right: 512px;  /* right edge of the home hero row */
-  --ow-away-row-left: 1350px;
-  --ow-away-row-right: 1830px;
+  /* Measured on Derk's live spectator screenshot 2026-10-13 (1920x1080): each team's hero cards + health bars run
+     home x 41-544, away x 1353-1861, card tops at y 72. The strip spans exactly that width, right above the cards. */
+  --ow-row-top: 72px;          /* top of the in-game hero cards */
+  --ow-home-row-left: 41px;    /* left edge of the home hero row */
+  --ow-home-row-right: 544px;  /* right edge of the home hero row (end of the last health bar) */
+  --ow-away-row-left: 1353px;
+  --ow-away-row-right: 1861px;
   --ow-strip-h: 34px;
   position: absolute; inset: 0; color: #f7fbff; pointer-events: none;
 }
