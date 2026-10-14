@@ -614,6 +614,17 @@
 
   // Spectated player name bar (state.spectated from the controller: Game Bridge tracker). Team
   // colour on the left edge; hidden when nobody is known.
+  // Agent of a player by gamertag, from the scoreboard reader (game.valorantBoard). '' = the reader doesn't know yet.
+  function valorantAgentOf(game, name) {
+    const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const want = norm(name);
+    if (!want) return '';
+    for (const side of ['home', 'away']) {
+      for (const p of valorantBoardPlayers(game, side)) if (p?.agent && norm(p.name) === want) return String(p.agent).toLowerCase().replace(/[^a-z0-9-]/g, '');
+    }
+    return '';
+  }
+
   function renderValorantSpectated(state, teams) {
     const bar = $('#val-spectated');
     if (!bar) return;
@@ -621,11 +632,32 @@
     const show = Boolean(sp?.name);
     bar.hidden = !show;
     if (!show) return;
+    const game = state?.games?.valorant || {};
     const team = sp.side === 'away' ? teams[1] : sp.side === 'home' ? teams[0] : null;
     bar.style.setProperty('--val-spec-color', team?.color || '#f47920');
     if (bar.dataset.name !== sp.name) { bar.dataset.name = sp.name; bar.classList.remove('is-in'); void bar.offsetWidth; bar.classList.add('is-in'); }
     setText('#val-spectated-name', sp.name);
-    setText('#val-spectated-team', team?.shortName || team?.name || '');
+    // Derk 2026-10-14 (director): the spectated player's AGENT ICON on the left instead of the team tag; team tag
+    // only while the scoreboard reader hasn't worked out which agent he plays.
+    const tag = $('#val-spectated-team');
+    const agent = valorantAgentOf(game, sp.name);
+    if (tag && tag.dataset.agent !== agent) {
+      tag.dataset.agent = agent;
+      tag.replaceChildren();
+      if (agent) {
+        const img = document.createElement('img');
+        img.alt = agent;
+        img.src = `../assets/valorant/agent-icons/${agent}.png`;
+        img.onerror = () => { img.remove(); tag.classList.remove('has-agent'); tag.textContent = team?.shortName || team?.name || ''; };
+        tag.append(img);
+      }
+    }
+    if (tag) {
+      tag.classList.toggle('has-agent', Boolean(agent));
+      if (!agent) setText('#val-spectated-team', team?.shortName || team?.name || '');
+    }
+    // Derk 2026-10-14: stat cards off -> the in-game name isn't covered any more, so fade our name bar out too.
+    bar.classList.toggle('is-off', game.valorantShowStatCards === false);
   }
 
   function renderValorantHud(selectedGame, game, teams, activeMap) {

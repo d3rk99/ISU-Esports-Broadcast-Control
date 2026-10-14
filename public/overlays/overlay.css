@@ -2338,6 +2338,14 @@ body:not([data-game="overwatch"]) .ow-players { display: none; }
   clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
 }
 .val-spectated i:empty { min-width: 18px; padding: 0; }
+/* Agent icon in place of the team tag (Derk 2026-10-14) */
+.val-spectated i.has-agent { padding: 0 16px 0 10px; min-width: 0; }
+.val-spectated i.has-agent img { display: block; height: 34px; width: 34px; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
+/* Faded out together with the stat cards (when the cards are gone the in-game name isn't covered) */
+/* The slide-in animation (val-spec-in, fill 'both') pins the bar's own opacity at 1 (measured 2026-10-14: opacity stayed
+   100 with is-off on the bar), so the fade uses 'filter: opacity()', which the animation doesn't touch. */
+.val-spectated { transition: filter 380ms ease; }
+.val-spectated.is-off { filter: opacity(0); }
 .val-spectated strong { font-size: 22px; font-weight: 1000; letter-spacing: .04em; white-space: nowrap; text-shadow: 0 2px 4px rgba(0,0,0,.6); }
 .val-spectated.is-in { animation: val-spec-in 320ms cubic-bezier(.2,.82,.18,1) both; }
 @keyframes val-spec-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
