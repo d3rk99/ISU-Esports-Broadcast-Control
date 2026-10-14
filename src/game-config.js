@@ -658,6 +658,7 @@ export function createGameState(gameKey) {
       autoRoster: true,
       autoSeriesScore: true,
       autoAdvance: true,
+      statCardHeadshot: true, // Derk 2026-10-14: off = the stat card shows only the team logo (player cams cover the face)
       processedMatches: [],
       live: {
         status: 'disabled',

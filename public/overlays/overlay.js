@@ -349,7 +349,9 @@
     const normalize = (value) => String(value || '').trim().toLowerCase();
     const matches = roster.filter((entry) => [entry.handle, entry.name].some((name) => normalize(name) && normalize(name) === normalize(player.name)));
     const carImage = game.rocketLeague?.carRenderer?.enabled ? safeImageUrl(player.carImage, '') : '';
-    const portrait = carImage || (matches.length === 1 ? safeImageUrl(matches[0].playerImage, '') : '');
+    // Derk 2026-10-14: 'Show headshot' off in the controller = only the team logo (player cams already show the face)
+    const headshotOn = game.rocketLeague?.statCardHeadshot !== false;
+    const portrait = headshotOn ? carImage || (matches.length === 1 ? safeImageUrl(matches[0].playerImage, '') : '') : '';
     const logo = safeImageUrl(team.logoImage, '');
     const artwork = $('#rl-player-art');
     const signature = JSON.stringify([portrait, logo, team.shortName]);

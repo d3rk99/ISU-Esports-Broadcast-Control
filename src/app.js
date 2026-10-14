@@ -373,6 +373,9 @@ function renderRocketLeaguePanel(game) {
           ${rlCheckbox('autoSeriesScore', 'Series score', rl.autoSeriesScore)}
           ${rlCheckbox('autoAdvance', 'Advance next game', rl.autoAdvance)}
         </div></section>
+        <section><h3>STAT CARD</h3><div class="rl-checks">
+          ${rlCheckbox('statCardHeadshot', 'Show headshot (off = team logo only)', rl.statCardHeadshot !== false)}
+        </div></section>
       </div>
       <div class="rl-player-grid">${live.players.length ? live.players.map((player) => renderLivePlayer(player, rl, game)).join('') : '<p class="rl-empty">Players and boost meters appear here when the spectator enters a match.</p>'}</div>
     </article>`;
