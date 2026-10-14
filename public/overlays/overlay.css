@@ -7,17 +7,17 @@
 }
 
 * { box-sizing: border-box; }
-.rl-player-stats { position: absolute; left: 56px; bottom: 48px; width: var(--rl-statcard-w, 640px); height: 142px; display: grid; grid-template-columns: 130px 1fr; grid-template-rows: 65px 77px; border-left: 5px solid var(--player-color); background: #10141d; box-shadow: 0 8px 28px #0008; }
-.rl-player-stats header { min-width: 0; padding: 8px 18px; background: linear-gradient(110deg, var(--player-color), #151923); }
-.rl-player-stats header small { display: block; font-size: 12px; font-weight: 800; letter-spacing: 2px; }
-.rl-player-stats header strong { display: block; font-size: 27px; font-weight: 900; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-player-stats { position: absolute; left: 56px; bottom: 48px; width: var(--rl-statcard-w, 352px); height: 106px; display: grid; grid-template-columns: 96px 1fr; grid-template-rows: 46px 60px; /* Derk 2026-10-14: 45% narrower (640->352), 25% lower (142->106) */ border-left: 5px solid var(--player-color); background: #10141d; box-shadow: 0 8px 28px #0008; }
+.rl-player-stats header { min-width: 0; padding: 5px 10px; background: linear-gradient(110deg, var(--player-color), #151923); }
+.rl-player-stats header small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-player-stats header strong { display: block; font-size: 21px; line-height: 1.1; font-weight: 900; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #rl-player-art { grid-row: 1 / 3; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 26px; font-weight: 900; background: linear-gradient(150deg, #ffffff18, #ffffff00); }
 #rl-player-art img { width: 100%; height: 100%; object-fit: contain; }
 #rl-player-art img.portrait { object-fit: contain; object-position: bottom; }
-#rl-player-art img.logo { padding: 14px; }
+#rl-player-art img.logo { padding: 10px; }
 .rl-player-stat-values { display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; text-align: center; }
-.rl-player-stat-values span { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #dfe5ee; border-right: 1px solid #ffffff15; } /* Derk 2026-10-14: bigger labels (was 10px) */
-.rl-player-stat-values b { display: block; color: #fff; font-size: 34px; line-height: 1.05; letter-spacing: 0; text-shadow: 0 2px 6px rgba(0,0,0,.6); } /* was 28px */
+.rl-player-stat-values span { font-size: 10px; font-weight: 800; letter-spacing: .5px; min-width: 0; color: #dfe5ee; border-right: 1px solid #ffffff15; } /* Derk 2026-10-14: bigger labels (was 10px) */
+.rl-player-stat-values b { display: block; color: #fff; font-size: 26px; line-height: 1.05; letter-spacing: 0; text-shadow: 0 2px 6px rgba(0,0,0,.6); } /* was 28px */
 [hidden] { display: none !important; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: transparent; }
