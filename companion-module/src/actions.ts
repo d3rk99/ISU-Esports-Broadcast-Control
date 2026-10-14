@@ -24,6 +24,7 @@ export type ActionsSchema = {
 	display_mode: { options: { station: string; mode: DisplayMode } }
 	display_noise: { options: { station: string; on: 'on' | 'off' | 'toggle'; volume: string } }
 	display_preset: { options: { station: string; preset: DisplayPreset; team: '' | 'home' | 'away' } }
+	stat_cards: { options: { value: 'show' | 'hide' | 'toggle'; game: '' | 'valorant' | 'overwatch' } }
 }
 
 const TEAM_CHOICES = [
@@ -225,6 +226,35 @@ export function UpdateActions(self: ModuleInstance): void {
 			],
 			callback: async (event) =>
 				self.sendControlAction({ action: 'stage.display.mode', station: event.options.station, mode: event.options.mode }),
+		},
+		stat_cards: {
+			name: 'Player stat cards: show / hide / toggle (VALORANT, Overwatch)',
+			options: [
+				{
+					id: 'value',
+					type: 'dropdown',
+					label: 'Stat cards',
+					default: 'toggle',
+					choices: [
+						{ id: 'show', label: 'Show' },
+						{ id: 'hide', label: 'Hide' },
+						{ id: 'toggle', label: 'Toggle' },
+					],
+				},
+				{
+					id: 'game',
+					type: 'dropdown',
+					label: 'Game',
+					default: '',
+					choices: [
+						{ id: '', label: 'Selected game' },
+						{ id: 'valorant', label: 'VALORANT' },
+						{ id: 'overwatch', label: 'Overwatch 2' },
+					],
+				},
+			],
+			callback: async (event) =>
+				self.sendControlAction({ action: 'statcards.set', value: event.options.value, ...(event.options.game ? { game: event.options.game } : {}) }),
 		},
 		display_noise: {
 			name: 'Displays: Pink noise on the player headsets',

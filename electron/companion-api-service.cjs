@@ -183,6 +183,7 @@ function buildCompanionCapabilities(state = {}) {
   if (gameKey === 'valorant') actions.push({ id: 'veto.reset', label: 'Reset VALORANT veto selections', parameters: ['game?'] });
   actions.push(
     { id: 'overwatch.ban', label: 'Overwatch: hero ban for the active map', parameters: ['team', 'hero'] },
+    { id: 'statcards.set', label: 'Player stat cards (VALORANT / Overwatch): show, hide or toggle', parameters: ['value (show/hide/toggle)', 'game?'] },
     { id: 'stage.display.mode', label: 'Displays: game mirror or NDI', parameters: ['mode', 'station?', 'source?'] },
     { id: 'stage.display.noise', label: 'Displays: pink noise on the player headsets', parameters: ['on (on/off/toggle)', 'station?', 'volume?'] },
     { id: 'display.preset', label: 'Displays: NDI preset (idle, intro, player, banner, score, black)', parameters: ['preset', 'station?', 'team?'] }

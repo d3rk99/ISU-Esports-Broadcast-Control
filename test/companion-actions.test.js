@@ -208,3 +208,26 @@ test('invalid Companion actions fail without valid-looking results', () => {
   assert.throws(() => applyCompanionAction(state, { action: 'veto.reset' }), /only available for VALORANT/);
   assert.throws(() => applyCompanionAction(state, { action: 'does.not.exist' }), /Unknown action/);
 });
+
+test('Companion statcards.set shows, hides and toggles the player stat cards for VALORANT and Overwatch (Derk 2026-10-14)', () => {
+  const state = createInitialState();
+  // defaults: VALORANT cards on (they always showed), Overwatch cards off (experimental)
+  assert.equal(state.games.valorant.valorantShowStatCards, true);
+  assert.equal(state.games.overwatch.overwatchShowStatCards, false);
+  applyCompanionAction(state, { action: 'statcards.set', value: 'hide', game: 'valorant' });
+  assert.equal(state.games.valorant.valorantShowStatCards, false);
+  applyCompanionAction(state, { action: 'statcards.set', value: 'toggle', game: 'valorant' });
+  assert.equal(state.games.valorant.valorantShowStatCards, true);
+  applyCompanionAction(state, { action: 'statcards.set', value: 'show', game: 'overwatch' });
+  assert.equal(state.games.overwatch.overwatchShowStatCards, true);
+  // no game given = the selected game
+  state.selectedGame = 'overwatch';
+  applyCompanionAction(state, { action: 'statcards.set', value: 'toggle' });
+  assert.equal(state.games.overwatch.overwatchShowStatCards, false);
+  // old saves without the VALORANT flag count as shown, so toggle hides
+  delete state.games.valorant.valorantShowStatCards;
+  applyCompanionAction(state, { action: 'statcards.set', value: 'toggle', game: 'valorant' });
+  assert.equal(state.games.valorant.valorantShowStatCards, false);
+  assert.throws(() => applyCompanionAction(state, { action: 'statcards.set', value: 'show', game: 'rocketleague' }), /valorant or overwatch/);
+  assert.throws(() => applyCompanionAction(state, { action: 'statcards.set', value: 'blink', game: 'valorant' }), /show, hide or toggle/);
+});

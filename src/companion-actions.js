@@ -216,6 +216,22 @@ export function applyCompanionAction(state, request = {}) {
     row.heroBans = { ...(row.heroBans || {}), [side]: match };
     return { message: match ? `${side} ban: ${match}` : `${side} ban cleared` };
   }
+  if (action === 'statcards.set') {
+    // Derk 2026-10-14: one Companion action shows / hides / toggles the player stat cards for VALORANT or Overwatch.
+    const gameKey = String(request.game || state.selectedGame || '');
+    const key = gameKey === 'valorant' ? 'valorantShowStatCards' : gameKey === 'overwatch' ? 'overwatchShowStatCards' : '';
+    if (!key) throw actionError('statcards.set is for valorant or overwatch (game, or select one of them first)');
+    const game = state.games[gameKey];
+    const mode = String(request.value ?? request.mode ?? 'toggle').toLowerCase();
+    const current = gameKey === 'valorant' ? game[key] !== false : Boolean(game[key]);
+    let next;
+    if (mode === 'show' || mode === 'on' || mode === 'true') next = true;
+    else if (mode === 'hide' || mode === 'off' || mode === 'false') next = false;
+    else if (mode === 'toggle') next = !current;
+    else throw actionError('value must be show, hide or toggle');
+    game[key] = next;
+    return { message: `${GAME_CONFIGS[gameKey].name} player stat cards ${next ? 'shown' : 'hidden'}`, gameKey };
+  }
   if (action === 'display.preset') {
     const station = request.station === undefined || request.station === '' ? 'all' : String(request.station);
     try { applyDisplayPreset(state, station, String(request.preset || ''), String(request.team || '')); } catch (error) { throw actionError(error.message); }

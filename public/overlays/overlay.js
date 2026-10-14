@@ -667,6 +667,12 @@
     renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber });
     renderValorantPlayerCards('#val-home-players', valorantBoardPlayers(game, 'home'), 'home');
     renderValorantPlayerCards('#val-away-players', valorantBoardPlayers(game, 'away'), 'away');
+    // Derk 2026-10-14: stat cards can be hidden like Overwatch's (controller checkbox / Companion). Blank = on (old saves).
+    const showCards = game.valorantShowStatCards !== false;
+    for (const side of ['home', 'away']) {
+      const box = $(`#val-${side}-players`);
+      if (box) box.classList.toggle('is-off', !showCards);
+    }
   }
 
   // Smash crew battle: 1v1 games, each crew shares a 12-stock pool (detailScore = stocks left,

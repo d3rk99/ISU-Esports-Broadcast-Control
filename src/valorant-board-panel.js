@@ -42,7 +42,7 @@ export function spectatePanel(sp = {}, addresses = []) {
 
 // assetBase: the controller page is loaded from a file, so '/assets/..' must go through the
 // overlay server (same as the other roster images).
-export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = [], assetBase = '') {
+export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = [], assetBase = '', game = {}) {
   const s = vb.settings || {}; const status = vb.status || {};
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' ? 'bad' : status.state === 'no-board' ? 'warn' : '';
   const table = ['home', 'away'].map((side, i) => {
@@ -60,6 +60,7 @@ export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresse
   return `<article class="panel vb-panel" data-key="vb-panel">
     <div class="panel-title"><span class="section-number">OCR</span><div><h2>VALORANT scoreboard reader</h2><p>Observer 3 keeps <b>Tab</b> open. The board is found by itself (it follows the window moving), then every cell is read. A value only shows after it reads the same twice, and a number stays blank instead of guessing.</p></div></div>
     <div class="ow-ocr-controls">
+      <label class="rl-enable-toggle"><input type="checkbox" data-val-stat-cards ${game.valorantShowStatCards === false ? '' : 'checked'}><i></i><span><b>PLAYER STAT CARDS</b><small>Bottom-left / bottom-right cards on the scoreboard overlay (Companion: Player stat cards)</small></span></label>
       <label class="rl-enable-toggle"><input type="checkbox" data-vb-cfg="enabled" ${s.enabled ? 'checked' : ''}><i></i><span><b>READ SCOREBOARD</b><small>Off by default; turn on when Observer 3 is on the board</small></span></label>
       <label class="field"><span>WINDOW TITLE CONTAINS</span><input data-vb-cfg="windowName" value="${esc(s.windowName || 'VALORANT')}"></label>
       <label class="field"><span>READ EVERY (MS)</span><input type="number" min="200" max="5000" step="50" data-vb-cfg="intervalMs" value="${Number(s.intervalMs) || 500}"></label>

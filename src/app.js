@@ -270,7 +270,7 @@ function renderControl(config) {
         ${renderTeamControl(game.teams[1], 1, config, game)}
       </div>
       ${state.selectedGame === 'rocketleague' ? renderRocketLeaguePanel(game) : ''}
-      ${state.selectedGame === 'valorant' ? renderValorantBoardPanel(valorantBoard, game.teams, spectateInfo, networkAddresses, overlayBaseUrl) : ''}
+      ${state.selectedGame === 'valorant' ? renderValorantBoardPanel(valorantBoard, game.teams, spectateInfo, networkAddresses, overlayBaseUrl, game) : ''}
       ${state.selectedGame === 'overwatch' ? renderOverwatchBans(game, config) : ''}
       ${state.selectedGame === 'overwatch' ? renderOverwatchOcrPanel(overwatchOcr, game.teams, game) : ''}
       <div class="lower-grid">
@@ -1884,6 +1884,11 @@ root.addEventListener('change', async (event) => {
       current().rosterFirstSide = target.value === 'away' ? 'away' : 'home';
       state.activeRosterSide = current().rosterFirstSide;
     }, `${current().teams[target.value === 'away' ? 1 : 0].name} will show first on the roster overlay`);
+    render();
+    return;
+  }
+  if (target.dataset.valStatCards !== undefined) {
+    commit(() => { state.games.valorant.valorantShowStatCards = target.checked; }, target.checked ? 'VALORANT stat cards on' : 'VALORANT stat cards off');
     render();
     return;
   }

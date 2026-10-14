@@ -61,6 +61,13 @@ export function UpdatePresets(self: ModuleInstance): void {
 					],
 				},
 				{
+					id: 'stat-cards',
+					name: 'Player stat cards (VALORANT / Overwatch)',
+					description: 'Show, hide or toggle the bottom player stat cards for the selected game',
+					type: 'simple',
+					presets: ['stat-cards-toggle', 'stat-cards-show', 'stat-cards-hide'],
+				},
+				{
 					id: 'detail',
 					name: 'Current map/game score',
 					description: 'Manual in-map or in-game score controls',
@@ -125,6 +132,9 @@ export function UpdatePresets(self: ModuleInstance): void {
 		'home-detail-minus': scorePreset('Home current score −1', 'home', 'decrement', true),
 		'away-detail-plus': scorePreset('Away current score +1', 'away', 'increment', true),
 		'away-detail-minus': scorePreset('Away current score −1', 'away', 'decrement', true),
+		'stat-cards-toggle': statCardsPreset('toggle', 'STAT\nCARDS', GRAY),
+		'stat-cards-show': statCardsPreset('show', 'CARDS\nSHOW', GREEN),
+		'stat-cards-hide': statCardsPreset('hide', 'CARDS\nHIDE', BLACK),
 		'next-match': {
 			type: 'simple',
 			name: 'Next map/game',
@@ -228,6 +238,16 @@ function programOutputPreset(label: string, output: 'scoreboard' | 'roster' | 'm
 				style: { color: WHITE, bgcolor: output === 'clean' ? GRAY : BLUE },
 			},
 		],
+	}
+}
+
+function statCardsPreset(value: 'show' | 'hide' | 'toggle', text: string, bgcolor: number) {
+	return {
+		type: 'simple' as const,
+		name: `Player stat cards: ${value} (selected game)`,
+		style: { text, size: 'auto' as const, color: WHITE, bgcolor, show_topbar: false },
+		steps: [{ down: [{ actionId: 'stat_cards' as const, options: { value, game: '' as const } }], up: [] }],
+		feedbacks: [],
 	}
 }
 
