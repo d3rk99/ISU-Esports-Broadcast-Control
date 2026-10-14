@@ -7,7 +7,7 @@
 }
 
 * { box-sizing: border-box; }
-.rl-player-stats { position: absolute; left: 56px; bottom: 48px; width: var(--rl-statcard-w, 352px); height: 106px; display: grid; grid-template-columns: 96px 1fr; grid-template-rows: 46px 60px; /* Derk 2026-10-14: 45% narrower (640->352), 25% lower (142->106) */ border-left: 5px solid var(--player-color); background: #10141d; box-shadow: 0 8px 28px #0008; }
+.rl-player-stats { position: absolute; left: 56px; bottom: 48px; width: var(--rl-statcard-w, 405px); height: 106px; display: grid; grid-template-columns: 96px 1fr; grid-template-rows: 46px 60px; /* Derk 2026-10-14: 45% narrower (640->352) then 15% wider (352->405), 25% lower (142->106) */ border-left: 5px solid var(--player-color); background: #10141d; box-shadow: 0 8px 28px #0008; }
 .rl-player-stats header { min-width: 0; padding: 5px 10px; background: linear-gradient(110deg, var(--player-color), #151923); }
 .rl-player-stats header small { display: block; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rl-player-stats header strong { display: block; font-size: 21px; line-height: 1.1; font-weight: 900; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
