@@ -564,10 +564,14 @@
   function renderValorantPlayerCards(selector, players = [], side = 'home') {
     const container = $(selector);
     if (!container) return;
-    container.replaceChildren();
+    // Keep the same 5 card elements and only refill them: the show/hide slide (CSS transition on each card) would
+    // restart, or never run, if the cards were rebuilt on every state update (the board reader updates ~2x a second).
+    if (container.children.length !== 5) container.replaceChildren(...Array.from({ length: 5 }, () => document.createElement('article')));
     const safePlayers = Array.from({ length: 5 }, (_item, index) => players[index] || { index });
     safePlayers.forEach((player, index) => {
-      const card = document.createElement('article');
+      const card = container.children[index];
+      card.replaceChildren();
+      card.removeAttribute('style');
       card.className = `val-player-card val-player-card--${side}`;
       const name = document.createElement('strong');
       name.textContent = player?.name || `PLAYER ${index + 1}`;
@@ -605,7 +609,6 @@
         placeValorantAgentArt(card, agentSlug);
       }
       card.append(valorantUltimateRing(player), name, stats, weaponWrap);
-      container.append(card);
     });
   }
 

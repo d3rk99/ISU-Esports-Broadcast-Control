@@ -748,11 +748,21 @@ body[data-setup="game"] .val-native-fit .val-center {
 }
 .val-players--home { left: 18px; }
 .val-players--away { right: 18px; }
-/* Hidden from the controller / Companion: slide out to their own screen edge and fade (no layout jump) */
-.val-players { transition: opacity 380ms ease, translate 420ms cubic-bezier(.6,0,.8,.2); }
-.val-players.is-off { opacity: 0 !important; pointer-events: none; }
-.val-players--home.is-off { translate: calc(-100% - 40px) 0; }
-.val-players--away.is-off { translate: calc(100% + 40px) 0; }
+/* Show/hide from the controller / Companion (Derk 2026-10-14): ONE BY ONE like Overwatch's cards - each card slides from
+   its own screen edge, card 1 first going in, card 5 first going out, 110 ms apart, 480 ms in / 380 ms out (same numbers as
+   OW_CARD_MS / OW_CARD_STEP_MS and ow-card-in/out). Driven by the container class, so rebuilding the cards on every state
+   update doesn't restart anything; per-card delay comes from its position. */
+.val-players--home { --val-off: calc(-100% - 40px); }
+.val-players--away { --val-off: calc(100% + 40px); }
+.val-players .val-player-card { transition: translate 480ms cubic-bezier(.2,.82,.18,1), opacity 300ms ease; transition-delay: calc(var(--val-i, 0) * 110ms); }
+.val-players .val-player-card:nth-child(1) { --val-i: 0; --val-o: 4; }
+.val-players .val-player-card:nth-child(2) { --val-i: 1; --val-o: 3; }
+.val-players .val-player-card:nth-child(3) { --val-i: 2; --val-o: 2; }
+.val-players .val-player-card:nth-child(4) { --val-i: 3; --val-o: 1; }
+.val-players .val-player-card:nth-child(5) { --val-i: 4; --val-o: 0; }
+.val-players.is-off { pointer-events: none; }
+.val-players.is-off .val-player-card { translate: var(--val-off) 0; opacity: 0;
+  transition: translate 380ms cubic-bezier(.6,0,.8,.2), opacity 300ms ease 80ms; transition-delay: calc(var(--val-o, 0) * 110ms); }
 /* Card: [ult ring] [name / K-D-A + credits / weapon]. Away cards mirror it. */
 .val-player-card {
   position: relative;
