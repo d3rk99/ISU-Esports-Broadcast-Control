@@ -2074,6 +2074,9 @@ async function rosterManagerAction(button) {
   if (action === 'rm-load') {
     const side = button.dataset.side === 'away' ? 'away' : 'home';
     const config = GAME_CONFIGS[state.selectedGame];
+    // Same team on both sides = every gamertag in both rosters, and the reader can't tell the blocks apart.
+    const other = side === 'home' ? 'away' : 'home';
+    if (game.rosterAssign?.[other] === team.id) { toast(`${team.name} is already loaded as ${other.toUpperCase()}. Load the opponent there first.`); return true; }
     commit(() => { loadTeamIntoMatch(game, side, team.id, { emptyPlayer: (i) => createPlayer(config, i), rosterSize: config.rosterSize }); }, `${team.name} loaded as ${side.toUpperCase()}`);
     toast(`${team.name} loaded as ${side.toUpperCase()}: the scoreboard reader now links these gamertags`);
     render(); return true;
