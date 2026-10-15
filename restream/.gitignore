@@ -1,0 +1,8 @@
+/target
+/tools/bin/
+*.log
+/tests/out/
+/dist/
+/release/
+/auto.crt
+/auto.key
