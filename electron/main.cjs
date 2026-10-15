@@ -1050,6 +1050,7 @@ function registerIpc() {
   ipcMain.handle('valorant-board:configure', (_event, settings = {}) => { const saved = saveValorantBoardSettings(settings); return { settings: saved, status: valorantBoardService.configure(saved) }; });
   ipcMain.handle('valorant-board:clear', () => { valorantBoardService.clear(); return valorantBoardService.snapshot(); });
   ipcMain.handle('valorant-board:set-name', (_event, details = {}) => valorantBoardService.setPlayerName(details));
+  ipcMain.handle('valorant-board:known-names', (_event, bySide = {}) => valorantBoardService.setKnownNames(bySide));
   ipcMain.handle('valorant-board:test-read', async () => { await valorantBoardService.sweep(); return valorantBoardService.snapshot(); });
   ipcMain.handle('overwatch-ocr:get-settings', () => ({ settings: readOverwatchOcrSettings(), status: overwatchOcrService.getStatus() }));
   ipcMain.handle('overwatch-ocr:configure', (_event, settings = {}) => {

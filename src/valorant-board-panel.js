@@ -1,4 +1,4 @@
-import { matchRosterToOcr, NAME_MATCH } from './overwatch-ocr-panel.js';
+import { matchRosterToOcr, NAME_MATCH, tagSimilarity } from './overwatch-ocr-panel.js';
 // Controller panel for the rebuilt VALORANT scoreboard reader (electron/valorant-board-service.cjs).
 // Same idea as the Overwatch OCR panel: on/off, window, live table, test read, clear.
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -47,11 +47,14 @@ export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresse
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' ? 'bad' : status.state === 'no-board' ? 'warn' : '';
   const table = ['home', 'away'].map((side, i) => {
     const players = vb.live?.teams?.[side]?.players || [];
-    return `<div class="vb-team"><h3>${esc(teams[i]?.name || (side === 'home' ? 'TOP TEAM' : 'BOTTOM TEAM'))}</h3>
+    const dec = vb.decision; const teamSide = dec?.top ? (side === 'home' ? dec.top : (dec.top === 'home' ? 'away' : 'home')) : '';
+    const teamName = teamSide ? teams[teamSide === 'home' ? 0 : 1]?.name : '';
+    const color = vb.live?.colors?.[side];
+    return `<div class="vb-team"><h3>${side === 'home' ? 'TOP' : 'BOTTOM'} BLOCK · ${esc(teamName || '?')}${teamSide ? ` (${teamSide.toUpperCase()})` : ''}${color ? ` · ${color === 'red' ? 'ATTACKING' : 'DEFENDING'}` : ''}</h3>
       <table><thead><tr><th>AGENT</th><th>NAME</th><th>ULT</th><th>K</th><th>D</th><th>A</th><th>GUN</th><th>SHIELD</th><th>CREDS</th><th>PING</th></tr></thead><tbody>
-      ${players.map((p) => `<tr data-key="vb-${side}-${p.row}">
+      ${[...players.map((p, slot) => ({ ...p, slot }))].sort((a, b) => (a.row ?? a.slot) - (b.row ?? b.slot)).map((p) => `<tr data-key="vb-${side}-${p.slot}">
         <td>${p.agent ? `<img src="${esc(assetBase)}/assets/valorant/agents/${esc(p.agent)}.webp" alt=""><span>${esc(p.agent.toUpperCase())}</span>` : v(null)}</td>
-        <td><input data-vb-name data-side="${side}" data-row="${p.row}" value="${esc(p.name)}" placeholder="(OCR)" class="${p.nameManual ? 'manual' : ''}"></td>
+        <td><input data-vb-name data-side="${side}" data-row="${p.slot}" value="${esc(p.name)}" placeholder="(OCR)" class="${p.nameManual ? 'manual' : ''}"></td>
         <td>${v(p.ultimate)}</td><td>${v(p.kills)}</td><td>${v(p.deaths)}</td><td>${v(p.assists)}</td>
         <td>${v(p.weapon ? p.weapon.toUpperCase() : null)}</td><td>${v(p.shield ? SHIELD[p.shield] : null)}</td>
         <td>${v(Number.isFinite(p.credits) ? p.credits.toLocaleString('en-US') : null)}</td><td>${v(p.ping)}</td></tr>`).join('')}
@@ -68,6 +71,7 @@ export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresse
       <div class="ow-ocr-buttons"><button data-action="vb-test">TEST READ</button><button data-action="vb-clear" data-confirm="Clear?">CLEAR</button></div>
     </div>
     ${matchLine(vb.live?.match)}
+    ${vb.decision ? `<p class="vb-match">TEAMS ON THE BOARD: top = <b>${esc((vb.decision.top || 'home').toUpperCase())}</b> · decided by <b>${esc({ names: 'ROSTER GAMERTAGS', sides: 'MAP POOL ATTACKING SIDE', kept: 'LAST DECISION', default: 'DEFAULT (nothing to go on yet)' }[vb.decision.by] || vb.decision.by)}</b><small>${esc(vb.decision.detail || '')} · Players are followed by gamertag when VALORANT re-sorts the board.</small></p>` : ''}
     <p class="ow-ocr-status is-${tone}">${esc((status.state || 'disabled').toUpperCase())} · ${esc(status.message || 'off')}${status.sweepMs ? ` · ${status.sweepMs} ms per read` : ''}</p>
     <div class="vb-tables">${table}</div>
     ${spectatePanel(spectate, addresses)}
@@ -103,8 +107,15 @@ export function syncValorantRoster(game, rosterKey = 'varsity', { threshold = NA
     const matched = new Set(pairs.map((p) => p.ri));
     for (const { pi, ri } of pairs) { apply(side, roster[pi], 'character', rows[ri].agentName); apply(side, roster[pi], 'role', VALORANT_AGENT_ROLES[rows[ri].agentName]); }
     if (!fillEmpty) continue;
+    // Derk 2026-10-15: never auto-add a board name that could be a half-read or a pre-set player read badly. A row only
+    // fills an empty roster slot when (a) no roster player is even close to it (>= 60%: it's a typo of a known player,
+    // the link will happen once the read settles) and (b) the roster has NO pre-set players for that team yet (once the
+    // Roster Manager loaded a team, the roster is the source of truth and the board never adds people to it).
+    const preset = roster.some((p) => String(p?.handle || '').trim() && !p.autoAdded);
+    if (preset) continue;
     for (const [ri, row] of rows.entries()) {
       if (matched.has(ri) || !row?.name) continue;
+      if (roster.some((p) => p?.handle && tagSimilarity(p.handle, row.name) >= 0.6)) continue;
       const slot = roster.find(isEmpty); if (!slot) break;
       changes.push({ side, handle: row.name, field: 'handle', from: '', to: row.name });
       slot.handle = row.name; slot.autoAdded = true;

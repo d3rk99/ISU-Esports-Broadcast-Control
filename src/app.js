@@ -10,6 +10,12 @@ import { advanceGameMatch, applyCompanionAction, saveLastGameStats, swapGameTeam
 import { deepClone, loadState, saveState } from './store.js';
 import { emptyOverwatchOcr, mergeOverwatchOcrSnapshot, renderOverwatchOcrPanel, syncRosterFromOcr } from './overwatch-ocr-panel.js';
 import { emptyValorantBoard, mergeValorantBoardSnapshot, renderValorantBoardPanel, spectatePanel, syncValorantRoster } from './valorant-board-panel.js';
+import { mapBoardToTeams } from './valorant-board-teams.js';
+import { ensureLibrary, createTeam, findTeam, addPlayer, bulkAdd, setForPlayers, removePlayers, loadTeamIntoMatch, writeBackFromMatch, liveLinks, sortedPlayers } from './roster-manager.js';
+import { renderRosterSubTabs, renderRosterManager } from './roster-manager-view.js';
+import { tagSimilarity } from './overwatch-ocr-panel.js';
+// Roster Manager UI state (not saved with the match): which library team is open, which players are ticked, filter.
+const rosterManagerUi = { teamId: '', selected: new Set(), filter: 'all', bulkText: '' };
 
 const root = document.querySelector('#app');
 let state = loadState();
@@ -226,7 +232,12 @@ function renderTopbar(config) {
 
 function renderView(config) {
   if (state.activeView === 'maps') return renderMaps(config);
-  if (state.activeView === 'roster') return renderRosters(config);
+  if (state.activeView === 'roster') {
+    const sub = state.rosterSubTab === 'manager' ? 'manager' : 'lineup';
+    return renderRosterSubTabs(sub) + (sub === 'manager'
+      ? renderRosterManager(current(), { selectedTeamId: rosterManagerUi.teamId, selected: rosterManagerUi.selected, assetUrl: displayAssetUrl, filter: rosterManagerUi.filter, bulkText: rosterManagerUi.bulkText })
+      : renderRosters(config));
+  }
   if (state.activeView === 'outputs') return renderOutputs();
   if (state.activeView === 'stage') return renderDisplaysView(state, { displayStatus, obsDisplays });
   if (state.activeView === 'settings') return renderSettings();
@@ -604,6 +615,7 @@ function renderMapRow(row, index, config, game) {
 }
 
 function renderRosters(config) {
+  readerLinkCache = null;
   const game = current();
   const rosterFirstSide = game.rosterFirstSide === 'away' ? 'away' : 'home';
   const rosterFirstIndex = rosterFirstSide === 'away' ? 1 : 0;
@@ -654,6 +666,24 @@ function stationOwners(game, self) {
   return out;
 }
 
+// Live link of this match-roster slot to the scoreboard reader (VALORANT: board already mapped by TEAM).
+let readerLinkCache = null;
+function readerLinks() {
+  if (readerLinkCache) return readerLinkCache;
+  const game = current();
+  const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live : null;
+  const roster = activeRosterCollection(game)[state.activeRoster] || [];
+  readerLinkCache = live?.teams ? liveLinks(roster, live.teams[state.activeRosterSide]?.players, tagSimilarity) : new Map();
+  return readerLinkCache;
+}
+function readerLinkChip(index) {
+  if (!['valorant', 'overwatch'].includes(state.selectedGame)) return '';
+  const l = readerLinks().get(index);
+  if (!l) return '<span class="reader-link none" title="Not seen on the scoreboard reader">READER —</span>';
+  const pct = Math.round(l.score * 100);
+  return `<span class="reader-link ${l.linked ? 'ok' : 'weak'}" title="Scoreboard reader: ${escapeHtml(l.name)}${l.block ? ` (${l.block} block, row ${Number(l.row) + 1})` : ''}">${l.linked ? 'LINKED' : 'MAYBE'} ${escapeHtml(l.name)} · ${pct}%${l.agent ? ` · ${escapeHtml(l.agent.toUpperCase())}` : ''}</span>`;
+}
+
 function renderPlayerEditor(player, index, config, game) {
   const selectedArt = game.characterArt[player.character] || {};
   const isOverwatch = state.selectedGame === 'overwatch';
@@ -680,7 +710,7 @@ function renderPlayerEditor(player, index, config, game) {
       <label><span>PLAYER NAME</span><input data-player="${index}" data-player-prop="name" value="${escapeHtml(player.name)}" placeholder="First Last" maxlength="40"></label>
       <label><span>ROLE</span><select data-player="${index}" data-player-prop="role">${config.roles.map((role) => `<option ${player.role === role ? 'selected' : ''}>${escapeHtml(role)}</option>`).join('')}</select></label>
       <label><span>STATION</span><select data-player="${index}" data-player-prop="stageStation">${stationOptions}</select></label>
-      <span class="starter-state ${index < config.rosterSize ? 'on' : ''}">${index < config.rosterSize ? 'STARTER' : 'RESERVE'}</span>
+      <span class="starter-cell"><span class="starter-state ${index < config.rosterSize ? 'on' : ''}">${player.libraryStatus === 'sixth' ? '6TH MAN' : player.libraryStatus === 'sub' ? 'SUB' : index < config.rosterSize ? 'STARTER' : 'RESERVE'}</span>${readerLinkChip(index)}</span>
       <button class="remove-player" data-action="remove-player" data-index="${index}" data-confirm="Remove?" title="Remove player (click twice)">&times;</button>
     </div>
     <div class="player-media-row">
@@ -1278,8 +1308,25 @@ const spectateRerender = () => { if ((state.selectedGame === 'valorant' && state
 window.isuDesktop?.onSpectated?.((sp) => { spectateInfo = { ...spectateInfo, spectated: sp }; spectateRerender(); });
 window.isuDesktop?.onSpectateReceiverStatus?.((st) => { spectateInfo = { ...spectateInfo, status: st }; spectateRerender(); });
 let valorantBoardRenderTimer = null;
+// Board blocks (top/bottom) -> TEAMS (home/away) before anyone uses the board: names first, map pool attacking side +
+// red/teal block second (src/valorant-board-teams.js). Everything downstream (overlay cards, stations, spectate,
+// Companion) reads game.valorantBoard.live.teams.home / .away = the match's teams.
+let valorantBlockDecision = null;
+let valorantKnownNamesSent = '';
 function publishValorantBoard() {
-  if (state.games.valorant) state.games.valorant.valorantBoard = { live: valorantBoard.live };
+  if (state.games.valorant && valorantBoard.live?.teams) {
+    const game = state.games.valorant;
+    const mapped = mapBoardToTeams(game, valorantBoard.live, valorantBlockDecision);
+    valorantBlockDecision = mapped.decision;
+    valorantBoard.decision = mapped.decision;
+    game.valorantBoard = { live: mapped.board };
+    // Roster gamertags as hints for the reader, in BOARD terms (top block = 'home' there).
+    const tags = (rosters) => ['varsity', 'jv'].flatMap((k) => (rosters?.[k] || []).map((p) => String(p?.handle || '').trim()).filter(Boolean));
+    const topTeam = mapped.decision.top;
+    const hint = { home: tags(topTeam === 'home' ? game.rosters : game.awayRosters), away: tags(topTeam === 'home' ? game.awayRosters : game.rosters) };
+    const key = JSON.stringify(hint);
+    if (key !== valorantKnownNamesSent) { valorantKnownNamesSent = key; window.isuDesktop?.setValorantBoardKnownNames?.(hint); }
+  } else if (state.games.valorant) state.games.valorant.valorantBoard = { live: valorantBoard.live };
   if (!livePublishTimer) livePublishTimer = window.setTimeout(() => { livePublishTimer = null; window.isuDesktop?.publishState(state); }, 100);
   if (state.selectedGame !== 'valorant' || valorantBoardRenderTimer) return;
   valorantBoardRenderTimer = window.setTimeout(() => { valorantBoardRenderTimer = null; render(); }, 250);
@@ -1386,6 +1433,14 @@ root.addEventListener('click', async (event) => {
     render();
     return;
   }
+  const subTab = event.target.closest('[data-roster-subtab]');
+  if (subTab) { state.rosterSubTab = subTab.dataset.rosterSubtab; persistState(); render(); return; }
+  const rmTeam = event.target.closest('[data-rm-team]');
+  if (rmTeam) { rosterManagerUi.teamId = rmTeam.dataset.rmTeam; rosterManagerUi.selected = new Set(); render(); return; }
+  const rmFilter = event.target.closest('[data-rm-filter]');
+  if (rmFilter) { rosterManagerUi.filter = rmFilter.dataset.rmFilter; render(); return; }
+  const rmAction = event.target.closest('[data-action^="rm-"]');
+  if (rmAction && !rmAction.disabled) { if (await rosterManagerAction(rmAction)) return; }
   const rosterButton = event.target.closest('[data-roster]');
   if (rosterButton) {
     state.activeRoster = rosterButton.dataset.roster;
@@ -1729,6 +1784,8 @@ root.addEventListener('click', async (event) => {
 root.addEventListener('input', (event) => {
   const target = event.target;
   if (target.dataset.obsCfg) obsDisplays.draft = { ...(obsDisplays.draft || {}), [target.dataset.obsCfg]: target.value };
+  // Bulk-add box: kept as typed, a re-render on blur would otherwise reset it before ADD PLAYERS reads it.
+  if (target.dataset.rmBulk !== undefined) rosterManagerUi.bulkText = target.value;
 });
 
 root.addEventListener('keydown', async (event) => {
@@ -1927,8 +1984,13 @@ root.addEventListener('change', async (event) => {
     });
   }
   if (target.dataset.player !== undefined) {
-    commit(() => { activeRosterCollection()[state.activeRoster][Number(target.dataset.player)][target.dataset.playerProp] = target.value; });
+    commit(() => {
+      activeRosterCollection()[state.activeRoster][Number(target.dataset.player)][target.dataset.playerProp] = target.value;
+      // The library stays the source of truth: edits in the match roster flow back to the loaded team.
+      writeBackFromMatch(current(), state.activeRosterSide);
+    });
   }
+  if (rosterManagerChange(target)) return;
   render();
 });
 
@@ -1973,3 +2035,94 @@ function initialize() {
 
 initialize();
 
+
+// ---- Roster Manager (Derk 2026-10-15): library of teams/players = source of truth; src/roster-manager.js ----
+function rmTeam() {
+  const lib = ensureLibrary(current());
+  return findTeam(current(), rosterManagerUi.teamId) || lib.teams[0] || null;
+}
+function rmShownIds(team) {
+  const f = rosterManagerUi.filter;
+  return sortedPlayers(team).filter((p) => f === 'all' || p.program === f || p.status === f).map((p) => p.id);
+}
+async function rosterManagerAction(button) {
+  const action = button.dataset.action;
+  const game = current();
+  const team = rmTeam();
+  if (action === 'rm-new-team') {
+    commit(() => { const t = createTeam(game, { name: ensureLibrary(game).teams.length ? 'NEW TEAM' : 'IDAHO STATE', shortName: ensureLibrary(game).teams.length ? '' : 'ISU', isISU: !ensureLibrary(game).teams.length }); rosterManagerUi.teamId = t.id; }, 'Team created');
+    render(); return true;
+  }
+  if (!team) return false;
+  if (action === 'rm-delete-team') {
+    commit(() => { ensureLibrary(game).teams = ensureLibrary(game).teams.filter((t) => t.id !== team.id); for (const s of ['home', 'away']) if (game.rosterAssign[s] === team.id) game.rosterAssign[s] = ''; rosterManagerUi.teamId = ''; }, `${team.name} deleted from the library`);
+    render(); return true;
+  }
+  if (action === 'rm-load') {
+    const side = button.dataset.side === 'away' ? 'away' : 'home';
+    const config = GAME_CONFIGS[state.selectedGame];
+    commit(() => { loadTeamIntoMatch(game, side, team.id, { emptyPlayer: (i) => createPlayer(config, i), rosterSize: config.rosterSize }); }, `${team.name} loaded as ${side.toUpperCase()}`);
+    toast(`${team.name} loaded as ${side.toUpperCase()}: the scoreboard reader now links these gamertags`);
+    render(); return true;
+  }
+  if (action === 'rm-add-one') { commit(() => { addPlayer(team, {}); }, 'Player added'); render(); return true; }
+  if (action === 'rm-bulk-add') {
+    const text = rosterManagerUi.bulkText || root.querySelector('[data-rm-bulk]')?.value || '';
+    let added = [];
+    commit(() => { added = bulkAdd(team, text); }, 'Players added');
+    if (added.length) rosterManagerUi.bulkText = '';
+    toast(added.length ? `${added.length} players added to ${team.name}` : 'Nothing to add: one player per line');
+    render(); return true;
+  }
+  if (action === 'rm-remove') { commit(() => { removePlayers(team, [button.dataset.id]); rosterManagerUi.selected.delete(button.dataset.id); }, 'Player removed'); render(); return true; }
+  if (action === 'rm-remove-selected') { const ids = [...rosterManagerUi.selected]; commit(() => { removePlayers(team, ids); }, `${ids.length} players removed`); rosterManagerUi.selected = new Set(); render(); return true; }
+  if (action === 'rm-select-all') { rosterManagerUi.selected = new Set(rmShownIds(team)); render(); return true; }
+  if (action === 'rm-select-none') { rosterManagerUi.selected = new Set(); render(); return true; }
+  if (action === 'rm-pick-headshot') {
+    const selected = await window.isuDesktop?.pickImage({ gameKey: state.selectedGame, type: 'playerImage' });
+    if (selected) {
+      commit(() => {
+        const p = team.players.find((x) => x.id === button.dataset.id); if (!p) return;
+        p.playerImage = selected.url; p.playerImageName = selected.name;
+        // Already loaded into the match: the match roster gets the headshot too.
+        for (const side of ['home', 'away']) if (game.rosterAssign?.[side] === team.id) for (const k of ['varsity', 'jv']) for (const mp of (side === 'away' ? game.awayRosters : game.rosters)?.[k] || []) if (mp.libraryId === p.id) { mp.playerImage = p.playerImage; mp.playerImageName = p.playerImageName; }
+      }, 'Headshot saved');
+      render();
+    }
+    return true;
+  }
+  return false;
+}
+// change events of the manager; returns true when handled (render already done)
+function rosterManagerChange(target) {
+  const game = current();
+  const team = rmTeam();
+  if (target.dataset.rmSelect !== undefined) {
+    if (target.checked) rosterManagerUi.selected.add(target.dataset.rmSelect); else rosterManagerUi.selected.delete(target.dataset.rmSelect);
+    render(); return true;
+  }
+  if (!team) return false;
+  if (target.dataset.rmTeamProp) {
+    const prop = target.dataset.rmTeamProp;
+    commit(() => {
+      if (prop === 'isISU') { for (const t of ensureLibrary(game).teams) t.isISU = false; team.isISU = target.checked; }
+      else team[prop] = prop === 'shortName' ? target.value.trim().slice(0, 6).toUpperCase() : target.value.trim().slice(0, 40) || team[prop];
+    }, 'Team saved');
+    render(); return true;
+  }
+  if (target.dataset.rmPlayer) {
+    commit(() => { setForPlayers(team, [target.dataset.rmPlayer], target.dataset.rmProp, target.value.trim()); }, 'Player saved');
+    render(); return true;
+  }
+  if (target.dataset.rmBulkStatus !== undefined && target.value) {
+    const ids = [...rosterManagerUi.selected]; let n = 0;
+    commit(() => { n = setForPlayers(team, ids, 'status', target.value); }, 'Status changed');
+    toast(`${n} players set to ${target.value.toUpperCase()}`); render(); return true;
+  }
+  if (target.dataset.rmBulkProgram !== undefined && target.value) {
+    const ids = [...rosterManagerUi.selected]; let n = 0;
+    commit(() => { n = setForPlayers(team, ids, 'program', target.value); }, 'Program changed');
+    toast(`${n} players moved to ${target.value.toUpperCase()}`); render(); return true;
+  }
+  return false;
+}

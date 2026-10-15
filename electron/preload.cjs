@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('isuDesktop', {
   configureValorantBoard: (settings) => ipcRenderer.invoke('valorant-board:configure', settings),
   clearValorantBoard: () => ipcRenderer.invoke('valorant-board:clear'),
   setValorantBoardName: (details) => ipcRenderer.invoke('valorant-board:set-name', details),
+  setValorantBoardKnownNames: (bySide) => ipcRenderer.invoke('valorant-board:known-names', bySide),
   testValorantBoard: () => ipcRenderer.invoke('valorant-board:test-read'),
   onValorantBoardState: (callback) => { const l = (_e, p) => callback(p); ipcRenderer.on('valorant-board:state', l); return () => ipcRenderer.removeListener('valorant-board:state', l); },
   onValorantBoardStatus: (callback) => { const l = (_e, p) => callback(p); ipcRenderer.on('valorant-board:status', l); return () => ipcRenderer.removeListener('valorant-board:status', l); },

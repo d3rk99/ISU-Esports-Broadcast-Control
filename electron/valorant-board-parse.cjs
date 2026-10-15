@@ -363,6 +363,28 @@ async function readCell(ocr, lum, cell, makeImage, fieldId = 'valorant-board') {
 }
 
 // ---- consensus (same rules as Overwatch) --------------------------------------------------
+// Which colour a block's rows are tinted: VALORANT tints the defenders' rows teal and the attackers' rows red on the
+// Tab board (measured on Derk's ISU observer boards, test/fixtures/val-board-1/2.png: top block teal, bottom red).
+// Samples the left part of each row band (agent + name area) of one block. -> 'teal' | 'red' | '' (not sure)
+function blockColor(rgb, profile, align, side) {
+  let teal = 0; let red = 0; let n = 0;
+  for (const off of profile.rowOffsets[side]) {
+    const cy = profile.headerY + align.dy + off;
+    for (let x = profile.columns.agent.x + 40 + align.dx; x < profile.columns.name.x + profile.columns.name.w + align.dx; x += 4) {
+      for (const dy of [-6, 6]) {
+        const [r, g, b] = rgb(x, cy + dy);
+        if (r + g + b < 120) continue;
+        n += 1;
+        if (g > r + 18 && b > r + 10) teal += 1; else if (r > g + 18 && r > b + 10) red += 1;
+      }
+    }
+  }
+  if (n < 20) return '';
+  if (teal > red * 2 && teal >= n * 0.25) return 'teal';
+  if (red > teal * 2 && red >= n * 0.25) return 'red';
+  return '';
+}
+
 class BoardConsensus {
   constructor({ first = 2, change = 2, correction = 4, nameReads = 3 } = {}) { Object.assign(this, { first, change, correction, nameReads }); this.cells = new Map(); }
   suspicious(field, current, next) {
@@ -397,4 +419,4 @@ function applySweep(board, consensus, reads, now = Date.now()) {
   return changed;
 }
 
-module.exports = { creditsRoi, GearMatcher, PROFILE, READ_FIELDS, SIDES, glyphCount, plausibleRead, readCell, findHeader, alignBoard, cellRois, AgentMatcher, parseCell, BoardConsensus, emptyBoard, applySweep };
+module.exports = { blockColor, creditsRoi, GearMatcher, PROFILE, READ_FIELDS, SIDES, glyphCount, plausibleRead, readCell, findHeader, alignBoard, cellRois, AgentMatcher, parseCell, BoardConsensus, emptyBoard, applySweep };

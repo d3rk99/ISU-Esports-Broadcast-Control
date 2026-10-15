@@ -6,7 +6,8 @@
 // Tesseract engine. The controller writes the result to state.games.valorant.valorantBoard.
 const os = require('node:os');
 const { HudReader } = require('./valorant-hud-reader.cjs');
-const { PROFILE, SIDES, alignBoard, cellRois, readCell, AgentMatcher, GearMatcher, BoardConsensus, emptyBoard, applySweep } = require('./valorant-board-parse.cjs');
+const { PROFILE, SIDES, alignBoard, blockColor, cellRois, readCell, AgentMatcher, GearMatcher, BoardConsensus, emptyBoard, applySweep } = require('./valorant-board-parse.cjs');
+const { BoardIdentity } = require('./valorant-board-identity.cjs');
 
 const DEFAULT_WORKERS = Math.max(2, Math.min(8, Math.floor((os.cpus()?.length || 4) / 2)));
 const DEFAULTS = { enabled: false, windowName: 'VALORANT', intervalMs: 500, workers: DEFAULT_WORKERS };
@@ -28,6 +29,8 @@ class ValorantBoardService {
     this.consensus = new BoardConsensus();
     this.status = { state: 'disabled', message: 'VALORANT scoreboard OCR is off', sweepMs: 0, sweeps: 0 };
     this.timer = null; this.running = false; this.nameOverrides = new Map();
+    // Players re-sort on the board during a match (Patch 13.06 Performance Score order): follow players, not rows.
+    this.identity = new BoardIdentity({ sides: SIDES });
     try { this.agents = new AgentMatcher(); } catch (error) { this.agents = null; this.agentError = error.message; }
     try { this.gear = new GearMatcher(); } catch (error) { this.gear = null; this.gearError = error.message; }
     // Top HUD: round score + round timer (replaces the old OCR lab). Score needs 2 matching
@@ -67,7 +70,10 @@ class ValorantBoardService {
 
   clear() {
     this.match = { homeScore: null, awayScore: null, timer: null, spikePlanted: false, updatedAt: 0 };
-    this.scoreVotes = { home: [], away: [] }; this.board = emptyBoard(); this.consensus = new BoardConsensus(); this.nameOverrides = new Map(); this.onState(this.snapshot()); }
+    this.scoreVotes = { home: [], away: [] }; this.board = emptyBoard(); this.consensus = new BoardConsensus(); this.nameOverrides = new Map(); this.identity.reset(); this.onState(this.snapshot()); }
+
+  // Roster gamertags expected in each board block ({ home: [...], away: [...] } in BOARD terms: home = top block).
+  setKnownNames(bySide = {}) { this.identity.setKnownNames(bySide); return true; }
 
   // Operator-set name for one slot; wins over OCR until cleared (empty name).
   setPlayerName({ side, row, name } = {}) {
@@ -75,7 +81,7 @@ class ValorantBoardService {
     const r = Math.round(Number(row)); if (!(r >= 0 && r <= 4)) throw new Error('row must be 0-4');
     const clean = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, 32);
     const player = this.board.teams[side].players[r];
-    if (clean) { this.nameOverrides.set(`${side}:${r}`, clean); player.name = clean; } else { this.nameOverrides.delete(`${side}:${r}`); player.name = ''; }
+    if (clean) { this.nameOverrides.set(`${side}:${r}`, clean); player.name = clean; this.identity.confirm(side, r, clean); } else { this.nameOverrides.delete(`${side}:${r}`); player.name = ''; this.identity.slots[side][r].tag = ''; }
     player.nameManual = Boolean(clean); player.updatedAt = this.now(); this.board.updatedAt = this.now();
     this.onState(this.snapshot());
     return this.snapshot();
@@ -103,7 +109,9 @@ class ValorantBoardService {
       const align = alignBoard(lum);
       this.lastAlign = align;
       if (!align.found) { if (matchChanged) this.onState(this.snapshot()); this.setStatus('no-board', 'Window found but no scoreboard visible (is Tab open on Observer 3?)', { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1 }); return false; }
-      const cells = cellRois(PROFILE, align).filter((c) => !(c.field === 'name' && this.nameOverrides.has(`${c.side}:${c.row}`)));
+      // Every name cell is read, also for operator-named players: names are what follows a player across row swaps.
+      // applySweep never overwrites a manual name (player.nameManual), and the override is kept per player slot.
+      const cells = cellRois(PROFILE, align);
       this.ocr.observerConcurrency = this.settings.workers;
       const reads = new Array(cells.length); let next = 0; const make = this.makeImage(frame);
       const lane = async () => { while (next < cells.length) { const i = next++; const c = cells[i]; reads[i] = { side: c.side, row: c.row, field: c.field, value: await readCell(this.ocr, lum, c, make, `observer3-${c.side}-${c.row}-${c.field}`) }; } };
@@ -118,11 +126,26 @@ class ValorantBoardService {
           reads.push({ side, row, field: 'shield', value: this.gear.shield(lum, S.x + align.dx, S.x + S.w + align.dx, cy).shield });
         }
       }
+      // Re-key every read from its board row to the player slot sitting there now (rows re-sort mid-match).
+      this.identity.remap(reads);
       const changed = applySweep(this.board, this.consensus, reads, this.now());
+      // Which colour each block is (teal = defenders, red = attackers): the controller uses it with the map pool's
+      // attacking side to know which block is which team. Kept when a sweep can't tell.
+      if (rgb) {
+        this.board.colors = this.board.colors || { home: '', away: '' };
+        for (const side of SIDES) { const c = blockColor(rgb, PROFILE, align, side); if (c) this.board.colors[side] = c; }
+      }
+      for (const side of SIDES) this.board.teams[side].players.forEach((p, slot) => {
+        if (p.name) this.identity.confirm(side, slot, p.name);
+        const row = this.identity.rowOf(side, slot);
+        if (p.row !== row) { p.row = row; p.updatedAt = this.now(); }
+      });
+      if (this.identity.lastMoves.length) this.lastMoves = this.identity.lastMoves;
       const seen = reads.filter((r) => r.value !== null).length;
       this.setStatus('reading', `Reading ${seen}/${reads.length} cells · board ${align.dx >= 0 ? '+' : ''}${align.dx}/${align.dy >= 0 ? '+' : ''}${align.dy} px`, { sweepMs: this.now() - started, sweeps: (this.status.sweeps || 0) + 1, lastSweepAt: this.now() });
-      if (changed || matchChanged) this.onState(this.snapshot());
-      return changed || matchChanged;
+      const moved = this.identity.lastMoves.length > 0;
+      if (changed || matchChanged || moved) this.onState(this.snapshot());
+      return changed || matchChanged || moved;
     } finally { this.running = false; }
   }
 
