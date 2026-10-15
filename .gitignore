@@ -14,9 +14,3 @@ assests/rl-loadout-assets/
 rl-app.bundle
 isu-broadcast-main.bundle
 _archive-old-releases/
-stream-server/vendor/ffmpeg/*
-!stream-server/vendor/ffmpeg/README.md
-stream-server/build-info.json
-stream-server/vendor/capture/*
-!stream-server/vendor/capture/README.md
-stream-server/native/capture/build/

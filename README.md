@@ -4,7 +4,7 @@ A local-first broadcast production suite for Idaho State Esports. It runs the on
 
 Supported titles: **Overwatch 2, VALORANT, Rocket League, Smash Bros. Ultimate, Call of Duty.**
 
-Version: **v0.6.2** (Broadcast Control) · Companion module **0.1.3** · ISU Stream Server **0.3.0**
+Version: **v0.6.2** (Broadcast Control) · Companion module **0.1.3** · Restream **0.2.0** (Kagejitsu)
 
 ## What it does
 
@@ -61,16 +61,7 @@ A separate portable app for the game/observer PC. It connects to Broadcast Contr
 - Garage colors per player can be saved, because the Stats API doesn't send them.
 - See `docs/rocket-league-car-renderer.md` for what works and its limits.
 
-### ISU Stream Server (Director PC, separate app)
-A standalone streaming app in `stream-server/`:
-- Capture: video capture devices the way OBS does it (webcams, capture cards, Blackmagic Web Presenter, OBS Virtual Camera, DeckLink through DirectShow), a file, or a test pattern.
-- **One** H.264/AAC encode (NVENC or x264), then a **broadcast delay** (default 300 s, up to 24 h), then the same stream to any number of RTMP/RTMPS destinations.
-- Fails closed: nothing is ever sent before the delay is full, and an encoder or disk error stops every output.
-- Each destination reconnects on its own and can't slow the others down.
-- Live recording, a program preview, audio meters, A/V sync offset, stream keys encrypted with Windows DPAPI, and its own Companion API (port 3180).
-- Details: `stream-server/ARCHITECTURE.md`.
-
-### Restream (by Kate / Kagejitsu, separate Rust app)
+### Restream (Director PC, by Kate / Kagejitsu, separate Rust app)
 A delayed multi-destination RTMP restreamer with simultaneous recording, in `restream/`. Pulled in with permission
 from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with its full history (git subtree).
 - Capture (Web Presenter / DeckLink / OBS Virtual Camera / webcams / SRT or RTMP from OBS), one encode, a delay of 3 min or
@@ -78,6 +69,7 @@ from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with it
   crash-safe recording.
 - Rust + GStreamer + egui. Build and usage: `restream/README.md`, operator manual: `restream/docs/USER-GUIDE.md`.
 - Ready Windows builds: https://github.com/Kagejitsu/restream/releases
+- Replaced the old ISU Stream Server (`stream-server/`, removed 2026-10-15; still in git history before this commit).
 - Pull Kate's newer versions: `git subtree pull --prefix=restream https://github.com/Kagejitsu/restream main`
 
 ## Network ports
@@ -87,7 +79,7 @@ from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with it
 | 3174 | Overlay and state server (OBS pages, stage preset pages) |
 | 3176 | Companion LAN API (off until enabled) |
 | 3178 | Stage Display Manager (display clients) |
-| 3180 | Stream Server API (off until enabled) |
+| 9000 | Restream SRT input from OBS (only when that source is picked in Restream) |
 | 49123 / 49124 | Rocket League Stats API (TCP / WebSocket) |
 
 ## Quick start
@@ -170,7 +162,6 @@ npm run package:bridge          # Game Bridge only
 npm run ndi:install             # once, before the display client
 npm run package:display-client  # ISU Display Client
 npm run package:companion       # Companion module .tgz
-npm --prefix stream-server run build   # ISU Stream Server
 cd restream; powershell -ExecutionPolicy Bypass -File tools\win-build.ps1 -Release; powershell -ExecutionPolicy Bypass -File tools\win-bundle.ps1   # Restream (needs Rust + GStreamer MSVC SDK, see restream/README.md)
 ```
 
@@ -194,7 +185,6 @@ src/                 Controller UI (app.js), game rules (game-config.js), Car Re
 public/overlays/     OBS pages: scoreboard (with player cards), map pool, roster, program output
 public/displays/     Stage preset pages rendered by OBS for NDI
 companion-module/    Native Bitfocus Companion 5 module
-stream-server/       ISU Stream Server (separate app)
 restream/            Restream by Kate / Kagejitsu (Rust, separate app, MIT)
 bridge/              Game Bridge UI
 tools/, scripts/     Training/asset tools, build and verify scripts
@@ -212,5 +202,4 @@ Control data is saved locally by the app. Overlays and stage pages read state fr
 - `docs/display-client-install.md`: station PC install, firewall, OBS and NDI
 - `docs/rocket-league-car-renderer.md`, `docs/rocket-league-loadout-assets.md`, `docs/rocket-league-player-cameras.md`
 - `docs/valorant-observer3-ocr-plan.md`
-- `stream-server/ARCHITECTURE.md`
 - `restream/README.md`, `restream/docs/USER-GUIDE.md`
