@@ -70,6 +70,16 @@ A standalone streaming app in `stream-server/`:
 - Live recording, a program preview, audio meters, A/V sync offset, stream keys encrypted with Windows DPAPI, and its own Companion API (port 3180).
 - Details: `stream-server/ARCHITECTURE.md`.
 
+### Restream (by Kate / Kagejitsu, separate Rust app)
+A delayed multi-destination RTMP restreamer with simultaneous recording, in `restream/`. Pulled in with permission
+from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with its full history (git subtree).
+- Capture (Web Presenter / DeckLink / OBS Virtual Camera / webcams / SRT or RTMP from OBS), one encode, a delay of 3 min or
+  more in the encoded stream, and the same bytes to Twitch / YouTube / Facebook / any RTMP(S) at once, plus an undelayed
+  crash-safe recording.
+- Rust + GStreamer + egui. Build and usage: `restream/README.md`, operator manual: `restream/docs/USER-GUIDE.md`.
+- Ready Windows builds: https://github.com/Kagejitsu/restream/releases
+- Pull Kate's newer versions: `git subtree pull --prefix=restream https://github.com/Kagejitsu/restream main`
+
 ## Network ports
 
 | Port | What |
@@ -161,6 +171,7 @@ npm run ndi:install             # once, before the display client
 npm run package:display-client  # ISU Display Client
 npm run package:companion       # Companion module .tgz
 npm --prefix stream-server run build   # ISU Stream Server
+cd restream; powershell -ExecutionPolicy Bypass -File tools\win-build.ps1 -Release; powershell -ExecutionPolicy Bypass -File tools\win-bundle.ps1   # Restream (needs Rust + GStreamer MSVC SDK, see restream/README.md)
 ```
 
 ## Large asset pack
@@ -184,6 +195,7 @@ public/overlays/     OBS pages: scoreboard (with player cards), map pool, roster
 public/displays/     Stage preset pages rendered by OBS for NDI
 companion-module/    Native Bitfocus Companion 5 module
 stream-server/       ISU Stream Server (separate app)
+restream/            Restream by Kate / Kagejitsu (Rust, separate app, MIT)
 bridge/              Game Bridge UI
 tools/, scripts/     Training/asset tools, build and verify scripts
 test/                Automated tests
@@ -201,3 +213,4 @@ Control data is saved locally by the app. Overlays and stage pages read state fr
 - `docs/rocket-league-car-renderer.md`, `docs/rocket-league-loadout-assets.md`, `docs/rocket-league-player-cameras.md`
 - `docs/valorant-observer3-ocr-plan.md`
 - `stream-server/ARCHITECTURE.md`
+- `restream/README.md`, `restream/docs/USER-GUIDE.md`
