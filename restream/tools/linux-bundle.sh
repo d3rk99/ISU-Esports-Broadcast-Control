@@ -24,7 +24,7 @@ cp "$GST/bin/gst-inspect-1.0.exe" "$DIST/bin/" 2>/dev/null || true
 cp "$GST/libexec/gstreamer-1.0/gst-plugin-scanner.exe" "$DIST/bin/" 2>/dev/null || true
 
 plugins=(coreelements app typefindfunctions playback
-  videoconvertscale videorate videotestsrc audiotestsrc audioconvert audioresample level
+  videoconvertscale videorate videotestsrc audiotestsrc audioconvert audioresample level volume
   videoparsersbad audioparsers flv matroska isomp4 multifile jpeg pango
   x264 openh264 fdkaac voaacenc libav
   mediafoundation winks directshow wasapi2 wasapi decklink

@@ -25,7 +25,7 @@ Copy-Item "$gst\libexec\gstreamer-1.0\gst-plugin-scanner.exe" "$dist\bin\" -Erro
 # Plugins we use. Missing ones (e.g. no nvcodec on a non-NVIDIA box) are skipped.
 $plugins = @(
   "coreelements","app","typefindfunctions","playback",
-  "videoconvertscale","videorate","videotestsrc","audiotestsrc","audioconvert","audioresample","level",
+  "videoconvertscale","videorate","videotestsrc","audiotestsrc","audioconvert","audioresample","level","volume",
   "videoparsersbad","audioparsers","flv","matroska","isomp4","multifile","jpeg","pango",
   "x264","openh264","fdkaac","voaacenc","libav",
   "mediafoundation","winks","directshow","wasapi2","wasapi","decklink",
@@ -37,6 +37,23 @@ foreach ($p in $plugins) {
   if (Test-Path $f) { Copy-Item $f "$dist\bin\gst-plugins" } else { Write-Host "  (no plugin $p)" }
 }
 # libav needs its own DLLs (already in bin), pango needs fontconfig/freetype (in bin).
+
+# Every element the pipelines name must exist in the bundled plugins, or the app fails at runtime with
+# 'no element "x"' (0.2.0 shipped without gstvolume.dll: gain + monitor broke the preview). Encoders and
+# capture sources are optional per machine; these are not.
+$required = @("queue","tee","fakesink","identity","filesink","appsink","appsrc","typefind",
+  "videoconvert","videoscale","videorate","videotestsrc","audiotestsrc","audioconvert","audioresample",
+  "volume","level","timeoverlay","h264parse","aacparse","flvmux","flvdemux","matroskamux","matroskademux",
+  "qtmux","splitmuxsink","decodebin","uridecodebin3","wasapi2src","wasapi2sink","mfvideosrc")
+$inspect = "$dist\bin\gst-inspect-1.0.exe"
+if (Test-Path $inspect) {
+  $env:GST_PLUGIN_PATH = "$dist\bin\gst-plugins"; $env:GST_PLUGIN_SYSTEM_PATH = "$dist\bin\gst-plugins"
+  $env:GST_REGISTRY = "$env:TEMP\restream-bundle-registry.bin"
+  Remove-Item $env:GST_REGISTRY -ErrorAction SilentlyContinue
+  $missing = @($required | Where-Object { & $inspect --exists $_ 2>$null; $LASTEXITCODE -ne 0 })
+  if ($missing.Count) { throw "bundle is missing GStreamer elements: $($missing -join ', ') (add their plugin to `$plugins)" }
+  Write-Host "all $($required.Count) required GStreamer elements present"
+} else { Write-Host "  (gst-inspect-1.0.exe not bundled: skipped the element check)" }
 
 Copy-Item "$root\docs\USER-GUIDE.md" $dist
 $size = (Get-ChildItem $dist -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB
