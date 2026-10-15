@@ -10,7 +10,7 @@ const DIR = path.join(__dirname, 'fixtures', 'spectate');
 const ROI = { x: 660, y: 930, w: 600, h: 60 };
 const NAMES = ['Sn0wfal', 'BaldReaper', 'newx', 'Eagl3', 'Ishnarb', 'santi', 'glowstick', 'nyv', 'CWTJ', 'Mexican Sova'];
 function load(file) {
-  const raw = execFileSync('python3', ['-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('RGB');sys.stdout.buffer.write(im.tobytes())`, file], { maxBuffer: 1e8 });
+  const raw = require('./png.cjs').readRgb(file).data;
   return (x, y) => { x -= ROI.x; y -= ROI.y; if (x < 0 || y < 0 || x >= ROI.w || y >= ROI.h) return [0, 0, 0]; const o = (y * ROI.w + x) * 3; return [raw[o], raw[o + 1], raw[o + 2]]; };
 }
 const rows = (tsv) => fs.readFileSync(path.join(DIR, tsv), 'utf8').trim().split('\n').map((l) => l.split('\t'));
@@ -73,8 +73,7 @@ test('spectate: Rocket League uses the Stats API target (no OCR) -> roster stati
 // Derk's live POV crops (2026-10-07): the portrait (agent icon on the red/teal team box) gives
 // the agent in ~1-10 ms; agent + the team's CURRENT colour -> one player, no OCR needed.
 function loadRgb(file) {
-  const raw = execFileSync('python3', ['-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('RGB');print(im.size[0]);sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())`, file], { maxBuffer: 1e8 });
-  const nl = raw.indexOf(10); const w = Number(raw.subarray(0, nl)); const px = raw.subarray(nl + 1);
+  const img = require('./png.cjs').readRgb(file); const w = img.width; const px = img.data;
   return (x, y) => { const o = (y * w + x) * 3; return [px[o] || 0, px[o + 1] || 0, px[o + 2] || 0]; };
 }
 test('spectate: POV portraits -> agent (Breach, Neon, Waylay, Sova, Yoru, Sova), team badge corner ignored', () => {

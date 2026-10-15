@@ -169,7 +169,7 @@ test('VALORANT board: credits skip the currency icon (100 not 1100, 400 not 1400
   const { TesseractOcrEngine } = require('../electron/valorant-ocr-engine.cjs');
   const { cellImage } = require('./valorant-board-fixtures.cjs');
   const { execFileSync } = require('node:child_process');
-  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-credits-icon.png')], { maxBuffer: 1e8 });
+  const raw = require('./png.cjs').readGray(path.join(__dirname, 'fixtures', 'val-credits-icon.png')).data;
   const lum = (x, y) => { x -= 1180; y -= 330; return x < 0 || y < 0 || x >= 120 || y >= 410 ? 0 : raw[y * 120 + x]; };
   const rows = [355, 389, 424, 458, 492, 587, 621, 655, 689, 723];
   const want = [0, 0, 100, 0, 50, 50, 400, 0, 0, 0];
@@ -187,7 +187,7 @@ test('VALORANT board: credits skip the currency icon (100 not 1100, 400 not 1400
 test('VALORANT top HUD: round score from the real screen (11 - 1), spike planted = no timer', () => {
   const { HudReader } = require('../electron/valorant-hud-reader.cjs');
   const { execFileSync } = require('node:child_process');
-  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-hud-top-11-1-spike.png')], { maxBuffer: 1e8 });
+  const raw = require('./png.cjs').readGray(path.join(__dirname, 'fixtures', 'val-hud-top-11-1-spike.png')).data;
   const lum = (x, y) => { x -= 780; y -= 20; return x < 0 || y < 0 || x >= 360 || y >= 50 ? 0 : raw[y * 360 + x]; };
   const r = new HudReader().read(lum);
   assert.equal(r.homeScore, 11); assert.equal(r.awayScore, 1); assert.equal(r.timer, null);
@@ -200,8 +200,7 @@ test('VALORANT top HUD: timer on the old lab\'s 152 real timer crops - right (wi
   const h = new HudReader(); let right = 0; let n = 0; const wrong = [];
   for (const d of fs.readdirSync(dir)) for (const f of fs.readdirSync(path.join(dir, d)).filter((x) => x.endsWith('.png'))) {
     const meta = JSON.parse(fs.readFileSync(path.join(dir, d, f.replace('.png', '.json')), 'utf8'));
-    const out = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');print(im.size[0],im.size[1]);sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())`, path.join(dir, d, f)], { maxBuffer: 1e7 });
-    const nl = out.indexOf(10); const [w, hh] = out.subarray(0, nl).toString().split(' ').map(Number); const px = out.subarray(nl + 1); const r = meta.roi;
+    const img = require('./png.cjs').readGray(path.join(dir, d, f)); const w = img.width; const hh = img.height; const px = img.data; const r = meta.roi;
     const lum = (x, y) => { x -= r.x; y -= r.y; return x < 0 || y < 0 || x >= w || y >= hh ? 0 : px[y * w + x]; };
     const t = h.read(lum).timer; n += 1;
     if (t && Math.abs(t.seconds - meta.expectedSeconds) <= 1) right += 1; else if (t) wrong.push(`${meta.expectedTimer}->${t.display}`);
@@ -214,7 +213,7 @@ test('VALORANT top HUD: timer on the old lab\'s 152 real timer crops - right (wi
 test('VALORANT top HUD: bright map behind the HUD (Derk 2026-10-07): 0 - 3, timer 0:11', () => {
   const { HudReader } = require('../electron/valorant-hud-reader.cjs');
   const { execFileSync } = require('node:child_process');
-  const raw = execFileSync('python3', ['-W', 'ignore', '-c', `from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert('L');sys.stdout.buffer.write(im.tobytes())`, path.join(__dirname, 'fixtures', 'val-hud-top-0-3-0011.png')], { maxBuffer: 1e8 });
+  const raw = require('./png.cjs').readGray(path.join(__dirname, 'fixtures', 'val-hud-top-0-3-0011.png')).data;
   const lum = (x, y) => { x -= 780; y -= 20; return x < 0 || y < 0 || x >= 360 || y >= 50 ? 0 : raw[y * 360 + x]; };
   const r = new HudReader().read(lum);
   assert.equal(r.homeScore, 0); assert.equal(r.awayScore, 3);
@@ -238,8 +237,7 @@ test('VALORANT board: ult column on real broadcast frames - READY reads READY, s
     let right = 0; const wrong = [];
     for (const [f, want] of Object.entries(TRUTH)) {
       const file = require('node:path').join(__dirname, 'fixtures', 'val-ult', `${f}.png`);
-      const raw = execFileSync('python3', ['-c', 'from PIL import Image;import sys;im=Image.open(sys.argv[1]).convert("L");sys.stdout.write(f"{im.width} {im.height}\\n");sys.stdout.flush();sys.stdout.buffer.write(im.tobytes())', file], { maxBuffer: 1e8 });
-      const nl = raw.indexOf(10); const [w, h] = raw.slice(0, nl).toString().split(' ').map(Number); const px = raw.slice(nl + 1);
+      const img = require('./png.cjs').readGray(file); const w = img.width; const h = img.height; const px = img.data;
       const lum = (x, y) => { x -= 480; y -= 250; return x < 0 || y < 0 || x >= w || y >= h ? 0 : px[y * w + x]; };
       const cells = cellRois(PROFILE, alignBoard(lum)).filter((c) => c.field === 'ultimate');
       for (const [i, c] of cells.entries()) {
