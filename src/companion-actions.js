@@ -23,6 +23,17 @@ function wholeNumber(value, label, { min = 0, max = Number.MAX_SAFE_INTEGER, fal
 export function swapGameTeams(game) {
   game.teams.reverse();
   [game.rosters, game.awayRosters] = [game.awayRosters, game.rosters];
+  // VALORANT's board is already keyed by match team, not physical board block.
+  // Move the cached reads too; the next scoreboard sweep may be seconds away.
+  const board = game.valorantBoard?.live;
+  if (board?.teams) {
+    [board.teams.home, board.teams.away] = [board.teams.away, board.teams.home];
+    if (board.blocks) {
+      for (const block of ['top', 'bottom']) {
+        if (board.blocks[block]) board.blocks[block] = board.blocks[block] === 'home' ? 'away' : 'home';
+      }
+    }
+  }
   game.rosterFirstSide = game.rosterFirstSide === 'away' ? 'home' : 'away';
   game.mapRows.forEach((row) => {
     row.score.reverse();
@@ -53,6 +64,7 @@ function resetDetailScores(game, gameKey) {
 // on a score reset. Lives here (not only in the controller buttons) so Companion's match.next /
 // scores.reset clear it too; before, only the on-screen buttons did (Derk 2026-10-08).
 export function resetValorantRoundTimeline(game) {
+  if (game.valorantRoundOverride) delete game.valorantRoundOverride[game.activeMap || 0];
   const ocr = game?.valorantOcr;
   if (!ocr) return;
   const live = ocr.live || {};

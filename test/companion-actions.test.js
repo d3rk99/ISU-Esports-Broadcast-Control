@@ -2,6 +2,85 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyCompanionAction } from '../src/companion-actions.js';
 import { createInitialState } from '../src/game-config.js';
+import { SpectateTracker } from '../electron/spectate-tracker.cjs';
+import { mapBoardToTeams } from '../src/valorant-board-teams.js';
+import { spectateCandidatesFrom, spectateSidesFrom, resolveSpectated } from '../electron/spectate-state.cjs';
+
+test('Valorant swap keeps reader agents and board blocks with their players immediately', () => {
+  const state = createInitialState(); state.selectedGame = 'valorant';
+  const game = state.games.valorant;
+  game.rosters.varsity = [{ handle: 'Alpha', stageStation: 1 }];
+  game.awayRosters.varsity = [{ handle: 'Bravo', stageStation: 6 }];
+  game.valorantBoard = { live: { teams: {
+    home: { players: [{ name: 'Alpha', agent: 'sova', block: 'bottom' }] },
+    away: { players: [{ name: 'Bravo', agent: 'jett', block: 'top' }] }
+  }, blocks: { top: 'away', bottom: 'home' }, colors: { home: 'red', away: 'teal' } } };
+  const before = structuredClone(game.valorantBoard.live);
+  const watched = { name: 'Alpha', game: 'valorant', side: 'home', team: game.teams[0].name, station: 1, receivedAt: 1000 };
+  assert.equal(spectateSidesFrom(state).teal, 'home');
+  applyCompanionAction(state, { action: 'teams.swap' });
+  assert.equal(game.valorantBoard.live.teams.away.players[0].name, 'Alpha');
+  assert.equal(game.valorantBoard.live.teams.home.players[0].agent, 'jett');
+  assert.deepEqual(game.valorantBoard.live.blocks, { top: 'home', bottom: 'away' });
+  assert.deepEqual(game.valorantBoard.live.colors, before.colors, 'physical block colours do not move');
+  const candidates = spectateCandidatesFrom(state);
+  assert.deepEqual(candidates.map((c) => [c.name, c.agent, c.side]), [['Bravo', 'jett', 'home'], ['Alpha', 'sova', 'away']]);
+  assert.equal(spectateSidesFrom(state).teal, 'away');
+  assert.equal(spectateSidesFrom(state).red, 'home');
+  const resolved = resolveSpectated(state, watched);
+  assert.equal(resolved.side, 'away', 'graphics remap the last bridge packet immediately');
+  assert.equal(resolved.station, 1);
+  assert.equal(resolved.team, watched.team);
+  assert.equal(resolved.receivedAt, 1000, 'remapping does not extend stale reads');
+  const emptyBoard = { teams: { home: { players: [] }, away: { players: [] } } };
+  game.veto.picks = [];
+  assert.equal(mapBoardToTeams(game, emptyBoard, { top: game.valorantBoard.live.blocks.top }).decision.top, 'home');
+  applyCompanionAction(state, { action: 'teams.swap' });
+  assert.deepEqual(game.valorantBoard.live, before, 'double swap restores the reader state');
+});
+
+test('portrait tracking keeps the same camera player across a swap with mirrored agents', () => {
+  const state = createInitialState(); state.selectedGame = 'valorant';
+  const game = state.games.valorant;
+  game.rosters.varsity = [{ handle: 'Alpha' }]; game.awayRosters.varsity = [{ handle: 'Bravo' }];
+  game.valorantBoard = { live: { teams: {
+    home: { players: [{ name: 'Alpha', agent: 'sova' }] }, away: { players: [{ name: 'Bravo', agent: 'sova' }] }
+  }, blocks: { top: 'away', bottom: 'home' }, colors: { home: 'red', away: 'teal' } } };
+  const tracker = new SpectateTracker({ agents: {}, now: () => 1000 });
+  tracker.portraits = { match: () => ({ agent: 'sova', color: 'teal', score: 1 }) };
+  const frame = () => [0, 0, 0]; const box = { x: 0, y: 0, w: 10, h: 10 };
+  for (let swap = 0; swap < 3; swap++) {
+    tracker.setCandidates(spectateCandidatesFrom(state)); tracker.setSides(spectateSidesFrom(state));
+    tracker.portraitStep(frame, box);
+    const result = tracker.portraitStep(frame, box);
+    assert.equal(result.spectated.name, 'Alpha', 'teal Sova always belongs to Alpha');
+    assert.equal(result.spectated.side, swap % 2 ? 'away' : 'home');
+    applyCompanionAction(state, { action: 'teams.swap' });
+  }
+});
+
+test('spectate colour fallback follows map attacking side through halftime and overtime', () => {
+  const state = createInitialState(); state.selectedGame = 'valorant';
+  const game = state.games.valorant; game.veto.picks[0].attackers = 0;
+  for (const [round, red] of [[1, 'home'], [13, 'away'], [25, 'home'], [26, 'away']]) {
+    game.teams[0].detailScore = round - 1;
+    assert.equal(spectateSidesFrom(state).red, red);
+  }
+  applyCompanionAction(state, { action: 'teams.swap' });
+  assert.equal(spectateSidesFrom(state).red, 'home', 'map-side fallback follows the swapped team');
+  assert.equal(resolveSpectated(state, { name: 'Alpha', game: 'overwatch' }).name, '', 'old game packet is hidden');
+});
+
+test('spectate tracker refreshes the same watched player after a roster-side swap', () => {
+  const tracker = new SpectateTracker({ now: () => 1000 });
+  tracker.setCandidates([{ name: 'Alpha', side: 'home', team: 'ISU', station: 1, agent: 'sova' }]);
+  for (let i = 0; i < 3; i++) tracker.report({ name: 'Alpha', score: 1 });
+  tracker.setCandidates([{ name: 'Alpha', side: 'away', team: 'ISU', station: 1, agent: 'sova' }]);
+  const result = tracker.report({ name: 'Alpha', score: 1 });
+  assert.equal(result.spectated.side, 'away');
+  assert.equal(result.spectated.team, 'ISU');
+  assert.equal(result.changed, true, 'metadata changes are sent without a camera switch');
+});
 
 test('Companion score and next-match actions update the selected game', () => {
   const state = createInitialState();

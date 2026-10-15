@@ -27,6 +27,7 @@ const overlayClients = new OverlayEventHub({
   onDrop: ({ buffered }) => recordDiagnostic('overlay-client-dropped', `Dropped a stalled overlay viewer with ${Math.round(buffered / 1024)} KB unsent; it will reconnect`)
 });
 const { rocketLeagueSpectated } = require('./spectate-tracker.cjs');
+const { spectateCandidatesFrom, spectateSidesFrom, resolveSpectated } = require('./spectate-state.cjs');
 let broadcastState = {};
 // Who the player-POV spectator is watching (from the Game Bridge's spectate tracker).
 let spectatedPlayer = { name: '', station: null, side: '', team: '', score: 0, since: 0, receivedAt: 0, game: '' };
@@ -178,6 +179,8 @@ function createOverlayOutputWindow(details = {}, display = null) {
     useContentSize: true,
     show: false,
     webPreferences: {
+      // Overlay fitting must not change the controller's zoom for localhost.
+      partition: 'overlay-output',
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -699,38 +702,7 @@ function publishSpectated() { if (broadcastState && Object.keys(broadcastState).
 // OCR tracker: take the name from the live feed and find that player's roster station. Other
 // games use the Game Bridge's spectate tracker (spectatedPlayer).
 function currentSpectated() {
-  return broadcastState?.selectedGame === 'rocketleague' ? rocketLeagueSpectated(broadcastState) : spectatedPlayer;
-}
-
-// Every gamertag the spectate tracker may report: both teams' Varsity + JV rosters (with their
-// stage station) plus names the scoreboard reader saw this map.
-function spectateCandidatesFrom(state = {}) {
-  const game = state.games?.[state.selectedGame] || {};
-  const out = [];
-  // Agent per player from the scoreboard reader (by gamertag), so the bridge can identify the
-  // spectated player from the portrait (agent + red/teal box) in ~1 ms, not only by OCR.
-  const live = state.selectedGame === 'valorant' ? game.valorantBoard?.live?.teams : state.selectedGame === 'overwatch' ? game.overwatchOcr?.live?.teams : null;
-  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  const agentOf = (side, name) => (live?.[side]?.players || []).find((p) => p?.name && norm(p.name) === norm(name))?.agent || '';
-  for (const [side, rosters, team] of [['home', game.rosters, game.teams?.[0]], ['away', game.awayRosters, game.teams?.[1]]]) {
-    for (const key of ['varsity', 'jv']) for (const p of rosters?.[key] || []) {
-      const name = String(p?.handle || p?.name || '').trim();
-      if (name) out.push({ name, station: Math.round(Number(p.stageStation) || 0) || null, side, team: team?.name || '', agent: agentOf(side, name) });
-    }
-  }
-  for (const side of ['home', 'away']) for (const p of live?.[side]?.players || []) if (p?.name) out.push({ name: p.name, station: null, side, team: '', agent: p.agent || '' });
-  return out;
-}
-
-// Which colour each team has RIGHT NOW (VALORANT swaps at round 13 and every OT round):
-// first half home = teal (defense), away = red (attack). Sent to the bridge with the names.
-function spectateSidesFrom(state = {}) {
-  const game = state.games?.valorant;
-  if (state.selectedGame !== 'valorant' || !game) return null;
-  const h = Number(game.teams?.[0]?.detailScore) || 0; const a = Number(game.teams?.[1]?.detailScore) || 0;
-  const round = Number(game.valorantOcr?.live?.observer3?.roundTimeline?.currentRound) || h + a + 1;
-  const swapped = round <= 12 ? false : round <= 24 ? true : (round - 25) % 2 === 1;
-  return { round, red: swapped ? 'home' : 'away', teal: swapped ? 'away' : 'home' };
+  return broadcastState?.selectedGame === 'rocketleague' ? rocketLeagueSpectated(broadcastState) : resolveSpectated(broadcastState, spectatedPlayer);
 }
 
 function spectateReceiverSettingsPath() { return path.join(app.getPath('userData'), 'spectate-receiver.json'); }
@@ -1138,7 +1110,7 @@ function registerIpc() {
       title: `${details.name} overlay preview`,
       backgroundColor: '#222222',
       autoHideMenuBar: true,
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+      webPreferences: { partition: 'overlay-preview', contextIsolation: true, nodeIntegration: false, sandbox: true }
     });
     const fitPreview = () => {
       const [width, height] = preview.getContentSize();
@@ -1219,6 +1191,8 @@ function createWindow() {
     if (details.level === 'error' || Number(details.level) >= 3) recordDiagnostic('renderer-console', details.message);
   });
   window.webContents.once('did-finish-load', () => {
+    // Clear any zoom inherited from overlay previews in older versions.
+    window.webContents.setZoomFactor(1);
     window.webContents.executeJavaScript(`JSON.stringify({
       desktopApi: Boolean(window.isuDesktop),
       savedConnection: window.isuDesktop?.savedRocketLeagueConnection ? {

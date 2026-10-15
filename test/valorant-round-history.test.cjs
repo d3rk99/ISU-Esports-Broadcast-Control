@@ -9,6 +9,17 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'app.js'), 'utf8')
 const ctx = {}; vm.createContext(ctx);
 vm.runInContext(src.slice(src.indexOf('function valorantRoundSwapped'), src.indexOf('function markValorantRoundWinner')), ctx);
 
+test('VALORANT graphic uses the map starting side and replay round override', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'overlays', 'overlay.js'), 'utf8');
+  const helpers = {}; vm.createContext(helpers);
+  vm.runInContext(js.slice(js.indexOf('function valorantRoundNumber'), js.indexOf('function renderValorantRoundHistory')), helpers);
+  const game = { activeMap: 0, veto: { picks: [{ attackers: 0 }] }, valorantRoundOverride: { 0: 20 } };
+  assert.equal(helpers.valorantRoundNumber({}, 0, 0, game), 20);
+  for (const [round, attacks] of [[1, true], [12, true], [13, false], [20, false], [25, true], [26, false]]) {
+    assert.equal(helpers.valorantHomeAttacks(game, round), attacks);
+  }
+});
+
 test('VALORANT round history: only home / away won, colour flips after round 12 (and each OT round)', () => {
   // first half: home = teal (defense colour), away = coral
   assert.equal(ctx.valorantRoleFor('home', 1), 'defense');
@@ -24,7 +35,7 @@ test('VALORANT round history: only home / away won, colour flips after round 12 
 
 test('VALORANT overlay: round dots follow the half swap for new AND old saves; spectated bar exists', () => {
   const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'overlays', 'overlay.js'), 'utf8');
-  assert.match(js, /const swapped = valorantSidesSwapped\(liveRound\);/, 'every past dot follows the CURRENT side (all swap at round 13, like the game)');
+  assert.match(js, /const homeAttacks = valorantHomeAttacks\(game, liveRound\);/, 'every past dot follows the current side using the map starting side');
   assert.match(js, /round\.winnerSide \|\| \(round\.winnerRole === 'defense' \? 'home'/);
   assert.match(js, /function renderValorantSpectated\(state, teams\)/);
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'overlays', 'scoreboard.html'), 'utf8');

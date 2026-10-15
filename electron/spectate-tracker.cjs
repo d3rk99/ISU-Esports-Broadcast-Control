@@ -135,6 +135,13 @@ class SpectateTracker {
       seen.set(name.toLowerCase(), { name, station: Number(c.station) || null, side: c.side || '', team: c.team || '', agent: String(c.agent || '') });
     }
     this.candidates = [...seen.values()];
+    if (this.current) {
+      const candidate = this.candidates.find((c) => c.name === this.current.name);
+      if (candidate && ['side', 'team', 'station', 'agent'].some((key) => candidate[key] !== this.current[key])) {
+        this.current = { ...this.current, ...candidate };
+        this.metadataChanged = true;
+      }
+    }
     return this.candidates.length;
   }
 
@@ -231,7 +238,8 @@ class SpectateTracker {
     if (winner) this.lastSeenAt = t;
     const counts = new Map(); for (const n of this.history) if (n) counts.set(n, (counts.get(n) || 0) + 1);
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-    let changed = false;
+    let changed = Boolean(this.metadataChanged);
+    this.metadataChanged = false;
     const fast = this.portraitRun >= 2 && winner.name !== this.current?.name ? winner.name : null;
     if ((fast || (top && top[1] >= Math.min(this.confirm, this.window))) && (fast || top[0]) !== this.current?.name) {
       const pick = fast || top[0];

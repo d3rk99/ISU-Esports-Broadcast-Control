@@ -423,9 +423,11 @@
     return '--';
   }
 
-  function valorantRoundNumber(live, homeScore, awayScore) {
-    const timelineRound = Number(live?.observer3?.roundTimeline?.currentRound);
-    if (Number.isFinite(timelineRound) && timelineRound > 0) return timelineRound;
+  function valorantRoundNumber(live, homeScore, awayScore, game = {}) {
+    const override = Number(game.valorantRoundOverride?.[game.activeMap || 0]);
+    if (Number.isInteger(override) && override >= 1 && override <= 100) return override;
+    const match = game.valorantBoard?.live?.match;
+    if (Number.isFinite(match?.homeScore) && Number.isFinite(match?.awayScore)) return match.homeScore + match.awayScore + 1;
     return Math.max(1, homeScore + awayScore + 1);
   }
 
@@ -442,7 +444,13 @@
     return role === 'defense' ? 'GREEN' : role === 'attack' ? 'RED' : '--';
   }
 
-  function renderValorantRoundHistory(live, { growing = false, fallbackRound = 1 } = {}) {
+  function valorantHomeAttacks(game, round) {
+    const first = game?.veto?.picks?.[game?.activeMap || 0]?.attackers;
+    const firstHomeAttacks = first === 0 || first === '0';
+    return firstHomeAttacks !== valorantSidesSwapped(round);
+  }
+
+  function renderValorantRoundHistory(live, { growing = false, fallbackRound = 1, game = {} } = {}) {
     const container = $('#val-round-history');
     if (!container) return;
     const timeline = live?.observer3?.roundTimeline || {};
@@ -463,9 +471,9 @@
       // (and each OT round) every past dot changes colour together with the score numbers.
       // winnerSide is the truth; older saves only have winnerRole (first-half colour, defense =
       // home), so the side is recovered from that.
-      const swapped = valorantSidesSwapped(liveRound);
+      const homeAttacks = valorantHomeAttacks(game, liveRound);
       const side = round.winnerSide || (round.winnerRole === 'defense' ? 'home' : round.winnerRole === 'attack' ? 'away' : '');
-      const winnerRole = !side ? '' : (side === 'home') !== swapped ? 'defense' : 'attack';
+      const winnerRole = !side ? '' : (side === 'home') === homeAttacks ? 'attack' : 'defense';
       marker.className = `val-round-dot${round.current || currentRound === index + 1 ? ' current' : ''}${winnerRole ? ` ${winnerRole}` : ''}`;
       marker.dataset.round = String(index + 1);
       marker.title = `${index + 1} ${valorantSideLabel(winnerRole)}`.trim();
@@ -673,9 +681,9 @@
     const awayScore = Number.isFinite(Number(teams[1]?.detailScore))
       ? Number(teams[1].detailScore)
       : trustedValorantScore(live, 'away', teams[1]?.score);
-    const roundNumber = valorantRoundNumber(live, homeScore, awayScore);
+    const roundNumber = valorantRoundNumber(live, homeScore, awayScore, game);
     hud.classList.toggle('spike-planted', Boolean(live?.match?.spikePlanted));
-    hud.classList.toggle('sides-swapped', valorantSidesSwapped(roundNumber));
+    hud.classList.toggle('sides-swapped', valorantHomeAttacks(game, roundNumber));
     hud.dataset.homeName = teams[0]?.name || 'HOME';
     hud.dataset.awayName = teams[1]?.name || 'AWAY';
     setText('#val-home-name', teams[0]?.name || 'HOME');
@@ -699,7 +707,7 @@
     setText('#val-event-detail', game.match?.round || 'IDAHO STATE ESPORTS');
     renderLogo('#val-home-logo', teams[0]);
     renderLogo('#val-away-logo', teams[1]);
-    renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber });
+    renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber, game });
     renderValorantPlayerCards('#val-home-players', valorantBoardPlayers(game, 'home'), 'home');
     renderValorantPlayerCards('#val-away-players', valorantBoardPlayers(game, 'away'), 'away');
     // Derk 2026-10-14: stat cards can be hidden like Overwatch's (controller checkbox / Companion). Blank = on (old saves).

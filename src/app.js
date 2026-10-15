@@ -946,6 +946,8 @@ function refreshValorantTimelineCurrentRound(homeScore, awayScore) {
 }
 
 function resetValorantRoundHistory() {
+  const game = state.games.valorant;
+  if (game.valorantRoundOverride) delete game.valorantRoundOverride[game.activeMap || 0];
   const timeline = ensureValorantRoundTimeline();
   timeline.currentRound = 1;
   timeline.rounds = Array.from({ length: 24 }, (_item, index) => ({
@@ -1311,13 +1313,12 @@ let valorantBoardRenderTimer = null;
 // Board blocks (top/bottom) -> TEAMS (home/away) before anyone uses the board: names first, map pool attacking side +
 // red/teal block second (src/valorant-board-teams.js). Everything downstream (overlay cards, stations, spectate,
 // Companion) reads game.valorantBoard.live.teams.home / .away = the match's teams.
-let valorantBlockDecision = null;
 let valorantKnownNamesSent = '';
 function publishValorantBoard() {
   if (state.games.valorant && valorantBoard.live?.teams) {
     const game = state.games.valorant;
-    const mapped = mapBoardToTeams(game, valorantBoard.live, valorantBlockDecision);
-    valorantBlockDecision = mapped.decision;
+    const previousTop = game.valorantBoard?.live?.blocks?.top;
+    const mapped = mapBoardToTeams(game, valorantBoard.live, previousTop ? { top: previousTop } : null);
     valorantBoard.decision = mapped.decision;
     game.valorantBoard = { live: mapped.board };
     // Roster gamertags as hints for the reader, in BOARD terms (top block = 'home' there).
@@ -1898,6 +1899,17 @@ root.addEventListener('change', async (event) => {
     render();
     return;
   }
+  if (target.hasAttribute('data-val-round')) {
+    const value = target.value === '' ? null : Number(target.value);
+    if (value !== null && (!Number.isInteger(value) || value < 1 || value > 100)) { toast('Enter a round from 1 to 100, or clear for automatic'); return; }
+    commit(() => {
+      const game = state.games.valorant;
+      game.valorantRoundOverride ||= {};
+      game.valorantRoundOverride[game.activeMap || 0] = value;
+      publishValorantBoard();
+    }, value ? `Current round set to ${value}` : 'Current round follows the score');
+    return;
+  }
   if (target.dataset.vbCfg) {
     const key = target.dataset.vbCfg;
     const value = target.type === 'checkbox' ? target.checked : target.type === 'number' ? Number(target.value) : target.value.trim();
@@ -1981,6 +1993,7 @@ root.addEventListener('change', async (event) => {
       const value = prop === 'attackers' ? Number(target.value) : target.value;
       current().veto.picks[pickIndex][prop] = value;
       if (state.selectedGame === 'valorant' && prop === 'map' && current().mapRows[pickIndex]) current().mapRows[pickIndex].map = value;
+      if (state.selectedGame === 'valorant') publishValorantBoard();
     });
   }
   if (target.dataset.player !== undefined) {

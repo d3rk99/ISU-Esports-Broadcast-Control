@@ -1,4 +1,5 @@
 import { matchRosterToOcr, NAME_MATCH, tagSimilarity } from './overwatch-ocr-panel.js';
+import { currentRound, attackingTeamNow } from './valorant-board-teams.js';
 // Controller panel for the rebuilt VALORANT scoreboard reader (electron/valorant-board-service.cjs).
 // Same idea as the Overwatch OCR panel: on/off, window, live table, test read, clear.
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -44,6 +45,14 @@ export function spectatePanel(sp = {}, addresses = []) {
 // overlay server (same as the other roster images).
 export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresses = [], assetBase = '', game = {}) {
   const s = vb.settings || {}; const status = vb.status || {};
+  const round = currentRound(game); const attacking = attackingTeamNow(game);
+  const override = game.valorantRoundOverride?.[game.activeMap || 0] || '';
+  const scoreRead = game.valorantBoard?.live?.match;
+  const roundSource = override ? 'MANUAL OVERRIDE' : Number.isFinite(scoreRead?.homeScore) && Number.isFinite(scoreRead?.awayScore) ? 'FROM READER SCORE' : 'FROM CURRENT ROUND SCORE';
+  const tags = (rosters) => ['varsity', 'jv'].flatMap((key) => (rosters?.[key] || []).map((p) => String(p?.handle || '').trim()).filter(Boolean));
+  const awayTags = new Set(tags(game.awayRosters).map((tag) => tag.toLowerCase()));
+  const duplicates = [...new Set(tags(game.rosters).filter((tag) => awayTags.has(tag.toLowerCase())))];
+  const sideName = (side) => teams[side === 'home' ? 0 : 1]?.name || side;
   const tone = status.state === 'reading' ? 'ok' : status.state === 'error' ? 'bad' : status.state === 'no-board' ? 'warn' : '';
   const table = ['home', 'away'].map((side, i) => {
     const players = vb.live?.teams?.[side]?.players || [];
@@ -71,6 +80,11 @@ export function renderValorantBoardPanel(vb, teams = [], spectate = {}, addresse
       <div class="ow-ocr-buttons"><button data-action="vb-test">TEST READ</button><button data-action="vb-clear" data-confirm="Clear?">CLEAR</button></div>
     </div>
     ${matchLine(vb.live?.match)}
+    <div class="ow-ocr-controls">
+      <label class="field"><span>CURRENT ROUND OVERRIDE</span><input type="number" min="1" max="100" data-val-round value="${esc(override)}" placeholder="Auto from round score"><small>For replays or joining mid-map. Holds this round until changed or cleared. Saved per map.</small></label>
+      <div class="vb-match">ROUND <b>${round}</b> · ${roundSource}<small>${attacking ? `${esc(sideName(attacking))} ATTACKING (RED) · ${esc(sideName(attacking === 'home' ? 'away' : 'home'))} DEFENDING (TEAL)` : 'Set the first attacking team in Map Pool.'} · First 12 rounds use Map Pool; rounds 13–24 reverse it; overtime alternates.</small>${!override && round === 1 ? '<small>Joining a replay mid-map? Set the current round above if the score is unreadable or still 0–0.</small>' : ''}</div>
+    </div>
+    ${duplicates.length ? `<p class="vb-match">ROSTER CONFLICT: <b>${esc(duplicates.join(', '))}</b><small>These gamertags are assigned to both teams. Load the correct Home and Away teams in Roster Manager. The bridge uses the mapped reader block to disambiguate names it can read.</small></p>` : ''}
     ${vb.decision ? `<p class="vb-match">TEAMS ON THE BOARD: top = <b>${esc((vb.decision.top || 'home').toUpperCase())}</b> · decided by <b>${esc({ names: 'ROSTER GAMERTAGS', sides: 'MAP POOL ATTACKING SIDE', kept: 'LAST DECISION', default: 'DEFAULT (nothing to go on yet)' }[vb.decision.by] || vb.decision.by)}</b><small>${esc(vb.decision.detail || '')} · Players are followed by gamertag when VALORANT re-sorts the board.</small></p>` : ''}
     <p class="ow-ocr-status is-${tone}">${esc((status.state || 'disabled').toUpperCase())} · ${esc(status.message || 'off')}${status.sweepMs ? ` · ${status.sweepMs} ms per read` : ''}</p>
     <div class="vb-tables">${table}</div>

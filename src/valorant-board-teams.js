@@ -30,7 +30,11 @@ function votes(blockPlayers, tags) {
 }
 
 // Round number now: rounds played + 1 (the board's round score is the match score of the current map).
-function currentRound(game) {
+export function currentRound(game) {
+  const override = Number(game?.valorantRoundOverride?.[game?.activeMap || 0]);
+  if (Number.isInteger(override) && override >= 1 && override <= 100) return override;
+  const match = game?.valorantBoard?.live?.match;
+  if (Number.isFinite(match?.homeScore) && Number.isFinite(match?.awayScore)) return match.homeScore + match.awayScore + 1;
   const h = Number(game?.teams?.[0]?.detailScore) || 0; const a = Number(game?.teams?.[1]?.detailScore) || 0;
   return h + a + 1;
 }
