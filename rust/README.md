@@ -34,7 +34,8 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Spectate tracker: name-bar cleanups, fuzzy match, portrait (agent + red/teal), camera vote, RL Stats API target | `spectate-tracker.cjs`, `valorant-portrait-match.cjs` | `isu-ocr::spectate` | 62 real name bars (exact images), 12 POV / broadcast frames, vote + RL cases: identical (`tests/parity_spectate.rs`) |
 | Bridge link (key check, keepalive), spectate receiver (3175), spectate candidates / sides / resolve | `bridge-link.cjs`, `spectate-receiver.cjs`, `spectate-state.cjs` | `isu-net::link`, `spectate` | JS parity on 7 states; real sockets: key 1008, candidates push, spectated packets, port freed |
 | Rocket League Stats API: local WebSocket 49124 / TCP 49123 fallback, bridge receiver, watchdog, throttle, simulator | `rocket-league-service.cjs` | `isu-net::rocket_league` | settings / stream parser / envelopes / full simulator run identical to JS; real sockets: bridge + split TCP stream |
-| Game Bridge app (Game PC: RL forwarder + spectate loops) | `game-bridge.cjs`, `bridge-main.cjs`, `bridge/index.html` | todo | |
+| Game Bridge logic (settings, link to the Graphics PC, RL forwarding, portrait + name spectate loops) | `game-bridge.cjs` | `isu-net::bridge` | settings parity; real sockets: Rust bridge -> Rust Graphics PC receives the RL simulator; wrong key = waiting |
+| Game Bridge app (window, config file + legacy fallback) | `bridge-main.cjs`, `bridge/index.html` | `isu-bridge` (egui) -> `isu-game-bridge` | form tests; renders on a virtual screen (RL + VALORANT modes checked by OCR of the screenshot) |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
 | Restream | already Rust (`../restream`) | — | |
@@ -48,6 +49,12 @@ The cell images Rust gives Tesseract are the ones the JS accuracy tests build (`
 test/valorant-board-fixtures.cjs and test/overwatch-ocr.test.cjs): bilinear upscale, threshold,
 white border. The Electron live path makes them with Electron's own `nativeImage.resize('best')`,
 which can't be reproduced bit for bit outside Electron. Both are validated on Derk's real frames.
+
+## Running the apps
+```
+cargo run --release -p isu-bridge          # ISU Esports Game Bridge (Game PC)
+```
+Linux virtual screen for testing: `Xvfb :97 -extension GLX` (Xvfb with GLX crashes in the sandbox).
 
 ## Commands
 ```

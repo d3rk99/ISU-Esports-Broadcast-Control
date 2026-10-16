@@ -97,3 +97,37 @@ async fn rocket_league_bridge_receiver_and_local_tcp() {
     assert_eq!(ev[1]["Data"]["Name"], "Jäger", "UTF-8 split across reads");
     svc.stop();
 }
+
+/// Game PC -> Graphics PC end to end, all Rust: the Game Bridge runs the RL simulator and forwards
+/// it; the Graphics PC's RocketLeagueService (remote mode) receives the same events.
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn game_bridge_forwards_rocket_league_to_graphics_pc() {
+    let got: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let g2 = Arc::clone(&got);
+    let graphics = RocketLeagueService::new(Arc::new(move |v| g2.lock().unwrap().push(v)), Arc::new(|_| {}));
+    let port = free_port();
+    graphics.configure(&json!({ "enabled": true, "source": "remote", "bridgePort": port, "bridgeToken": "bridge-key-0123456", "updateIntervalMs": 1 }));
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let statuses: Arc<Mutex<Vec<Value>>> = Arc::default();
+    let s2 = Arc::clone(&statuses);
+    let bridge = isu_net::bridge::GameBridge::new(None, Arc::new(move |s| s2.lock().unwrap().push(s)), Arc::new(|_| {}));
+    let st = bridge.start(&json!({ "game": "rocketleague", "graphicsHost": "127.0.0.1", "bridgePort": port, "bridgeToken": "bridge-key-0123456", "rocketLeague": { "host": "127.0.0.1", "webPort": free_port(), "tcpPort": free_port() } }));
+    assert_eq!(st["remote"]["state"], "connecting");
+    for _ in 0..50 { if bridge.status()["remote"]["state"] == "connected" { break; } tokio::time::sleep(Duration::from_millis(50)).await; }
+    assert_eq!(bridge.status()["remote"]["state"], "connected", "{}", bridge.status());
+    bridge.start_simulator();
+    tokio::time::sleep(Duration::from_millis(2300)).await;
+    let ev = got.lock().unwrap().clone();
+    assert!(ev.len() >= 3, "{ev:?}");
+    assert_eq!(ev[0]["Event"], "MatchCreated");
+    assert_eq!(ev[1]["Event"], "UpdateState");
+    assert_eq!(ev[1]["Data"]["Players"][0]["Name"], "BengalOne");
+    assert!(bridge.status()["remote"]["sentPackets"].as_u64().unwrap() >= 3);
+    assert_eq!(graphics.status()["transport"], "bridge");
+    // wrong key -> the bridge waits and retries (Graphics PC closes with 1008)
+    bridge.start(&json!({ "game": "rocketleague", "graphicsHost": "127.0.0.1", "bridgePort": port, "bridgeToken": "wrong-key-0123456" }));
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    assert_eq!(bridge.status()["remote"]["state"], "waiting", "{}", bridge.status());
+    assert_eq!(bridge.status()["remote"]["message"], "Invalid bridge key");
+    bridge.stop(); graphics.stop();
+}

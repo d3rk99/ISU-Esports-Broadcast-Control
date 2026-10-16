@@ -51,3 +51,11 @@ async fn receiver_cleaning_matches_js() {
         assert_eq!(json!(r.set_candidates(&list, &s["sides"])), s["n"], "count");
     }
 }
+
+#[test]
+fn bridge_settings_and_envelopes_match_js() {
+    let c = cases();
+    for s in c["bridgeSettings"].as_array().unwrap() { assert_eq!(isu_net::bridge::normalize_settings(&s["in"]), s["out"], "normalizeBridgeSettings {}", s["in"]); }
+    assert_eq!(isu_net::bridge::envelope("rocketleague", &json!({ "a": 1 }), 7, 123.0), c["envelopes2"][0]);
+    assert_eq!(isu_net::bridge::envelope("valorant", &json!({}), 1, 5.0), c["envelopes2"][1]);
+}

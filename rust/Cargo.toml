@@ -3,7 +3,7 @@
 # Restream is already Rust (../restream); it stays its own workspace.
 [workspace]
 resolver = "2"
-members = ["crates/isu-core", "crates/isu-server", "crates/isu-ocr", "crates/isu-net"]
+members = ["crates/isu-core", "crates/isu-server", "crates/isu-ocr", "crates/isu-net", "crates/isu-bridge"]
 
 [workspace.package]
 version = "0.1.0"
@@ -28,3 +28,6 @@ png = "0.18"
 sha2 = "0.10"
 tokio-tungstenite = "0.28"
 url = "2"
+eframe = "0.36"
+egui = "0.36"
+dirs = "6"

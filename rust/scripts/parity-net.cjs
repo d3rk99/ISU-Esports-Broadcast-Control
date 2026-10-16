@@ -46,6 +46,11 @@ for (const s of [{}, { enabled: 'yes', port: '4000.4', token: '  key  ' }, { por
   [Array.from({ length: 45 }, (_v, i) => ({ name: `P${i}` })), { red: 'left' }],
   [[{ name: 'x'.repeat(50), station: 'NaN' }], null]];
   for (const [l, s] of lists) { const n = r.setCandidates(l, s); out.recvCandidates.push({ list: l, sides: s, n, candidates: r.candidates, sidesOut: r.sides }); } }
+const GB = require(path.join(repo, 'electron/game-bridge.cjs'));
+out.bridgeSettings = [{}, { game: 'valorant', graphicsHost: ' 10.0.0.2 ', bridgePort: '3175', bridgeToken: ' key ', spectate: { roi: { x: -5, y: 2000, w: 'abc' }, method: 'icon', windowName: 'VALORANT - Spectator', intervalMs: 50, portrait: { s: 999 } }, extra: 1 },
+  { game: 'overwatch', spectate: { method: 'icon' } }, { game: 'tetris', rocketLeague: { transport: 'tcp', host: '1.2.3.4', tcpPort: 1 } }, { game: 'rocketleague', transport: 'websocket', webPort: 5000 }]
+  .map((s) => ({ in: s, out: GB.normalizeBridgeSettings(s) }));
+out.envelopes2 = [GB.createGameEnvelope('rocketleague', { a: 1 }, 7, 123), GB.createGameEnvelope('valorant', {}, 1, 5)];
 fs.mkdirSync(path.join(__dirname, '..', 'crates', 'isu-net', 'tests'), { recursive: true });
 fs.writeFileSync(path.join(__dirname, '..', 'crates', 'isu-net', 'tests', 'parity-net.json'), JSON.stringify(out));
 console.log('states', out.states.length, 'sim messages', out.simCount);
