@@ -17,7 +17,6 @@ export function createVariableDefinitions(): Record<string, VariableDefinition> 
 		event: { name: 'Match: Event' },
 		round: { name: 'Match: Round' },
 		format: { name: 'Match: Format' },
-		live: { name: 'Match: Live / off-air' },
 		home_name: { name: 'Home: Team name' },
 		home_short_name: { name: 'Home: Abbreviation' },
 		home_color: { name: 'Home: Primary color' },

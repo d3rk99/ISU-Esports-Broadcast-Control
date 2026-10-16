@@ -13,7 +13,6 @@ export type ActionsSchema = {
 	detail_score_set: { options: { team: Team; value: string } }
 	next_match: { options: Record<string, never> }
 	reset_scores: { options: Record<string, never> }
-	live_state: { options: { mode: 'toggle' | 'on' | 'off' } }
 	swap_teams: { options: Record<string, never> }
 	select_game: { options: { game: string } }
 	activate_map: { options: { number: string } }
@@ -148,28 +147,6 @@ export function UpdateActions(self: ModuleInstance): void {
 			name: 'Reset all team scores',
 			options: [],
 			callback: async () => self.sendControlAction({ action: 'scores.reset' }),
-		},
-		live_state: {
-			name: 'Set overlay live state',
-			options: [
-				{
-					id: 'mode',
-					type: 'dropdown',
-					label: 'State',
-					default: 'toggle',
-					choices: [
-						{ id: 'toggle', label: 'Toggle' },
-						{ id: 'on', label: 'Take live' },
-						{ id: 'off', label: 'Take off air' },
-					],
-				},
-			],
-			callback: async (event) =>
-				self.sendControlAction(
-					event.options.mode === 'toggle'
-						? { action: 'match.live.toggle' }
-						: { action: 'match.live.set', value: event.options.mode === 'on' },
-				),
 		},
 		swap_teams: {
 			name: 'Swap Home and Away teams',

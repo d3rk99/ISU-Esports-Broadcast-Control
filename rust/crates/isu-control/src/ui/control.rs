@@ -30,18 +30,12 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let row = game["mapRows"].get(active).or_else(|| game["mapRows"].get(0)).cloned().unwrap_or(json!({}));
     let length = series_length(game, &key);
     let next = (active + 1) % (length.max(1.0) as usize);
-    let live = truthy(game.pointer("/match/live"));
     let rl_live = game.pointer("/rocketLeague/live");
     let unit = if key == "rocketleague" || key == "smash" { "GAME" } else { "MAP" };
 
     // 01 Live scoreboard
-    heading(ui, "01", "Live scoreboard", "Primary match data", |ui| {
-        let b = if live { egui::Button::new(RichText::new("● Take off air").strong().color(Color32::from_rgb(0xff, 0x6b, 0x63))).fill(Color32::from_rgb(0x2a, 0x13, 0x12)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0xd9, 0x47, 0x3e))).min_size(egui::vec2(0.0, 37.0)) } else { secondary_button("● Take live") };
-        if ui.add(b).clicked() {
-            app.control("toggle-live", 0, None);
-        }
-    });
-    scoreboard_preview(ui, game, cfg, &key, &row, active, live, rl_live, unit);
+    title(ui, "01", "Live scoreboard", "What the scoreboard overlay shows right now");
+    scoreboard_preview(ui, game, cfg, &key, &row, active, rl_live, unit);
     ui.add_space(6.0);
 
     // .control-grid: home | middle buttons | away
@@ -50,13 +44,13 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         1 => {
             ui.add_space(26.0);
             let w = ui.available_width();
-            if ui.add(secondary_button("⇄ SWAP SIDES").min_size(egui::vec2(w, 40.0))).on_hover_text("Swap team sides").clicked() {
+            if ui.add(secondary_button("⇄ SWAP SIDES").min_size(egui::vec2(w, 40.0))).on_hover_text("Teams switched sides of the screen: swaps names, logos, colours, rosters and scores between left and right.").clicked() {
                 app.control("swap-teams", 0, None);
             }
             if app.confirm_button(ui, "reset-scores", "RESET SCORES", "Click again to reset scores") {
                 app.control("reset-scores", 0, None);
             }
-            if ui.add(primary_button(&format!("NEXT MATCH\nTO {unit} {}", next + 1)).min_size(egui::vec2(w, 58.0))).clicked() {
+            if ui.add(primary_button(&format!("NEXT MATCH\nTO {unit} {}", next + 1)).min_size(egui::vec2(w, 58.0))).on_hover_text("This game/map is over: saves the result and moves everything to the next one.").clicked() {
                 app.control("next-match", 0, None);
             }
         }
@@ -82,7 +76,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     cols(ui, &[-1.7, -0.8], 15.0, |i, ui| {
         if i == 0 {
             panel(ui, |ui| {
-                title(ui, "02", "Match details", "Information shared across graphics");
+                title(ui, "02", "Match details", "Text shown on the scoreboard and map overlays");
                 cols(ui, &[-1.0, -1.0], 10.0, |j, ui| {
                     if j == 0 {
                         if let Some(v) = text_field(ui, "match.event", "Event / league", &s(game.pointer("/match/event")), 60, 0.0) {
@@ -115,8 +109,8 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
             });
         } else {
             panel(ui, |ui| {
-                let label = match key.as_str() { "valorant" => "Current round score", "rocketleague" => "Current game goals", "smash" => "Current stocks", _ => "Live map score" };
-                title(ui, "", label, "Optional in-game value");
+                let label = match key.as_str() { "valorant" => "Rounds this map", "rocketleague" => "Goals this game", "smash" => "Stocks left", _ => "Score this map" };
+                title(ui, "", label, "Score inside the current game (rounds, goals, stocks). Shown small next to the series score.");
                 cols(ui, &[-1.0, -1.0], 10.0, |t, ui| detail_score(app, ui, game, t));
             });
         }
@@ -148,7 +142,7 @@ fn detail_score(app: &App, ui: &mut egui::Ui, game: &Value, t: usize) {
 
 /// .scoreboard-stage: dark stage with the preview bar (team | orange score | team) and the map strip.
 #[allow(clippy::too_many_arguments)]
-fn scoreboard_preview(ui: &mut egui::Ui, game: &Value, cfg: &Value, key: &str, row: &Value, active: usize, live: bool, rl_live: Option<&Value>, unit: &str) {
+fn scoreboard_preview(ui: &mut egui::Ui, game: &Value, cfg: &Value, key: &str, row: &Value, active: usize, rl_live: Option<&Value>, unit: &str) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 230.0), egui::Sense::hover());
     let p = ui.painter_at(rect);
     p.rect(rect, 4.0, Color32::from_rgb(0x14, 0x14, 0x17), egui::Stroke::new(1.0, Color32::from_rgb(0x2d, 0x2d, 0x31)), egui::StrokeKind::Inside);
@@ -183,9 +177,6 @@ fn scoreboard_preview(ui: &mut egui::Ui, game: &Value, cfg: &Value, key: &str, r
     p.add(egui::Shape::convex_polygon(vec![egui::pos2(mid.left() + k, mid.top()), egui::pos2(mid.right() - k, mid.top()), egui::pos2(mid.right(), mid.center().y), egui::pos2(mid.right() - k, mid.bottom()), egui::pos2(mid.left() + k, mid.bottom()), egui::pos2(mid.left(), mid.center().y)], c::ORANGE, egui::Stroke::NONE));
     p.text(egui::pos2(cx, mid.top() + 15.0), egui::Align2::CENTER_CENTER, s(cfg.get("scoreLabel")).to_uppercase(), egui::FontId::proportional(8.5), Color32::from_rgb(0x27, 0x16, 0x0b));
     p.text(mid.center(), egui::Align2::CENTER_CENTER, format!("{} — {}", s(game.pointer("/teams/0/score")), s(game.pointer("/teams/1/score"))), egui::FontId::proportional(28.0), Color32::from_rgb(0x11, 0x11, 0x11));
-    let tag = egui::Rect::from_center_size(egui::pos2(cx, mid.bottom() - 15.0), egui::vec2(58.0, 15.0));
-    p.rect_filled(tag, 0.0, Color32::from_rgb(0x17, 0x17, 0x19));
-    p.text(tag.center(), egui::Align2::CENTER_CENTER, if live { "LIVE" } else { "PREVIEW" }, egui::FontId::proportional(8.5), if live { Color32::from_rgb(0xff, 0x6b, 0x63) } else { Color32::WHITE });
     // .preview-map strip
     let map_name = if key == "rocketleague" && rl_live.is_some_and(|l| truthy(l.get("arena"))) { isu_core::game_config::rocket_league_arena_name(&s(rl_live.unwrap().get("arena"))) } else { s(row.get("map")) };
     let mode = if key == "rocketleague" && rl_live.is_some() { game_clock(rl_live.unwrap().get("timeSeconds"), truthy(rl_live.unwrap().get("overtime"))) } else { s(row.get("mode")) };
@@ -358,91 +349,100 @@ fn stat(ui: &mut egui::Ui, label: &str, value: &str) {
     });
 }
 
+/// Rocket League feed status in plain words.
+fn plain_rl_status(status: &str) -> &'static str {
+    match status {
+        "connected" => "RECEIVING GAME DATA",
+        "simulating" => "TEST FEED RUNNING",
+        "connecting" => "CONNECTING…",
+        "waiting" | "idle" => "WAITING FOR A MATCH",
+        "listening" => "WAITING FOR THE GAME PC",
+        "error" => "PROBLEM",
+        _ => "OFF",
+    }
+}
+
 fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
     let rl = &game["rocketLeague"];
     let live = &rl["live"];
     let status = s(live.get("status"));
     let status_col = match status.as_str() { "connected" | "simulating" => Color32::from_rgb(0x70, 0xcd, 0x6a), "error" => c::RED, "waiting" | "connecting" | "idle" | "listening" => Color32::from_rgb(0xe8, 0xb3, 0x3c), _ => c::DIM };
     panel(ui, |ui| {
-        heading(ui, "", "Live game connection", "ROCKET LEAGUE STATS API · official game telemetry, no BakkesMod required", |ui| {
+        heading(ui, "", "Rocket League live data", "Reads the score, clock, players and boost straight from the game (Rocket League's built-in stats feed). Turn it on, then pick where the game is running.", |ui| {
             ui.vertical(|ui| {
                 ui.with_layout(egui::Layout::top_down(egui::Align::Max), |ui| {
-                    ui.label(RichText::new(format!("●  {}", status.to_uppercase())).strong().size(11.0).color(status_col));
+                    ui.label(RichText::new(format!("●  {}", plain_rl_status(&status))).strong().size(11.0).color(status_col));
                     ui.label(RichText::new(s(live.get("message"))).size(10.0).color(c::DIM));
                 });
             });
         });
-        // .rl-connection-grid: toggle 170 | 4 fields
         let src = s(rl.get("source"));
-        cols(ui, &[180.0, -1.0, -1.0, -1.0, -1.0], 9.0, |j, ui| match (j, src.as_str()) {
-            (0, _) => {
+        // basics: on/off | where is the game | blue team
+        cols(ui, &[200.0, -1.2, -1.0], 12.0, |j, ui| match j {
+            0 => {
+                ui.add_space(10.0);
                 let mut en = truthy(rl.get("enabled"));
-                ui.add_space(12.0);
-                let note = if en { "Enabled" } else { "Disabled" };
+                let note = if en { "On: the overlay follows the game" } else { "Off: scores are typed by hand" };
                 if toggle(ui, &mut en, "LIVE DATA", note) {
                     rl_set(app, "enabled", json!(en));
                 }
             }
-            (1, _) => {
-                if let Some(v) = select(ui, "rl-source", "Data source", &src, &[("local".to_string(), "This PC / direct".into()), ("remote".to_string(), "Game PC bridge".into())]) {
+            1 => {
+                if let Some(v) = select(ui, "rl-source", "Where is Rocket League running?", &src, &[("local".to_string(), "On this PC".into()), ("remote".to_string(), "On another PC (with the Game Bridge app)".into())]) {
                     rl_set(app, "source", json!(v));
                 }
-            }
-            (2, _) => {
-                if let Some(v) = text_field(ui, "rl-interval", "Boost update interval (ms)", &s(rl.get("updateIntervalMs")), 3, 0.0) {
-                    rl_set(app, "updateIntervalMs", num_field(&v));
-                }
-                let ms = num_or_zero(rl.get("updateIntervalMs"));
-                ui.label(RichText::new(format!("1–50 ms · {} updates/sec", (1000.0 / (if ms == 0.0 { 33.0 } else { ms }).max(1.0)).round().clamp(1.0, 120.0))).size(9.5).color(c::DIM));
-            }
-            (3, "remote") => {
-                if let Some(v) = text_field(ui, "rl-bport", "Receiver port", &s(rl.get("bridgePort")), 5, 0.0) {
-                    rl_set(app, "bridgePort", num_field(&v));
-                }
-            }
-            (4, "remote") => {
-                if let Some(v) = text_field(ui, "rl-token", "Bridge key", &s(rl.get("bridgeToken")), 128, 0.0) {
-                    rl_set(app, "bridgeToken", json!(v));
-                }
-                ui.horizontal(|ui| {
-                    if ui.small_button("GENERATE").clicked() {
-                        let k = random_key();
-                        app.commit("Private bridge key generated", |st| st["games"]["rocketleague"]["rocketLeague"]["bridgeToken"] = json!(k));
-                        app.svc.sync_rl();
-                    }
-                    ui.label(RichText::new(format!("Graphics PC: {}", if app.addresses.is_empty() { "address unavailable".into() } else { app.addresses.join(" / ") })).size(9.5).color(c::DIM));
-                });
-            }
-            (3, _) => {
-                let tr = s(rl.get("transport"));
-                if let Some(v) = select(ui, "rl-transport", "Transport", &tr, &[("auto".to_string(), "Automatic (WebSocket → TCP)".into()), ("websocket".to_string(), "WebSocket · 49124".into()), ("tcp".to_string(), "TCP · 49123".into())]) {
-                    rl_set(app, "transport", json!(v));
-                }
+                let hint = if src == "remote" { "Open the Game Bridge app on the game PC and enter this PC's address + the key from Settings → Network & keys." } else { "Rocket League must be running on this PC." };
+                ui.add(egui::Label::new(RichText::new(hint).size(9.5).color(c::DIM)).wrap());
             }
             _ => {
-                cols(ui, &[-1.6, -1.0, -1.0], 6.0, |k, ui| match k {
-                    0 => {
-                        if let Some(v) = text_field(ui, "rl-host", "Host", &s(rl.get("host")), 255, 0.0) {
-                            rl_set(app, "host", json!(v));
-                        }
-                    }
-                    1 => {
-                        if let Some(v) = text_field(ui, "rl-tcp", "TCP", &s(rl.get("tcpPort")), 5, 0.0) {
-                            rl_set(app, "tcpPort", num_field(&v));
-                        }
-                    }
-                    _ => {
-                        if let Some(v) = text_field(ui, "rl-ws", "WebSocket", &s(rl.get("webPort")), 5, 0.0) {
-                            rl_set(app, "webPort", num_field(&v));
-                        }
-                    }
-                });
+                let blue = num_or_zero(rl.get("blueTeam")) as i64;
+                if let Some(v) = select(ui, "rl-blue", "Which team is blue in the game?", &blue, &[(0, format!("Home · {}", s(game.pointer("/teams/0/shortName")))), (1, format!("Away · {}", s(game.pointer("/teams/1/shortName"))))]) {
+                    rl_set(app, "blueTeam", json!(v));
+                }
+                ui.label(RichText::new("The other team is orange.").size(9.5).color(c::DIM));
             }
         });
-        ui.separator();
+        super::widgets::advanced(ui, "rl-conn", |ui| {
+            cols(ui, &[-1.0, -1.2, -1.0, -0.7, -0.7], 9.0, |j, ui| match (j, src.as_str()) {
+                (0, _) => {
+                    if let Some(v) = text_field(ui, "rl-interval", "Boost update interval (ms)", &s(rl.get("updateIntervalMs")), 3, 0.0) {
+                        rl_set(app, "updateIntervalMs", num_field(&v));
+                    }
+                    let ms = num_or_zero(rl.get("updateIntervalMs"));
+                    ui.label(RichText::new(format!("1–50 ms · {} updates/sec", (1000.0 / (if ms == 0.0 { 33.0 } else { ms }).max(1.0)).round().clamp(1.0, 120.0))).size(9.5).color(c::DIM));
+                }
+                (1, "remote") => {
+                    if let Some(v) = text_field(ui, "rl-bport", "Receiver port", &s(rl.get("bridgePort")), 5, 0.0) {
+                        rl_set(app, "bridgePort", num_field(&v));
+                    }
+                }
+                (1, _) => {
+                    let tr = s(rl.get("transport"));
+                    if let Some(v) = select(ui, "rl-transport", "Connection type", &tr, &[("auto".to_string(), "Automatic".into()), ("websocket".to_string(), "WebSocket · 49124".into()), ("tcp".to_string(), "TCP · 49123".into())]) {
+                        rl_set(app, "transport", json!(v));
+                    }
+                }
+                (2, "local") => {
+                    if let Some(v) = text_field(ui, "rl-host", "Game address", &s(rl.get("host")), 255, 0.0) {
+                        rl_set(app, "host", json!(v));
+                    }
+                }
+                (3, "local") => {
+                    if let Some(v) = text_field(ui, "rl-tcp", "TCP port", &s(rl.get("tcpPort")), 5, 0.0) {
+                        rl_set(app, "tcpPort", num_field(&v));
+                    }
+                }
+                (4, "local") => {
+                    if let Some(v) = text_field(ui, "rl-ws", "WebSocket port", &s(rl.get("webPort")), 5, 0.0) {
+                        rl_set(app, "webPort", num_field(&v));
+                    }
+                }
+                _ => {}
+            });
+        });
         // .rl-toolbar
         ui.horizontal(|ui| {
-            if ui.add(secondary_button("COPY GAME CONFIG")).clicked() {
+            if ui.add(secondary_button("COPY GAME CONFIG")).on_hover_text("Copies the lines Rocket League needs in its DefaultStatsAPI.ini (TAGame.MatchStatsExporter_TA) so it sends data to this app.").clicked() {
                 // copy-rl-config: TAGame.MatchStatsExporter_TA block for the game's ini
                 let ms = num_or_zero(rl.get("updateIntervalMs"));
                 let rate = (1000.0 / (if ms == 0.0 { 33.0 } else { ms }).max(1.0)).round().clamp(1.0, 120.0);
@@ -450,7 +450,7 @@ fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
                 app.toast("Rocket League configuration copied");
             }
             let simulating = status == "simulating";
-            if ui.add(secondary_button(if simulating { "STOP TEST FEED" } else { "RUN TEST FEED" })).clicked() {
+            if ui.add(secondary_button(if simulating { "STOP TEST FEED" } else { "RUN TEST FEED" })).on_hover_text("Plays a fake match into the app so you can check the overlays without the game.").clicked() {
                 let rl2 = std::sync::Arc::clone(&app.svc.rl);
                 let _g = app.svc.rt.enter();
                 if simulating {
@@ -477,19 +477,11 @@ fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
             2 => stat(ui, "Match ID", &guid),
             _ => stat(ui, "Spectating", &spec),
         });
-        // .rl-settings-grid: mapping | automation | stat card
-        cols(ui, &[-0.9, -1.6, -0.9], 14.0, |j, ui| match j {
+        // what the live data is allowed to change
+        cols(ui, &[-1.6, -0.9], 14.0, |j, ui| match j {
             0 => {
-                field_label(ui, "Team mapping");
-                let blue = num_or_zero(rl.get("blueTeam")) as i64;
-                if let Some(v) = select(ui, "rl-blue", "Blue team is", &blue, &[(0, format!("Home · {}", s(game.pointer("/teams/0/shortName")))), (1, format!("Away · {}", s(game.pointer("/teams/1/shortName"))))]) {
-                    rl_set(app, "blueTeam", json!(v));
-                }
-                ui.label(RichText::new("Orange is assigned to the opposite side.").size(10.0).color(c::DIM));
-            }
-            1 => {
-                field_label(ui, "Automation");
-                let items = [("syncGoals", "Game goals"), ("syncClock", "Clock & overtime"), ("syncPlayers", "Players & boost"), ("autoRoster", "Auto roster & cars"), ("autoSeriesScore", "Series score"), ("autoAdvance", "Advance next game")];
+                field_label(ui, "Let the game update…");
+                let items = [("syncGoals", "Goals"), ("syncClock", "Clock & overtime"), ("syncPlayers", "Players & boost"), ("autoRoster", "Roster names"), ("autoSeriesScore", "Series score when a game ends"), ("autoAdvance", "Move to the next game")];
                 egui::Grid::new("rl-auto").num_columns(2).spacing([18.0, 4.0]).show(ui, |ui| {
                     for (n, (p, l)) in items.iter().enumerate() {
                         let mut on = truthy(rl.get(*p));
@@ -503,12 +495,12 @@ fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
                 });
             }
             _ => {
-                field_label(ui, "Stat card");
+                field_label(ui, "Player stat card");
                 let mut hs = rl.get("statCardHeadshot") != Some(&json!(false));
-                if ui.checkbox(&mut hs, "Show headshot").on_hover_text("Off = team logo only").changed() {
+                if ui.checkbox(&mut hs, "Show the player's photo").changed() {
                     rl_set(app, "statCardHeadshot", json!(hs));
                 }
-                ui.label(RichText::new("Off = team logo only").size(10.0).color(c::DIM));
+                ui.label(RichText::new("Off = only the team logo").size(10.0).color(c::DIM));
             }
         });
         // .rl-player-grid: 3 per row

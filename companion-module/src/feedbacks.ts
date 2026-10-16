@@ -2,7 +2,6 @@ import type ModuleInstance from './main.js'
 
 export type FeedbacksSchema = {
 	controller_connected: { type: 'boolean'; options: Record<string, never> }
-	is_live: { type: 'boolean'; options: Record<string, never> }
 	selected_game: { type: 'boolean'; options: { game: string } }
 	program_output_selected: { type: 'boolean'; options: { output: string } }
 	team_leading: { type: 'boolean'; options: { team: 'home' | 'away'; scoreType: 'series' | 'detail' } }
@@ -41,13 +40,6 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 			defaultStyle: { bgcolor: 0x2e7d32, color: 0xffffff },
 			options: [],
 			callback: () => self.getVariableValue('connection_ok') === true,
-		},
-		is_live: {
-			name: 'Overlay is live',
-			type: 'boolean',
-			defaultStyle: { bgcolor: 0xc62828, color: 0xffffff },
-			options: [],
-			callback: () => self.getVariableValue('live') === true,
 		},
 		selected_game: {
 			name: 'Selected game',

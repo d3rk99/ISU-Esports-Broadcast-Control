@@ -46,7 +46,6 @@ pub fn build_companion_variables(state: &Value) -> Map<String, Value> {
     put("event", scalar(m("event"), ""));
     put("round", scalar(m("round"), ""));
     put("format", scalar(m("format"), ""));
-    put("live", json!(truthy(m("live"))));
     for (p, t) in [("home", &home), ("away", &away)] {
         put(&format!("{p}_name"), scalar(t.get("name"), ""));
         put(&format!("{p}_short_name"), scalar(t.get("shortName"), ""));
@@ -199,8 +198,6 @@ pub fn build_companion_capabilities(state: &Value) -> Value {
         a("detail_score.set", "Set current map/game score", &["team", "value", "game?"]),
         a("match.next", "Advance to the next map/game", &["game?"]),
         a("scores.reset", "Reset series and current scores", &["game?"]),
-        a("match.live.toggle", "Toggle live/off-air", &["game?"]),
-        a("match.live.set", "Set live/off-air", &["value", "game?"]),
         a("teams.swap", "Swap home and away sides", &["game?"]),
         a("game.select", "Select the active game", &["game"]),
         a("output.select", "Select Program output HTML: scoreboard, roster, map-pool, or clean", &["output"]),

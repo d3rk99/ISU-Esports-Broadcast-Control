@@ -288,11 +288,6 @@ export function applyCompanionAction(state, request = {}) {
     },
     'match.next': () => advanceGameMatch(game, gameKey, state.activeRoster || 'varsity'),
     'scores.reset': () => resetAllScores(game, gameKey),
-    'match.live.toggle': () => { game.match.live = !game.match.live; },
-    'match.live.set': () => {
-      if (typeof request.value !== 'boolean') throw actionError('value must be true or false');
-      game.match.live = request.value;
-    },
     'teams.swap': () => gameKey === 'valorant' ? swapGameTeamsPreservingSideScores(game) : swapGameTeams(game),
     'map.activate': () => {
       const index = wholeNumber(request.number, 'number', { min: 1, max: visibleMapRows(game).length }) - 1;

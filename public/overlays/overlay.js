@@ -450,7 +450,7 @@
     return firstHomeAttacks !== valorantSidesSwapped(round);
   }
 
-  function renderValorantRoundHistory(live, { growing = false, fallbackRound = 1, game = {} } = {}) {
+  function renderValorantRoundHistory(live, { fallbackRound = 1, game = {} } = {}) {
     const container = $('#val-round-history');
     if (!container) return;
     const timeline = live?.observer3?.roundTimeline || {};
@@ -458,11 +458,7 @@
     const currentRound = Number(timeline.currentRound) || 0;
     // The round being played now (same number the score colours use for sides-swapped).
     const liveRound = Number(fallbackRound) || currentRound || 1;
-    // Growing mode (experimental, controller toggle): only rounds 1..current are drawn and the
-    // bar widens with each round until it is full width at round 24.
-    const shown = growing ? Math.max(1, Math.min(24, currentRound || fallbackRound || 1)) : 24;
-    container.classList.toggle('is-growing', growing);
-    container.style.setProperty('--val-rounds-shown', String(shown));
+    const shown = 24;
     container.replaceChildren();
     for (let index = 0; index < shown; index += 1) {
       const round = rounds[index] || { round: index + 1 };
@@ -707,7 +703,7 @@
     setText('#val-event-detail', game.match?.round || 'IDAHO STATE ESPORTS');
     renderLogo('#val-home-logo', teams[0]);
     renderLogo('#val-away-logo', teams[1]);
-    renderValorantRoundHistory(live, { growing: Boolean(game.valorantGrowingRounds), fallbackRound: roundNumber, game });
+    renderValorantRoundHistory(live, { fallbackRound: roundNumber, game });
     renderValorantPlayerCards('#val-home-players', valorantBoardPlayers(game, 'home'), 'home');
     renderValorantPlayerCards('#val-away-players', valorantBoardPlayers(game, 'away'), 'away');
     // Derk 2026-10-14: stat cards can be hidden like Overwatch's (controller checkbox / Companion). Blank = on (old saves).
@@ -985,7 +981,7 @@
     setText('#score-round', game.match?.round);
     setText('#score-format', game.match?.format);
     setText('#score-label', meta.score);
-    setText('#game-code', game.match?.live ? 'LIVE' : meta.code);
+    setText('#game-code', meta.code);
     setText('#home-name', teams[0]?.name);
     setText('#away-name', teams[1]?.name);
     renderLogo('#home-logo', teams[0]);
@@ -1002,7 +998,6 @@
     root.style.setProperty('--away-color', teams[1]?.color || '#5e6673');
     root.style.setProperty('--home-secondary', teams[0]?.secondaryColorEnabled ? teams[0].secondaryColor : teams[0]?.color || '#f47920');
     root.style.setProperty('--away-secondary', teams[1]?.secondaryColorEnabled ? teams[1].secondaryColor : teams[1]?.color || '#5e6673');
-    root.classList.toggle('is-live', Boolean(game.match?.live));
     renderRocketLeagueScorecard(selectedGame, game, teams, activeMap);
     renderRocketLeaguePlayers(game, selectedGame);
     renderRocketLeagueStatCard(game, selectedGame, state.activeRoster);

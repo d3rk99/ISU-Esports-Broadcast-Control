@@ -219,7 +219,8 @@ impl Core {
     }
 
     // ---- Rocket League ----
-    pub fn rl_event(&self, env: &Value) -> Vec<(String, usize, Value)> {
+    /// (car render jobs from the event are ignored: the car render lab is not part of the Rust apps)
+    pub fn rl_event(&self, env: &Value) {
         let (out, roster_msg) = {
             let mut g = self.lock();
             let before = g.state.pointer("/games/rocketleague/rosters").cloned();
@@ -250,7 +251,6 @@ impl Core {
             self.schedule_live();
         }
         self.repaint();
-        out.renders
     }
 
     pub fn rl_status(&self, status: &Value) {

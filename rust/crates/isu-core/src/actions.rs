@@ -572,14 +572,6 @@ pub fn apply_companion_action(state: &mut Value, request: &Value, now_ms: f64) -
             advance_game_match(game, &game_key, &roster_key, now_ms);
         }
         "scores.reset" => reset_all_scores(game, &game_key),
-        "match.live.toggle" => {
-            let live = truthy(game.pointer("/match/live"));
-            game["match"]["live"] = json!(!live);
-        }
-        "match.live.set" => match request.get("value") {
-            Some(Value::Bool(b)) => game["match"]["live"] = json!(*b),
-            _ => return Err(ActionError::new("value must be true or false")),
-        },
         "teams.swap" => {
             if game_key == "valorant" {
                 swap_game_teams_preserving_side_scores(game)

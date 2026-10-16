@@ -630,7 +630,6 @@ export function createGameState(gameKey) {
     rosterFirstSide: 'home',
     showAwayRoster: false,
     // VALORANT HUD experiment: round history bar grows one dot per round (off = classic 24 dots).
-    valorantGrowingRounds: false,
     overwatchShowStatCards: false,
     // Derk 2026-10-14: hide/show VALORANT player stat cards like Overwatch; ON by default (they always showed before)
     valorantShowStatCards: true,

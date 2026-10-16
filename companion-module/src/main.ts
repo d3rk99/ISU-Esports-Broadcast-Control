@@ -120,7 +120,6 @@ export default class ModuleInstance extends InstanceBase<ModuleSchema> {
 		this.variableValues = { ...this.variableValues, ...changed, connection_ok: true }
 		if (!Object.keys(changed).length) return
 		this.setVariableValues(changed)
-		if (Object.hasOwn(changed, 'live')) this.checkFeedbacks('is_live')
 		if (Object.hasOwn(changed, 'selected_game')) this.checkFeedbacks('selected_game')
 		if (Object.hasOwn(changed, 'active_output_overlay')) this.checkFeedbacks('program_output_selected')
 		if (

@@ -24,9 +24,9 @@ return {
 const mk = (state) => new Function('state', ...Object.keys(env), 'persistState', 'toast', 'history', body)(state, ...Object.values(env), () => {}, () => {}, []);
 const out = { sessions: [] };
 const script = [
-  ['score-plus', 0], ['score-plus', 0], ['score-plus', 0], ['score-plus', 0], ['score-minus', 1], ['score-plus', 1], ['detail-plus', 0], ['detail-plus', 0], ['detail-minus', 1], ['toggle-live', 0],
+  ['score-plus', 0], ['score-plus', 0], ['score-plus', 0], ['score-plus', 0], ['score-minus', 1], ['score-plus', 1], ['detail-plus', 0], ['detail-plus', 0], ['detail-minus', 1],
   ['map-winner', 0, 0], ['map-winner', 1, 1], ['map-winner', 1, 1], ['map-winner', 1, 0], ['activate-map', 2], ['format', 5], ['format', 3], ['format', 1],
-  ['swap-teams', 0], ['next-match', 0], ['next-match', 0], ['detail-plus', 1], ['reset-scores', 0], ['score-plus', 1], ['clear-maps', 0], ['add-player', 0], ['remove-player', 0], ['reset-veto', 0], ['toggle-live', 0], ['nope', 0], ['reset-game', 0]];
+  ['swap-teams', 0], ['next-match', 0], ['next-match', 0], ['detail-plus', 1], ['reset-scores', 0], ['score-plus', 1], ['clear-maps', 0], ['add-player', 0], ['remove-player', 0], ['reset-veto', 0], ['nope', 0], ['reset-game', 0]];
 for (const game of gc.GAME_ORDER) {
   const state = gc.createInitialState(); delete state.updatedAt; state.selectedGame = game; state.activeRosterSide = 'away';
   state.games[game].teams[0].name = 'HOME'; state.games[game].rosters.varsity[0].handle = 'P1';

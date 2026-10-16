@@ -44,9 +44,8 @@ fn controller_window_like_a_user() {
     let mut h = Harness::builder().with_size(egui::vec2(1600.0, 1000.0)).build_eframe(move |cc| isu_control::ui::App::new(&cc.egui_ctx, svc2));
     settle(&mut h);
 
-    // --- Match Control: score +, live, swap
-    h.get_by_label("● Take live").click(); settle(&mut h);
-    assert_eq!(core.state()["games"]["valorant"]["match"]["live"], true);
+    // --- Match Control: score +, swap (no "Take live" any more: it did nothing on the overlays)
+    assert!(h.query_by_label_contains("Take live").is_none(), "Take live removed");
     let plus: Vec<_> = h.get_all_by_label("+").collect();
     plus[0].click(); settle(&mut h);
     assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "home score +");

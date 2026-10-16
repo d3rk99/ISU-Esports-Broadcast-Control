@@ -55,7 +55,6 @@ export function UpdatePresets(self: ModuleInstance): void {
 						'away-plus',
 						'away-minus',
 						'next-match',
-						'live-toggle',
 						'swap-teams',
 						'reset-scores',
 					],
@@ -141,19 +140,6 @@ export function UpdatePresets(self: ModuleInstance): void {
 			style: { text: 'NEXT\nMATCH', size: 'auto', color: WHITE, bgcolor: GREEN, show_topbar: false },
 			steps: [{ down: [{ actionId: 'next_match', options: {} }], up: [] }],
 			feedbacks: [],
-		},
-		'live-toggle': {
-			type: 'simple',
-			name: 'Toggle overlay live',
-			style: { text: 'TAKE\nLIVE', size: 'auto', color: WHITE, bgcolor: GRAY, show_topbar: false },
-			steps: [{ down: [{ actionId: 'live_state', options: { mode: 'toggle' } }], up: [] }],
-			feedbacks: [
-				{
-					feedbackId: 'is_live',
-					options: {},
-					style: { text: 'ON AIR', color: WHITE, bgcolor: RED },
-				},
-			],
 		},
 		'swap-teams': {
 			type: 'simple',

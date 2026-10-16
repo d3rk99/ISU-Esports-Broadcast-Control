@@ -1071,7 +1071,6 @@
     },
     "rosterFirstSide": "home",
     "showAwayRoster": false,
-    "valorantGrowingRounds": false,
     "overwatchShowStatCards": false,
     "valorantShowStatCards": true,
     "characterArt": {
@@ -1976,7 +1975,6 @@
     },
     "rosterFirstSide": "home",
     "showAwayRoster": false,
-    "valorantGrowingRounds": false,
     "overwatchShowStatCards": false,
     "valorantShowStatCards": true,
     "characterArt": {
@@ -2662,7 +2660,6 @@
     },
     "rosterFirstSide": "home",
     "showAwayRoster": false,
-    "valorantGrowingRounds": false,
     "overwatchShowStatCards": false,
     "valorantShowStatCards": true,
     "characterArt": {},
@@ -2981,7 +2978,6 @@
     },
     "rosterFirstSide": "home",
     "showAwayRoster": false,
-    "valorantGrowingRounds": false,
     "overwatchShowStatCards": false,
     "valorantShowStatCards": true,
     "characterArt": {
@@ -3807,7 +3803,6 @@
     },
     "rosterFirstSide": "home",
     "showAwayRoster": false,
-    "valorantGrowingRounds": false,
     "overwatchShowStatCards": false,
     "valorantShowStatCards": true,
     "characterArt": {},

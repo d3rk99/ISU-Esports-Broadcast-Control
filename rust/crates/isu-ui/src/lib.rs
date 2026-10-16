@@ -356,3 +356,34 @@ pub fn single_instance(dir: &std::path::Path, name: &str) -> Option<std::fs::Fil
     f.try_lock().ok().map(|_| f)
 }
 
+
+/// "Advanced" fold: expert settings, closed by default, remembered per id.
+pub fn advanced(ui: &mut egui::Ui, id: &str, add: impl FnOnce(&mut egui::Ui)) {
+    let key = egui::Id::new(("advanced", id));
+    let mut open = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(false);
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 26.0), egui::Sense::click());
+    let p = ui.painter();
+    let col = if resp.hovered() { c::TEXT } else { c::LABEL };
+    p.hline(r.x_range(), r.center().y, egui::Stroke::new(1.0, egui::Color32::from_rgb(0x24, 0x24, 0x28)));
+    let label = if open { "▾  ADVANCED (hide)" } else { "▸  ADVANCED: only change if something does not work" };
+    let g = p.layout_no_wrap(label.to_string(), egui::FontId::proportional(10.0), col);
+    let bg = egui::Rect::from_min_size(egui::pos2(r.left(), r.center().y - g.size().y / 2.0 - 3.0), g.size() + egui::vec2(12.0, 6.0));
+    p.rect_filled(bg, 2.0, c::PANEL);
+    p.galley(bg.min + egui::vec2(0.0, 3.0), g, col);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Advanced"));
+    if resp.clicked() {
+        open = !open;
+        ui.data_mut(|d| d.insert_temp(key, open));
+    }
+    if open {
+        add(ui);
+    }
+}
+
+/// A small "?" that shows `text` on hover (for labels that need one more sentence).
+pub fn help(ui: &mut egui::Ui, text: &str) -> egui::Response {
+    let (r, resp) = ui.allocate_exact_size(egui::vec2(16.0, 16.0), egui::Sense::hover());
+    ui.painter().circle_stroke(r.center(), 7.0, egui::Stroke::new(1.0, c::LABEL));
+    ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "?", egui::FontId::proportional(10.0), c::LABEL);
+    resp.on_hover_text(text)
+}

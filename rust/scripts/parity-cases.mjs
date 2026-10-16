@@ -57,7 +57,7 @@ const reqs = [
   { action: 'score.increment', team: 'nobody' }, { action: 'score.increment', team: 'away', amount: 'x' },
   { action: 'score.decrement', team: 'away' }, { action: 'score.set', team: '0', value: 99 }, { action: 'score.set', team: 'home' },
   { action: 'detail_score.increment', team: 'away', amount: 4 }, { action: 'detail_score.decrement', team: 'home', amount: 50 }, { action: 'detail_score.set', team: 'away', value: '7.5' },
-  { action: 'match.next' }, { action: 'scores.reset' }, { action: 'match.live.toggle' }, { action: 'match.live.set', value: true }, { action: 'match.live.set', value: 'yes' },
+  { action: 'match.next' }, { action: 'scores.reset' },
   { action: 'teams.swap' }, { action: 'game.select', game: 'smash' }, { action: 'game.select', game: 'tetris' }, { action: 'game.select' },
   { action: 'output.select', output: 'roster' }, { action: 'output.select', name: 'clean' }, { action: 'output.select', output: 'tv' },
   { action: 'map.activate', number: 2 }, { action: 'map.activate', number: 99 }, { action: 'map.activate' },

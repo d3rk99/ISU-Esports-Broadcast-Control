@@ -132,40 +132,25 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         }
     }
     panel(ui, |ui| {
-        title(ui, "OCR", "VALORANT scoreboard reader", "Observer 3 keeps Tab open. The board is found by itself (it follows the window moving), then every cell is read. A value only shows after it reads the same twice, and a number stays blank instead of guessing.");
+        title(ui, "", "VALORANT scoreboard reader", "Reads names, agents, kills, guns and money from the in-game scoreboard so the overlays fill in by themselves. The observer PC must keep the scoreboard (Tab) open. Values only show after they were read the same twice, and stay blank instead of guessing.");
         let mut cfg: Option<(Value, String)> = None;
-        // .vb-panel .ow-ocr-controls: 1.6fr 1.4fr 1fr 1fr auto
-        cols(ui, &[-1.6, -1.4, -1.0, -1.0, 210.0], 12.0, |j, ui| match j {
+        // basics: reader on | stat cards | test / clear
+        cols(ui, &[-1.3, -1.3, 220.0], 12.0, |j, ui| match j {
             0 => {
-                let mut cards = game.get("valorantShowStatCards") != Some(&json!(false));
-                if toggle(ui, &mut cards, "PLAYER STAT CARDS", "Bottom-left / bottom-right cards on the scoreboard overlay (Companion: Player stat cards)") {
-                    app.commit(if cards { "VALORANT stat cards on" } else { "VALORANT stat cards off" }, |st| st["games"]["valorant"]["valorantShowStatCards"] = json!(cards));
-                }
-            }
-            1 => {
                 let mut en = settings["enabled"] == true;
-                if toggle(ui, &mut en, "READ SCOREBOARD", "Off by default; turn on when Observer 3 is on the board") {
+                if toggle(ui, &mut en, "READ THE SCOREBOARD", "Turn on when the observer PC shows the Tab scoreboard") {
                     cfg = Some((json!({ "enabled": en }), if en { "VALORANT scoreboard reader on" } else { "VALORANT scoreboard reader off" }.into()));
                 }
             }
-            2 => {
-                if let Some(x) = text_field(ui, "vbwin", "Window title contains", &{ let w = s(settings.get("windowName")); if w.is_empty() { "VALORANT".into() } else { w } }, 200, 0.0) {
-                    cfg = Some((json!({ "windowName": x.trim() }), "VALORANT reader settings saved".into()));
+            1 => {
+                let mut cards = game.get("valorantShowStatCards") != Some(&json!(false));
+                if toggle(ui, &mut cards, "PLAYER STAT CARDS", "Small player cards in the bottom corners of the scoreboard overlay") {
+                    app.commit(if cards { "VALORANT stat cards on" } else { "VALORANT stat cards off" }, |st| st["games"]["valorant"]["valorantShowStatCards"] = json!(cards));
                 }
             }
-            3 => {
-                cols(ui, &[-1.0, -1.0], 6.0, |k, ui| {
-                    let (key, l, d) = if k == 0 { ("intervalMs", "Read every (ms)", 500.0) } else { ("workers", "CPU cores", 4.0) };
-                    let cur = { let n = num_or_zero(settings.get(key)); if n == 0.0 { d } else { n } };
-                    if let Some(x) = text_field(ui, &format!("vb{key}"), l, &cur.to_string(), 5, 0.0) {
-                        cfg = Some((json!({ key: isu_core::game_config::js_number(x.trim()).unwrap_or(f64::NAN) }), "VALORANT reader settings saved".into()));
-                    }
-                });
-            }
             _ => {
-                ui.add_space(12.0);
                 ui.horizontal(|ui| {
-                    if ui.add(secondary_button("TEST READ")).clicked() {
+                    if ui.add(secondary_button("TEST READ")).on_hover_text("Reads the scoreboard once right now, to check it works.").clicked() {
                         if let Some(b) = app.svc.board.clone() {
                             let tx = app.toast_tx.clone();
                             let core = std::sync::Arc::clone(&app.svc.core);
@@ -187,6 +172,22 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                 });
             }
         });
+        super::widgets::advanced(ui, "vb-adv", |ui| {
+            cols(ui, &[-1.4, -1.0, -1.0], 12.0, |j, ui| match j {
+                0 => {
+                    if let Some(x) = text_field(ui, "vbwin", "Game window name contains", &{ let w = s(settings.get("windowName")); if w.is_empty() { "VALORANT".into() } else { w } }, 200, 0.0) {
+                        cfg = Some((json!({ "windowName": x.trim() }), "VALORANT reader settings saved".into()));
+                    }
+                }
+                _ => {
+                    let (key, l, d) = if j == 1 { ("intervalMs", "Read every (ms)", 500.0) } else { ("workers", "CPU cores to use", 4.0) };
+                    let cur = { let n = num_or_zero(settings.get(key)); if n == 0.0 { d } else { n } };
+                    if let Some(x) = text_field(ui, &format!("vb{key}"), l, &cur.to_string(), 5, 0.0) {
+                        cfg = Some((json!({ key: isu_core::game_config::js_number(x.trim()).unwrap_or(f64::NAN) }), "VALORANT reader settings saved".into()));
+                    }
+                }
+            });
+        });
         if let Some((n, msg)) = cfg {
             if let Some(b) = &app.svc.board {
                 let saved = app.svc.core.files.save_merged("valorant-board-settings.json", &n, |v| isu_ocr::service::settings_json(&isu_ocr::service::normalize_settings(v)));
@@ -202,7 +203,7 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         }
         cols(ui, &[220.0, -1.0], 12.0, |j, ui| {
             if j == 0 {
-                if let Some(x) = text_field(ui, "valround", "Current round override", &override_v, 3, 0.0) {
+                if let Some(x) = text_field(ui, "valround", "Fix the round number", &override_v, 3, 0.0) {
                     let val = if x.trim().is_empty() { None } else { isu_core::game_config::js_number(x.trim()) };
                     if !x.trim().is_empty() && !val.is_some_and(|n| n == n.trunc() && (1.0..=100.0).contains(&n)) {
                         app.toast("Enter a round from 1 to 100, or clear for automatic");
@@ -216,7 +217,7 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                         });
                     }
                 }
-                ui.add(egui::Label::new(RichText::new("Blank = auto from the round score. For replays or joining mid-map; saved per map.").size(9.5).color(c::DIM)).wrap());
+                ui.add(egui::Label::new(RichText::new("Leave empty: counted from the score. Type a round only for replays or when you start mid-map.").size(9.5).color(c::DIM)).wrap());
             } else {
                 let who = if attacking.is_empty() { "Set the first attacking team in Map Pool.".to_string() } else { format!("{} ATTACKING (RED) · {} DEFENDING (TEAL)", side_name(attacking), side_name(if attacking == "home" { "away" } else { "home" })) };
                 let extra = if override_v.is_empty() && round == 1.0 { " Joining a replay mid-map? Set the current round on the left if the score is unreadable or still 0–0." } else { "" };
@@ -283,10 +284,10 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                 }
             }
         }
-        ui.add_space(6.0);
-        ui.separator();
-        ui.add_space(4.0);
-        super::settings::spectate_panel(app, ui);
+        // who the camera is on (set up in Settings → Network & keys)
+        let who = app.svc.core.lock().spectate["spectated"].clone();
+        let name = s(who.get("name"));
+        ui.label(RichText::new(format!("CAMERA ON: {}{}   ·   set up in Settings → Network & keys", if name.is_empty() { "—".into() } else { name }, who.get("station").filter(|v| truthy(Some(v))).map(|v| format!(" (station {})", s(Some(v)))).unwrap_or_default())).size(11.0).color(c::DIM));
     });
 }
 
@@ -312,57 +313,53 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let ow = app.svc.core.lock().overwatch_ocr.clone();
     let settings = app.svc.core.files.merged("overwatch-ocr-settings.json", ow_norm);
     panel(ui, |ui| {
-        title(ui, "OCR", "Overwatch scoreboard OCR", "Observer 3 keeps the Tab scoreboard open; stats are read from it. Map score stays manual (Companion).");
+        title(ui, "", "Overwatch scoreboard reader", "Reads names, heroes and stats from the in-game scoreboard so the overlays and rosters fill in by themselves. The observer PC must keep the scoreboard (Tab) open. The map score stays manual.");
         let mut cfg: Option<(String, Value)> = None;
-        // toggles row
-        cols(ui, &[-1.0, -1.0, -1.0, -1.0], 12.0, |j, ui| match j {
+        // basics
+        cols(ui, &[-1.0, -1.0, -1.0], 12.0, |j, ui| match j {
             0 => {
                 let mut en = settings["enabled"] == true;
-                if toggle(ui, &mut en, "READ SCOREBOARD", "Off by default; turn on when Observer 3 is on the board") { cfg = Some(("enabled".into(), json!(en))); }
+                if toggle(ui, &mut en, "READ THE SCOREBOARD", "Turn on when the observer PC shows the Tab scoreboard") { cfg = Some(("enabled".into(), json!(en))); }
             }
             1 => {
-                let mut cards = truthy(game.get("overwatchShowStatCards"));
-                if toggle(ui, &mut cards, "PLAYER STAT CARDS (EXPERIMENTAL)", "Bottom-left / bottom-right cards on the scoreboard overlay") {
-                    app.commit(if cards { "Overwatch stat cards on" } else { "Overwatch stat cards off" }, |st| st["games"]["overwatch"]["overwatchShowStatCards"] = json!(cards));
-                }
-            }
-            2 => {
                 let mut auto = game.get("overwatchHeroAutofill") != Some(&json!(false));
-                if toggle(ui, &mut auto, "AUTO-FILL ROSTER FROM OCR", "Matches gamertags at ≥90% similarity: hero + role follow the game; empty roster slots get filled from the board") {
+                if toggle(ui, &mut auto, "FILL THE ROSTER", "Heroes and roles follow the game; new names fill empty roster slots") {
                     app.commit(if auto { "Roster heroes auto-fill on" } else { "Roster heroes auto-fill off" }, |st| st["games"]["overwatch"]["overwatchHeroAutofill"] = json!(auto));
                 }
             }
             _ => {
-                let mut align = settings.get("autoAlign") != Some(&json!(false));
-                if toggle(ui, &mut align, "AUTO-ALIGN BOXES", "Follows names pushed up by competitive Drives and columns nudged by icons; DEBUG CAPTURE shows what moved") { cfg = Some(("autoAlign".into(), json!(align))); }
+                let mut cards = truthy(game.get("overwatchShowStatCards"));
+                if toggle(ui, &mut cards, "PLAYER STAT CARDS (TEST)", "Small player cards in the bottom corners of the scoreboard overlay") {
+                    app.commit(if cards { "Overwatch stat cards on" } else { "Overwatch stat cards off" }, |st| st["games"]["overwatch"]["overwatchShowStatCards"] = json!(cards));
+                }
             }
         });
-        ui.add_space(4.0);
-        // fields row
-        cols(ui, &[-1.4, -0.8, -1.0, -0.7, -0.7], 12.0, |j, ui| match j {
-            0 => {
-                let cur = { let x = s(settings.get("view")); if x.is_empty() { "auto".into() } else { x } };
-                let opts: Vec<(String, String)> = [("auto", "Auto-detect"), ("spectator", "Spectator (Observer)"), ("player", "Testing: in the lobby (own stat card)")].iter().map(|(k, l)| (k.to_string(), l.to_string())).collect();
-                if let Some(pick) = select(ui, "owview", "Board view", &cur, &opts) { cfg = Some(("view".into(), json!(pick))); }
-                ui.label(RichText::new("Auto finds it from the column labels; pick one to force it").size(9.5).color(c::DIM));
-            }
-            2 => {
-                if let Some(x) = text_field(ui, "owwin", "Window title contains", &{ let w = s(settings.get("windowName")); if w.is_empty() { "Overwatch".into() } else { w } }, 200, 0.0) {
-                    cfg = Some(("windowName".into(), json!(x.trim())));
+        super::widgets::advanced(ui, "ow-adv", |ui| {
+            let mut align = settings.get("autoAlign") != Some(&json!(false));
+            if toggle(ui, &mut align, "Follow moving boxes", "Keeps the read boxes on the names/numbers when the board shifts. Use DEBUG CAPTURE to see what moved.") { cfg = Some(("autoAlign".into(), json!(align))); }
+            cols(ui, &[-1.4, -0.8, -1.0, -0.7, -0.7], 12.0, |j, ui| match j {
+                0 => {
+                    let cur = { let x = s(settings.get("view")); if x.is_empty() { "auto".into() } else { x } };
+                    let opts: Vec<(String, String)> = [("auto", "Find it by itself"), ("spectator", "Observer / spectator"), ("player", "Testing: own stat card in a lobby")].iter().map(|(k, l)| (k.to_string(), l.to_string())).collect();
+                    if let Some(pick) = select(ui, "owview", "Scoreboard type", &cur, &opts) { cfg = Some(("view".into(), json!(pick))); }
                 }
-            }
-            _ => {
-                let (k, l, d, note) = match j { 1 => ("boxScale", "Number box size (%)", 108.0, "100 = measured, default 108"), 3 => ("intervalMs", "Read every (ms)", 500.0, ""), _ => ("workers", "CPU cores (OCR)", 4.0, "Default: half your cores") };
-                let cur = { let n = num_or_zero(settings.get(k)); if n == 0.0 { d } else { n } };
-                if let Some(x) = text_field(ui, &format!("ow{k}"), l, &cur.to_string(), 5, 0.0) {
-                    cfg = Some((k.into(), json!(isu_core::game_config::js_number(x.trim()).unwrap_or(f64::NAN))));
+                2 => {
+                    if let Some(x) = text_field(ui, "owwin", "Game window name contains", &{ let w = s(settings.get("windowName")); if w.is_empty() { "Overwatch".into() } else { w } }, 200, 0.0) {
+                        cfg = Some(("windowName".into(), json!(x.trim())));
+                    }
                 }
-                if !note.is_empty() { ui.label(RichText::new(note).size(9.5).color(c::DIM)); }
-            }
+                _ => {
+                    let (k, l, d) = match j { 1 => ("boxScale", "Number box size (%)", 108.0), 3 => ("intervalMs", "Read every (ms)", 500.0), _ => ("workers", "CPU cores", 4.0) };
+                    let cur = { let n = num_or_zero(settings.get(k)); if n == 0.0 { d } else { n } };
+                    if let Some(x) = text_field(ui, &format!("ow{k}"), l, &cur.to_string(), 5, 0.0) {
+                        cfg = Some((k.into(), json!(isu_core::game_config::js_number(x.trim()).unwrap_or(f64::NAN))));
+                    }
+                }
+            });
         });
         // buttons
         ui.horizontal(|ui| {
-            if ui.add(secondary_button("TEST READ")).clicked() {
+            if ui.add(secondary_button("TEST READ")).on_hover_text("Reads the scoreboard once right now, to check it works.").clicked() {
                 match app.svc.overwatch.clone() {
                     Some(o) => {
                         let (tx, core) = (app.toast_tx.clone(), std::sync::Arc::clone(&app.svc.core));
@@ -371,7 +368,7 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                     None => app.toast("Test read failed: the OCR models are not installed"),
                 }
             }
-            if ui.add(secondary_button("DEBUG CAPTURE")).clicked() {
+            if ui.add(secondary_button("DEBUG CAPTURE")).on_hover_text("For fixing problems: shows the captured picture with every read box and what was read in it.").clicked() {
                 match app.svc.overwatch.clone() {
                     Some(o) => {
                         app.toast("Capturing the Overwatch window…");

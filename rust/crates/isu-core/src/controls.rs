@@ -100,11 +100,6 @@ pub fn apply(state: &mut Value, action: &str, index: usize, winner: Option<f64>,
     let msg = "Changes saved".to_string();
     let game = &mut state["games"][key.as_str()];
     match action {
-        "toggle-live" => {
-            let live = crate::game_config::truthy(game.pointer("/match/live"));
-            game["match"]["live"] = json!(!live);
-            Some(if live { "Overlay taken off air" } else { "Overlay is live" }.into())
-        }
         "score-plus" => {
             let t = &mut game["teams"][index];
             t["score"] = jnum(target.min(num_or_zero(t.get("score")) + 1.0));

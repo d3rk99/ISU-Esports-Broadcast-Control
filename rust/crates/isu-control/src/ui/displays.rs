@@ -165,24 +165,26 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         });
     });
     obs_panel(app, ui);
-    panel(ui, |ui| {
-        title(ui, "", "Display key", "Optional. If set, every display client must enter the same key in its settings (Ctrl+Alt+S on the station).");
-        cols(ui, &[360.0, 120.0, -1.0], 8.0, |j, ui| match j {
-            0 => {
-                let hint = if ds["keyRequired"] == true { "key set · type a new one or leave blank to clear" } else { "no key (open)" };
-                ui.add(egui::TextEdit::singleline(&mut app.obs.key).password(true).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)));
+    ui.label(RichText::new("The station key (optional password for the screen PCs) is in Settings → Network & keys.").size(10.5).color(c::DIM));
+}
+
+/// The key every Display Client must enter (Settings → Network & keys).
+pub fn display_key_row(app: &mut App, ui: &mut egui::Ui) {
+    let ds = app.svc.core.lock().display_status.clone();
+    cols(ui, &[-1.0, 120.0], 8.0, |j, ui| match j {
+        0 => {
+            let hint = if ds["keyRequired"] == true { "a key is set · type a new one, or leave empty and save to remove it" } else { "no key: any station PC can connect" };
+            ui.add(egui::TextEdit::singleline(&mut app.obs.key).password(true).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)));
+        }
+        _ => {
+            if ui.add(secondary_button("SAVE").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
+                let k = app.obs.key.clone();
+                app.svc.core.files.save_display_key(&k);
+                app.svc.displays.set_key(&k);
+                app.obs.key.clear();
+                app.toast(if k.is_empty() { "Station key removed" } else { "Station key saved: every station PC must use it" });
             }
-            1 => {
-                if ui.add(secondary_button("SAVE KEY").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
-                    let k = app.obs.key.clone();
-                    app.svc.core.files.save_display_key(&k);
-                    app.svc.displays.set_key(&k);
-                    app.obs.key.clear();
-                    app.toast(if k.is_empty() { "Display key cleared" } else { "Display key saved: clients must use it" });
-                }
-            }
-            _ => {}
-        });
+        }
     });
 }
 

@@ -207,11 +207,6 @@ impl App {
                     ui.label(RichText::new(sub).size(11.5).color(c::DIM));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let live = st.pointer(&format!("/games/{game}/match/live")) == Some(&json!(true));
-                    let (fg, bd, bg) = if live { (Color32::from_rgb(0xff, 0x6b, 0x63), Color32::from_rgb(0xd9, 0x47, 0x3e), Color32::from_rgb(0x2a, 0x13, 0x12)) } else { (c::MUTED, c::BORDER, c::BUTTON) };
-                    egui::Frame::NONE.fill(bg).stroke(egui::Stroke::new(1.0, bd)).corner_radius(2.0).inner_margin(egui::Margin::symmetric(14, 9)).show(ui, |ui| {
-                        ui.label(RichText::new(if live { "● LIVE" } else { "● OFF AIR" }).strong().size(11.0).extra_letter_spacing(1.0).color(fg));
-                    });
                     let can_undo = !self.svc.core.lock().history.is_empty();
                     if ui.add_enabled(can_undo, egui::Button::new("↶ Undo").min_size(egui::vec2(0.0, 37.0))).on_hover_text("Undo last change (Ctrl+Z)").clicked() && self.svc.core.undo() {
                         self.toast("Last change undone");

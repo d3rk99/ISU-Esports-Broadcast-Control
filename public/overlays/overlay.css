@@ -163,7 +163,6 @@ body[data-output="test-fill"].obs-canvas::before { display: none; }
 .score-core div { display: flex; align-items: center; margin: 5px 0; font-size: 46px; line-height: 1; }
 .score-core i { margin: 0 17px; font-style: normal; font-weight: 300; opacity: .45; }
 .score-core span { min-width: 55px; padding: 5px 9px; color: white; background: #101012; font-size: 9px; font-weight: 1000; letter-spacing: .13em; text-align: center; }
-.scoreboard.is-live .score-core span { background: #cf2f28; animation: live-pulse 1.3s infinite; }
 .score-mapline { display: flex; align-items: center; justify-content: center; gap: 14px; width: 48%; min-width: 530px; height: 40px; margin: 0 auto; color: #777780; background: rgba(9,9,11,.94); font-size: 11px; font-weight: 800; letter-spacing: .12em; }
 .score-mapline i { width: 1px; height: 14px; background: #3c3c42; }
 .score-mapline strong { color: #e7e7ea; }
@@ -542,15 +541,6 @@ body[data-setup="game"] .val-native-fit .val-center {
   padding: 4px 10px 3px;
   clip-path: polygon(3% 0, 97% 0, 94.5% 100%, 5.5% 100%);
   animation: val-native-round-history-in 440ms cubic-bezier(.2,.82,.18,1) 980ms both;
-}
-/* Growing round bar (experimental): width follows the number of rounds shown, 1..24.
-   Columns 13px + 3px gap + 20px padding, matching the full 418px bar at 24 rounds. */
-.val-native-fit .val-round-history.is-growing {
-  grid-template-columns: repeat(var(--val-rounds-shown, 24), 13px);
-  width: calc(var(--val-rounds-shown, 24) * 16px - 3px + 33px);
-  min-width: 58px;
-  clip-path: polygon(10px 0, calc(100% - 10px) 0, calc(100% - 20px) 100%, 20px 100%);
-  transition: width 420ms cubic-bezier(.2,.82,.18,1);
 }
 .val-native-fit .val-round-dot {
   grid-template-rows: 10px 9px;

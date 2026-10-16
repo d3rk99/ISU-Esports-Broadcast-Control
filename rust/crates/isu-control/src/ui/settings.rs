@@ -17,7 +17,7 @@ fn s(v: Option<&Value>) -> String {
 pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let key = st["selectedGame"].as_str().unwrap_or("overwatch");
     let name = s(config(key).and_then(|c| c.get("name")));
-    title(ui, "01", "Workspace data", "Local-first settings for a dependable broadcast desk");
+    title(ui, "01", "This app", "Everything is saved on this PC automatically.");
     let card = |ui: &mut egui::Ui, icon: &str, t: &str, d: &str, right: &mut dyn FnMut(&mut egui::Ui)| {
         panel(ui, |ui| {
             cols(ui, &[46.0, -1.0, 240.0], 15.0, |j, ui| match j {
@@ -50,7 +50,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         egui::Frame::NONE.stroke(egui::Stroke::new(1.0, c::BORDER)).inner_margin(egui::Margin::symmetric(9, 5)).show(ui, |ui| ui.label(RichText::new(format!("v{} (Rust)", env!("CARGO_PKG_VERSION"))).size(11.0).strong().color(c::MUTED)));
     });
     // 02 output displays
-    title(ui, "02", "Direct output displays", "Choose which displays receive fullscreen Fill and Key output windows");
+    title(ui, "02", "Program output screens", "Which monitors show the full-screen graphics (Fill and Key) when you press OPEN PROGRAM on the OBS Outputs page.");
     if app.monitors.is_none() {
         let o = std::sync::Arc::clone(&app.svc.outputs);
         app.monitors = Some(Vec::new());
@@ -111,17 +111,61 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         });
     });
     ui.add_space(10.0);
-    // 02b spectated player receiver
-    title(ui, "02b", "Spectated player receiver", "For the Game Bridge on a player-POV spectator PC (VALORANT and Overwatch). Rocket League gets the spectated player from its API. Companion: $(isu:spectated_station), $(isu:spectated_name)");
-    panel(ui, |ui| spectate_panel(app, ui));
-    ui.add_space(10.0);
-    // 03 Companion
-    title(ui, "03", "Bitfocus Companion API", "Authenticated LAN control for Stream Deck buttons, variables, and future native Companion modules");
+    // 03 Network & keys: every connection to another PC in one place
+    title(ui, "03", "Network & keys", "Everything other PCs need to connect to this one. This PC's address on the network is shown below; type it into the other apps.");
+    let addr = if app.addresses.is_empty() { "unknown (check the network cable / Wi-Fi)".to_string() } else { app.addresses.join(" / ") };
+    panel(ui, |ui| {
+        ui.horizontal(|ui| {
+            super::widgets::field_label(ui, "This PC's address");
+            ui.label(RichText::new(&addr).monospace().size(14.0).strong().color(c::TEXT));
+            if ui.add(secondary_button("COPY")).clicked() { ui.ctx().copy_text(addr.clone()); app.toast("Address copied"); }
+        });
+    });
+    // a) Rocket League game PC
+    let rl = st.pointer("/games/rocketleague/rocketLeague").cloned().unwrap_or(json!({}));
+    panel(ui, |ui| {
+        heading(ui, "", "Rocket League game PC", "Only when Rocket League runs on another PC: that PC runs the Game Bridge app with this address, this port and this key. (Match Control → Rocket League → \"On another PC\".)", |_| {});
+        cols(ui, &[140.0, -1.0, 110.0], 10.0, |j, ui| match j {
+            0 => {
+                if let Some(v) = text_field(ui, "net-rl-port", "Port", &s(rl.get("bridgePort")), 5, 0.0) {
+                    let n = isu_core::game_config::js_number(&v).unwrap_or(f64::NAN);
+                    app.commit("Rocket League settings saved", |st| st["games"]["rocketleague"]["rocketLeague"]["bridgePort"] = json!(n));
+                    app.svc.sync_rl();
+                }
+            }
+            1 => {
+                if let Some(v) = text_field(ui, "net-rl-key", "Key", &s(rl.get("bridgeToken")), 128, 0.0) {
+                    app.commit("Rocket League settings saved", |st| st["games"]["rocketleague"]["rocketLeague"]["bridgeToken"] = json!(v));
+                    app.svc.sync_rl();
+                }
+            }
+            _ => {
+                ui.add_space(14.0);
+                if ui.add(secondary_button("NEW KEY").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
+                    let k = super::control::random_key();
+                    app.commit("Private bridge key generated", |st| st["games"]["rocketleague"]["rocketLeague"]["bridgeToken"] = json!(k));
+                    app.svc.sync_rl();
+                }
+            }
+        });
+    });
+    // b) camera (spectated player) PC
+    panel(ui, |ui| {
+        heading(ui, "", "Who the camera is on (VALORANT & Overwatch)", "The PC that shows a player's view runs the Game Bridge app; it tells this app which player is on screen, so the name bar and Stream Deck know. Rocket League does this by itself.", |_| {});
+        spectate_panel(app, ui);
+    });
+    // c) stations
+    panel(ui, |ui| {
+        heading(ui, "", "Station screens key", "Optional password for the screen PCs (Display Client). If you set one, type the same key in each station's settings (Ctrl+Alt+S on that PC).", |_| {});
+        super::displays::display_key_row(app, ui);
+    });
+    // d) Stream Deck
+    title(ui, "04", "Stream Deck (Bitfocus Companion)", "Lets Stream Deck buttons change scores, maps and displays. Off until you turn it on.");
     let cset = app.svc.companion.settings();
     let cst = app.svc.companion.status();
     panel(ui, |ui| {
         let state = if cst["listening"] == true { "ONLINE" } else if cset.enabled { "ERROR" } else { "OFF" };
-        heading(ui, "", "Companion connection", "REMOTE CONTROL SERVICE · The API is disabled until you turn it on. Keep the private key out of screenshots and public profiles.", |ui| {
+        heading(ui, "", "Companion connection", "Keep the key private (not in screenshots). In Companion, add the \"ISU Esports Broadcast Control\" connection and paste the address and key below.", |ui| {
             ui.label(RichText::new(format!("●  {state}")).size(11.0).strong().color(if state == "ONLINE" { Color32::from_rgb(0x70, 0xcd, 0x6a) } else if state == "ERROR" { c::RED } else { c::DIM }));
         });
         let mut next: Option<Value> = None;
@@ -130,7 +174,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
             0 => {
                 ui.add_space(12.0);
                 let mut en = cset.enabled;
-                if toggle(ui, &mut en, "Enable LAN API", if cset.enabled { "Accepting authenticated control requests" } else { "No remote control connections allowed" }) {
+                if toggle(ui, &mut en, "Allow Stream Deck control", if cset.enabled { "On: Companion can control this app" } else { "Off: nothing can control this app from outside" }) {
                     let mut n = base.clone(); n["enabled"] = json!(en); next = Some(n);
                 }
             }
@@ -195,13 +239,11 @@ pub fn spectate_panel(app: &mut App, ui: &mut egui::Ui) {
     let settings = app.svc.core.files.merged("spectate-receiver.json", norm);
     let who = app.svc.core.lock().spectate["spectated"].clone();
     let mut next: Option<(Value, String)> = None;
-    ui.label(RichText::new("SPECTATED PLAYER (player-POV spectator → Companion) · VALORANT & Overwatch").size(10.0).strong().extra_letter_spacing(1.0).color(c::ORANGE));
-    ui.add_space(2.0);
     cols(ui, &[-1.2, 110.0, -1.4], 10.0, |j, ui| match j {
         0 => {
             ui.add_space(12.0);
             let mut en = settings["enabled"] == true;
-            if toggle(ui, &mut en, "SPECTATED PLAYER RECEIVER", "For the Game Bridge on the player-view spectator PC") {
+            if toggle(ui, &mut en, "LISTEN FOR THE CAMERA PC", "Turn on when a Game Bridge reports who the camera is on") {
                 next = Some((json!({ "enabled": en }), if en { "Spectated-player receiver on" } else { "Spectated-player receiver off" }.into()));
             }
         }
@@ -212,18 +254,16 @@ pub fn spectate_panel(app: &mut App, ui: &mut egui::Ui) {
             }
         }
         _ => {
-            super::widgets::field_label(ui, "Bridge key");
+            super::widgets::field_label(ui, "Key");
             cols(ui, &[-1.0, 100.0], 6.0, |k, ui| {
                 if k == 0 {
                     if let Some(v) = text_field(ui, "sptoken", "", &s(settings.get("token")), 128, 0.0) {
                         next = Some((json!({ "token": v.trim() }), "Receiver settings saved".into()));
                     }
-                } else if ui.add(secondary_button("GENERATE").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
+                } else if ui.add(secondary_button("NEW KEY").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
                     next = Some((json!({ "token": super::control::random_key() }), "Bridge key generated: paste it into the Game Bridge".into()));
                 }
             });
-            let addr = app.addresses.join(" / ");
-            ui.label(RichText::new(format!("This PC: {}", if addr.is_empty() { "address unavailable".into() } else { addr })).size(9.5).color(c::DIM));
         }
     });
     if let Some((n, msg)) = next {
@@ -237,5 +277,5 @@ pub fn spectate_panel(app: &mut App, ui: &mut egui::Ui) {
     let name = s(who.get("name"));
     let station = who.get("station").filter(|v| truthy(Some(v))).map(|v| format!(" (station {})", s(Some(v)))).unwrap_or_default();
     ui.add_space(4.0);
-    ui.label(RichText::new(format!("{} · {} · NOW: {}{station}", state.to_uppercase(), { let m = s(st.get("message")); if m.is_empty() { "off".into() } else { m } }, if name.is_empty() { "—".into() } else { name })).color(tone));
+    ui.label(RichText::new(format!("{} · {} · CAMERA ON: {}{station}", state.to_uppercase(), { let m = s(st.get("message")); if m.is_empty() { "off".into() } else { m } }, if name.is_empty() { "—".into() } else { name })).color(tone));
 }
