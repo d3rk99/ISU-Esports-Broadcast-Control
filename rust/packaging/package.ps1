@@ -72,7 +72,7 @@ Ocr-Data $ctl
 Copy-Item "$repo\public" "$ctl\public" -Recurse -Force
 New-Item -ItemType Directory -Force "$ctl\assests" | Out-Null
 Copy-Item "$repo\assests\rocket-league-items.csv" "$ctl\assests\" -Force
-foreach ($pack in @("rl-loadout-assets", "rl-loadout-assets.zip")) { if (Test-Path "$repo\assests\$pack") { Copy-Item "$repo\assests\$pack" "$ctl\assests\" -Recurse -Force } }
+# The RL loadout pack (~8 GB) only feeds the car render lab, which is not ported (Derk 2026-10-16: not used).
 
 # ---- game bridge ----
 $br = "$out\ISU Esports Game Bridge"
