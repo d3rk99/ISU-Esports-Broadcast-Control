@@ -1,0 +1,16 @@
+# ISU Esports Broadcast suite, Rust rewrite (branch rust-rewrite, Derk 2026-10-15).
+# Goal: same features, logic and behaviour as the Electron/Node apps, to measure performance.
+# Restream is already Rust (../restream); it stays its own workspace.
+[workspace]
+resolver = "2"
+members = ["crates/isu-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+unicode-normalization = "0.1"

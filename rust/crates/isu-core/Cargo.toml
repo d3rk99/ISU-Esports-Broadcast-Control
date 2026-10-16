@@ -1,0 +1,10 @@
+[package]
+name = "isu-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Controller state logic: Companion actions, variables, display presets, gamertag matching (port of src/*.js)."
+
+[dependencies]
+serde_json.workspace = true
+unicode-normalization.workspace = true
