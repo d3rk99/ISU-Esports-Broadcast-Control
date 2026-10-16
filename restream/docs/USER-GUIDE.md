@@ -114,3 +114,17 @@ puts the profile (keys blanked) and the recent log on the clipboard for support.
 `restream-cli run profile.toml [--delay S] [--for S]` runs a profile headless with
 a live status readout; `restream-cli devices` and `restream-cli encoders` list
 what the machine offers. Keys in CLI profiles may be `${ENV_VAR}` references.
+
+## Companion / remote control (ISU addition)
+
+Control tab → **Enable the control API** (port 3181, this PC only unless *Allow other PCs* is ticked) and copy the key.
+In Companion add the **ISU Restream** connection (module source: `restream/companion-module`, build with
+`corepack yarn install && corepack yarn package`) with this PC's IP, the port and the key.
+
+Buttons do exactly what the window's own buttons do: Go Live, Stop (the delay buffer plays out), CUT (the preset needs a
+1 s hold), recording on/off, the audio monitor on/off, program gain and monitor volume (set or ±). Variables show the
+state, delay fill, recording, gain, monitor, audio peaks, encoder fps/kbps, errors and each destination's state.
+
+HTTP, for scripts: every request needs the header `X-Restream-Key: <key>`.
+`GET /api/state` · `POST /api/go-live` · `/api/stop` · `/api/cut` · `/api/recording/{start|stop|toggle}` ·
+`/api/monitor/{on|off|toggle}` · `/api/gain?db=N` · `/api/gain/adjust?db=N` · `/api/monitor-volume?db=N` · `/api/monitor-volume/adjust?db=N`

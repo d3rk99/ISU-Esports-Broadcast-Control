@@ -15,11 +15,26 @@ pub struct Settings {
     pub debug_logging: bool,
     /// Encoder that last worked when the profile said "auto"; tried first.
     pub preferred_video_encoder: String,
+    /// Companion / remote control API (Control tab). Off by default.
+    pub control_enabled: bool,
+    pub control_port: u16,
+    /// Listen on every network card instead of 127.0.0.1 only.
+    pub control_lan: bool,
+    /// Key every request must send in `X-Restream-Key`.
+    pub control_key: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { last_profile: String::new(), debug_logging: false, preferred_video_encoder: String::new() }
+        Self {
+            last_profile: String::new(),
+            debug_logging: false,
+            preferred_video_encoder: String::new(),
+            control_enabled: false,
+            control_port: 3181,
+            control_lan: false,
+            control_key: String::new(),
+        }
     }
 }
 

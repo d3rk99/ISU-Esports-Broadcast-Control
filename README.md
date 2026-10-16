@@ -70,6 +70,7 @@ from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with it
 - Rust + GStreamer + egui. Build and usage: `restream/README.md`, operator manual: `restream/docs/USER-GUIDE.md`.
 - Ready Windows builds: https://github.com/Kagejitsu/restream/releases
 - Replaced the old ISU Stream Server (`stream-server/`, removed 2026-10-15; still in git history before this commit).
+- ISU additions: Companion control API (Restream > Control tab, port 3181, key) + the Companion module `restream/companion-module` (Go Live / Stop / Cut / Record / gain / monitor, state variables). See `restream/docs/USER-GUIDE.md`.
 - Pull Kate's newer versions: `git subtree pull --prefix=restream https://github.com/Kagejitsu/restream main`
 
 ## Network ports
@@ -79,6 +80,7 @@ from https://github.com/Kagejitsu/restream (MIT, see `restream/LICENSE`) with it
 | 3174 | Overlay and state server (OBS pages, stage preset pages) |
 | 3176 | Companion LAN API (off until enabled) |
 | 3178 | Stage Display Manager (display clients) |
+| 3181 | Restream control API for Companion (off until enabled in Restream > Control) |
 | 9000 | Restream SRT input from OBS (only when that source is picked in Restream) |
 | 49123 / 49124 | Rocket League Stats API (TCP / WebSocket) |
 
@@ -162,6 +164,7 @@ npm run package:bridge          # Game Bridge only
 npm run ndi:install             # once, before the display client
 npm run package:display-client  # ISU Display Client
 npm run package:companion       # Companion module .tgz
+cd restream/companion-module; corepack yarn install; corepack yarn package   # ISU Restream Companion module .tgz
 cd restream; powershell -ExecutionPolicy Bypass -File tools\win-build.ps1 -Release; powershell -ExecutionPolicy Bypass -File tools\win-bundle.ps1   # Restream (needs Rust + GStreamer MSVC SDK, see restream/README.md)
 ```
 

@@ -12,6 +12,7 @@ use restream_core::stats::DestStatus;
 use restream_core::{Engine, EngineState, Profile, StatsEvent};
 use tokio::sync::broadcast;
 
+use crate::control;
 use crate::logbuf::LogBuffer;
 use crate::settings::Settings;
 use crate::{keys, paths};
@@ -32,6 +33,7 @@ enum Tab {
     Delay,
     Destinations,
     Recording,
+    Control,
     Logs,
 }
 
@@ -111,6 +113,13 @@ pub struct App {
     /// Set while a Go Live is in flight so the idle preview does not restart
     /// in the gap between its shutdown and the session's start.
     going_live: bool,
+    /// Companion / remote control API (crate::control). None = off.
+    control: Option<control::Server>,
+    control_shared: Arc<control::Shared>,
+    control_rx: std::sync::mpsc::Receiver<control::Request>,
+    control_settings: Settings,
+    control_error: Option<String>,
+    show_control_key: bool,
 }
 
 impl App {
@@ -129,6 +138,13 @@ impl App {
         let (ui_tx, ui_rx) = std::sync::mpsc::channel();
         let video_encoders = restream_core::pipeline::available_video_encoders();
         let audio_encoders = restream_core::pipeline::available_audio_encoders();
+        let (control_tx, control_rx) = std::sync::mpsc::channel();
+        let control_shared = Arc::new(control::Shared { snapshot: Default::default(), commands: control_tx });
+        let mut control_settings = Settings::load();
+        if control_settings.control_key.len() < 16 {
+            control_settings.control_key = control::new_key();
+            control_settings.save();
+        }
         let mut app = Self {
             rt,
             engine,
@@ -159,8 +175,17 @@ impl App {
             preview_dirty_since: None,
             preview_starting: false,
             going_live: false,
+            control: None,
+            control_shared,
+            control_rx,
+            control_settings,
+            control_error: None,
+            show_control_key: false,
         };
         app.refresh_devices();
+        if app.control_settings.control_enabled {
+            app.restart_control();
+        }
         // Developer conveniences: `restream --go-live [--monitor]`
         let args: Vec<String> = std::env::args().collect();
         if args.iter().any(|a| a == "--monitor") {
@@ -172,6 +197,7 @@ impl App {
                 "encoder" => Tab::Encoder,
                 "delay" => Tab::Delay,
                 "recording" => Tab::Recording,
+                "control" => Tab::Control,
                 "logs" => Tab::Logs,
                 _ => Tab::Destinations,
             };
@@ -381,6 +407,7 @@ impl App {
             }
         }
         self.tick_input_preview();
+        self.tick_control();
         // preview textures
         if let Some(f) = self.engine.preview().take_newer(self.live_seq) {
             self.live_seq = f.seq;
@@ -464,6 +491,204 @@ impl App {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------- Companion control ---
+
+    fn restart_control(&mut self) {
+        self.control = None; // drops the old listener first (frees the port)
+        self.control_error = None;
+        let s = &self.control_settings;
+        if !s.control_enabled {
+            return;
+        }
+        match control::start(&self.rt, Arc::clone(&self.control_shared), s.control_port, s.control_lan, s.control_key.clone()) {
+            Ok(srv) => {
+                tracing::info!("control API listening on {}", srv.bound);
+                self.control = Some(srv);
+            }
+            Err(e) => {
+                tracing::error!("control API: {e}");
+                self.control_error = Some(e);
+            }
+        }
+    }
+
+    fn snapshot(&self) -> control::Snapshot {
+        let l = &self.live;
+        let state = match self.engine.state() {
+            EngineState::Idle => "IDLE",
+            EngineState::Filling => "FILLING",
+            EngineState::OnAir => "ON AIR",
+            EngineState::Draining => "DRAINING",
+        };
+        let destinations = self
+            .profile
+            .destinations
+            .iter()
+            .enumerate()
+            .map(|(i, d)| {
+                let v = l.dests.get(&i).cloned().unwrap_or_default();
+                let status = if !d.enabled {
+                    "DISABLED".to_string()
+                } else if self.engine.state() == EngineState::Idle {
+                    "STOPPED".to_string()
+                } else {
+                    v.status.map(|s| s.label().to_uppercase()).unwrap_or_else(|| "STOPPED".into())
+                };
+                control::DestSnap { name: d.name.clone(), enabled: d.enabled, status, kbps: v.kbps, reconnects: v.reconnects }
+            })
+            .collect();
+        control::Snapshot {
+            state: state.into(),
+            on_air: l.on_air && self.engine.state() != EngineState::Idle,
+            delay_seconds: self.profile.delay.seconds,
+            delay_filled_seconds: l.fill.as_secs_f64(),
+            on_air_in_seconds: l.on_air_in.map(|d| d.as_secs_f64()),
+            recording: l.rec_active,
+            recording_seconds: l.rec_duration.as_secs_f64(),
+            recording_path: l.rec_path.clone().unwrap_or_default(),
+            gain_db: self.profile.input.gain_db,
+            monitor: self.profile.input.monitor.enabled,
+            monitor_volume_db: self.profile.input.monitor.volume_db,
+            audio_peak_l: l.peak_db.first().copied(),
+            audio_peak_r: l.peak_db.get(1).copied().or_else(|| l.peak_db.first().copied()),
+            video_fps: l.video_fps,
+            video_kbps: l.video_kbps,
+            audio_kbps: l.audio_kbps,
+            last_error: l.last_error.as_ref().filter(|(t, _)| t.elapsed() < Duration::from_secs(60)).map(|(_, e)| e.clone()).unwrap_or_default(),
+            profile: self.profile.name.clone(),
+            destinations,
+        }
+    }
+
+    /// Run queued remote commands exactly like the GUI's own buttons, then publish the state.
+    fn tick_control(&mut self) {
+        while let Ok(req) = self.control_rx.try_recv() {
+            let r = self.run_control(req.command.clone());
+            if let Err(e) = &r {
+                tracing::warn!("control: {:?} refused: {e}", req.command);
+            }
+            let _ = req.reply.send(r);
+        }
+        *self.control_shared.snapshot.lock() = self.snapshot();
+    }
+
+    fn run_control(&mut self, cmd: control::Command) -> Result<String, String> {
+        use control::{Command, Level, Toggle};
+        let idle = self.engine.state() == EngineState::Idle;
+        let flip = |t: Toggle, now: bool| match t {
+            Toggle::On => true,
+            Toggle::Off => false,
+            Toggle::Toggle => !now,
+        };
+        match cmd {
+            Command::GoLive => {
+                if !idle || self.going_live {
+                    return Err("already live".into());
+                }
+                self.go_live();
+                Ok("going live".into())
+            }
+            Command::Stop => {
+                if idle {
+                    return Err("not live".into());
+                }
+                self.stop(false);
+                Ok("stopping: the buffered stream plays out, then destinations disconnect".into())
+            }
+            Command::Cut => {
+                if idle {
+                    return Err("not live".into());
+                }
+                self.stop(true);
+                Ok("cut: buffer discarded, destinations disconnected".into())
+            }
+            Command::Recording(t) => {
+                if idle {
+                    return Err("recording needs a running session (Go Live first)".into());
+                }
+                let want = flip(t, self.live.rec_active);
+                if want == self.live.rec_active {
+                    return Ok(format!("recording already {}", if want { "on" } else { "off" }));
+                }
+                self.toggle_recording();
+                Ok(format!("recording {}", if want { "starting" } else { "stopping" }))
+            }
+            Command::Monitor(t) => {
+                let want = flip(t, self.profile.input.monitor.enabled);
+                self.profile.input.monitor.enabled = want;
+                let m = self.profile.input.monitor.clone();
+                self.engine.set_audio_monitor(m.enabled, m.device, m.volume_db);
+                self.profile_dirty = true;
+                Ok(format!("monitor {}", if want { "on" } else { "off" }))
+            }
+            Command::Gain(l) => {
+                let v = match l {
+                    Level::Set(v) => v,
+                    Level::Adjust(d) => self.profile.input.gain_db + d,
+                }
+                .clamp(-30.0, 20.0);
+                self.profile.input.gain_db = v;
+                self.engine.set_audio_gain_db(v);
+                self.profile_dirty = true;
+                Ok(format!("gain {v:.1} dB"))
+            }
+            Command::MonitorVolume(l) => {
+                let v = match l {
+                    Level::Set(v) => v,
+                    Level::Adjust(d) => self.profile.input.monitor.volume_db + d,
+                }
+                .clamp(-60.0, 12.0);
+                self.profile.input.monitor.volume_db = v;
+                self.engine.set_audio_monitor_volume_db(v);
+                self.profile_dirty = true;
+                Ok(format!("monitor volume {v:.0} dB"))
+            }
+        }
+    }
+
+    fn tab_control(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Companion / remote control");
+        ui.label(RichText::new("Lets Bitfocus Companion (module: ISU Restream) press Go Live / Stop / Cut / Record and change gain and the monitor, and shows the state as variables. Works while live.").weak());
+        ui.separator();
+        let mut changed = false;
+        let s = &mut self.control_settings;
+        changed |= ui.checkbox(&mut s.control_enabled, "Enable the control API").changed();
+        ui.horizontal(|ui| {
+            ui.label("Port");
+            changed |= ui.add(egui::DragValue::new(&mut s.control_port).range(1024..=65535)).changed();
+        });
+        changed |= ui
+            .checkbox(&mut s.control_lan, "Allow other PCs (Companion on another computer)")
+            .on_hover_text("Off: only this PC (127.0.0.1). On: every network card; Windows Firewall may ask.")
+            .changed();
+        ui.horizontal(|ui| {
+            ui.label("Key");
+            let shown = if self.show_control_key { s.control_key.clone() } else { "•".repeat(16) };
+            ui.monospace(shown);
+            if ui.small_button(if self.show_control_key { "Hide" } else { "Show" }).clicked() {
+                self.show_control_key = !self.show_control_key;
+            }
+            if ui.small_button("Copy").clicked() {
+                ui.ctx().copy_text(s.control_key.clone());
+            }
+            if ui.small_button("New key").on_hover_text("Companion must get the new key").clicked() {
+                s.control_key = control::new_key();
+                changed = true;
+            }
+        });
+        if changed {
+            self.control_settings.save();
+            self.restart_control();
+        }
+        ui.separator();
+        match (&self.control, &self.control_error) {
+            (Some(srv), _) => ui.label(RichText::new(format!("Listening on {}", srv.bound)).color(Color32::from_rgb(90, 200, 110))),
+            (None, Some(e)) => ui.label(RichText::new(e).color(Color32::from_rgb(230, 90, 80))),
+            (None, None) => ui.label(RichText::new("Off").weak()),
+        };
+        ui.label(RichText::new("In Companion: add the 'ISU Restream' connection, host = this PC's IP (127.0.0.1 on the same PC), the port above and the key.").small().weak());
     }
 
     // ----------------------------------------------------------------- UI ---
@@ -671,13 +896,14 @@ impl App {
                 (Tab::Encoder, "Encoder"),
                 (Tab::Delay, "Delay"),
                 (Tab::Recording, "Recording"),
+                (Tab::Control, "Control"),
                 (Tab::Logs, "Logs"),
             ] {
                 ui.selectable_value(&mut self.tab, t, label);
             }
         });
         ui.separator();
-        if !idle && self.tab != Tab::Logs {
+        if !idle && self.tab != Tab::Logs && self.tab != Tab::Control {
             ui.label(RichText::new("Settings are locked while a session is running.").color(Color32::from_rgb(230, 160, 30)).small());
         }
         let before = self.profile.clone();
@@ -688,10 +914,13 @@ impl App {
                 Tab::Delay => self.tab_delay(ui),
                 Tab::Destinations => self.tab_destinations(ui),
                 Tab::Recording => self.tab_recording(ui),
-                Tab::Logs => {}
+                Tab::Control | Tab::Logs => {}
             });
             if self.tab == Tab::Logs {
                 self.tab_logs(ui);
+            }
+            if self.tab == Tab::Control {
+                self.tab_control(ui);
             }
         });
         if self.profile != before {
