@@ -16,6 +16,8 @@ $ErrorActionPreference = "Stop"
 $rust = Resolve-Path "$PSScriptRoot\.."
 $repo = Resolve-Path "$rust\.."
 $out = "$rust\release"
+# Keep cleanup confined to this workspace's generated release directory.
+if ([IO.Path]::GetFullPath($out) -ne [IO.Path]::GetFullPath((Join-Path $rust 'release'))) { throw "Invalid release directory: $out" }
 if (-not $Version) { $Version = (Get-Content "$repo\package.json" | ConvertFrom-Json).version }
 Write-Host "ISU Rust apps $Version"
 
@@ -30,6 +32,16 @@ $bin = "$rust\target\release"
 # ---- shared pieces ----
 $tessBin = Resolve-Path "$env:TESSERACT_LIB_DIR\..\bin"
 $tessDlls = Get-ChildItem "$tessBin\*.dll"
+# The OCR DLLs also import the MSVC runtime. Ship the redistributable CRT locally
+# so a fresh station does not depend on a developer's global VC++ installation.
+$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vs = if (Test-Path $vswhere) { & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath }
+if (-not $vs) { throw "Visual C++ Build Tools not found (vswhere)" }
+$crt = Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory | Sort-Object FullName -Descending | Select-Object -First 1
+if (-not $crt) { throw "MSVC redistributable CRT directory not found under $vs" }
+$dumpbin = Get-Command dumpbin.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1
+if (-not $dumpbin) { $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" | Sort-Object FullName -Descending | Select-Object -ExpandProperty FullName -First 1 }
+if (-not $dumpbin) { throw "dumpbin.exe not found in Visual C++ Build Tools" }
 $engGz = "$repo\node_modules\@tesseract.js-data\eng\4.0.0\eng.traineddata.gz"
 if (-not (Test-Path $engGz)) { throw "Missing $engGz (run npm install in the repo root)" }
 $ndiDll = @("$env:NDI_RUNTIME_DIR_V6\Processing.NDI.Lib.x64.dll", "$env:NDI_RUNTIME_DIR_V5\Processing.NDI.Lib.x64.dll", "$env:ProgramFiles\NDI\NDI 6 Runtime\v6\Processing.NDI.Lib.x64.dll") | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
@@ -70,24 +82,36 @@ Ocr-Data $br
 # ---- display client ----
 $dc = "$out\ISU Display Client"
 Copy-Files @("$bin\isu-display-client.exe", $ndiDll, "$repo\electron\displays\NDI-LICENSE.txt") $dc
+foreach ($app in @($ctl, $br, $dc)) { Copy-Files (Get-ChildItem "$($crt.FullName)\*.dll") $app }
 
 # ---- check: every app starts far enough to find its files (scripts\check-ndi-bundle.cjs idea) ----
 foreach ($need in @("$ctl\public\overlays\scoreboard.html", "$ctl\electron\ocr-models", "$ctl\tessdata\eng.traineddata", "$br\electron\valorant-agent-templates.json", "$br\tessdata\eng.traineddata", "$dc\Processing.NDI.Lib.x64.dll")) {
   if (-not (Test-Path $need)) { throw "Package is missing $need" }
 }
-foreach ($exe in @("$ctl\isu-broadcast-control.exe", "$br\isu-game-bridge.exe")) {
-  $deps = & dumpbin /dependents $exe 2>$null | Select-String "tesseract"
-  if ($deps) { foreach ($d in $deps) { $n = $d.ToString().Trim(); if (-not (Test-Path "$(Split-Path $exe)\$n")) { throw "$exe needs $n next to it" } } }
+foreach ($app in @($ctl, $br, $dc)) {
+  foreach ($file in (Get-ChildItem "$app\*.exe", "$app\*.dll")) {
+    $deps = & $dumpbin /dependents $file.FullName 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "dumpbin failed on $($file.FullName)" }
+    foreach ($line in $deps) {
+      if ($line -match '^\s+([\w.\-]+\.dll)\s*$') {
+        $n = $Matches[1]
+        if ((Test-Path "$app\$n") -or $n -like 'api-ms-*' -or $n -like 'ext-ms-*') { continue }
+        if ($n -match '^(msvcp|vcruntime|concrt)' -or -not (Test-Path "$env:WINDIR\System32\$n")) { throw "$($file.Name) needs $n next to it in $app" }
+      }
+    }
+  }
 }
 
 # ---- portable zips ----
 foreach ($app in @($ctl, $br, $dc)) {
   $name = Split-Path $app -Leaf
-  Compress-Archive -Path "$app\*" -DestinationPath "$out\$name-Portable-$Version-x64.zip" -Force
+  # Compress-Archive cannot handle the optional multi-GB RL asset pack.
+  & "$env:WINDIR\System32\tar.exe" --format=zip -cf "$out\$name-Portable-$Version-x64.zip" -C $app .
+  if ($LASTEXITCODE -ne 0) { throw "Portable ZIP failed for $name" }
 }
 
 # ---- installers (Inno Setup) ----
-$iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($iscc) {
   foreach ($iss in @("controller.iss", "bridge.iss", "display-client.iss")) {
     & $iscc "/DAppVersion=$Version" "/DSrc=$out" "/O$out" "$PSScriptRoot\$iss"

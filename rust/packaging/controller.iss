@@ -17,6 +17,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 Compression=lzma2
 SolidCompression=yes
+DiskSpanning=yes
+DiskSliceSize=max
 UninstallDisplayIcon={app}\{#AppExe}
 WizardStyle=modern
 
@@ -24,7 +26,8 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"
 
 [Files]
-Source: "{#Src}\{#AppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Src}\{#AppName}\*"; DestDir: "{app}"; Excludes: "assests\rl-loadout-assets.zip"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Src}\{#AppName}\assests\rl-loadout-assets.zip"; DestDir: "{app}\assests"; Flags: ignoreversion nocompression skipifsourcedoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
