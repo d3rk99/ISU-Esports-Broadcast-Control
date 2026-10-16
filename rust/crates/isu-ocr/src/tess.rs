@@ -50,7 +50,16 @@ pub struct Read {
 impl Tess {
     /// `datapath` = folder with `<lang>.traineddata`.
     pub fn new(datapath: &Path, lang: &str) -> anyhow::Result<Self> {
-        let dp = CString::new(datapath.to_string_lossy().as_bytes())?;
+        // Tesseract normalizes backslashes, which breaks Rust's Windows verbatim
+        // paths (\\?\C:\... becomes //?/C:/...). Pass an ordinary Win32 path.
+        let path = datapath.to_string_lossy();
+        #[cfg(windows)]
+        let path = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else {
+            path.strip_prefix(r"\\?\").unwrap_or(&path).to_string()
+        };
+        let dp = CString::new(path.as_bytes())?;
         let lg = CString::new(lang)?;
         unsafe {
             let h = TessBaseAPICreate();
