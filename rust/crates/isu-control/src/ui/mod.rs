@@ -1,6 +1,8 @@
 //! The controller window (src/app.js render + src/styles.css look) in egui. One module per view.
 pub mod control;
 pub mod maps;
+pub mod roster;
+pub mod roster_manager;
 pub mod widgets;
 
 use std::sync::Arc;
@@ -44,6 +46,7 @@ pub struct App {
     /// destructive button waiting for its second click (app.js armedConfirm)
     pub armed: Option<(String, std::time::Instant)>,
     pub addresses: Vec<String>,
+    pub rm: roster_manager::Ui,
 }
 
 const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
@@ -59,7 +62,7 @@ impl App {
         cc.egui_ctx.set_visuals(v);
         let ctx = cc.egui_ctx.clone();
         *svc.core.repaint.lock().unwrap() = Some(Box::new(move || ctx.request_repaint()));
-        Self { svc, toast: None, armed: None, addresses: local_addresses() }
+        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default() }
     }
 
     pub fn state(&self) -> Value {
@@ -203,6 +206,7 @@ impl eframe::App for App {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| match st["activeView"].as_str().unwrap_or("control") {
                 "control" => control::view(self, ui, &st),
                 "maps" => maps::view(self, ui, &st),
+                "roster" => roster::view(self, ui, &st),
                 other => {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));

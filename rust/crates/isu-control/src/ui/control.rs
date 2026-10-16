@@ -404,6 +404,16 @@ fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
     });
 }
 
+/// crypto.randomUUID(): 8-4-4-4-12 lowercase hex, version 4.
+pub fn random_uuid() -> String {
+    let mut b = [0u8; 16];
+    getrandom(&mut b);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
 /// crypto.randomUUID().replaceAll('-', '') -> 32 hex chars.
 pub fn random_key() -> String {
     let mut b = [0u8; 16];
