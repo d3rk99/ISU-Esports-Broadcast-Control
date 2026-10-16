@@ -73,7 +73,7 @@ impl App {
         v.selection.bg_fill = c::ORANGE.gamma_multiply(0.6);
         ctx.set_visuals(v);
         let ctx = ctx.clone();
-        *svc.core.repaint.lock().unwrap() = Some(Box::new(move || ctx.request_repaint()));
+        *svc.core.repaint.lock().unwrap() = Some(Arc::new(move || ctx.request_repaint()));
         let (toast_tx, toast_rx) = std::sync::mpsc::channel();
         let (monitors_tx, monitors_rx) = std::sync::mpsc::channel();
         Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default(), toast_tx, toast_rx, monitors: None, monitors_tx, monitors_rx, companion_key: None, ow_debug: std::sync::Arc::default() }

@@ -42,7 +42,7 @@ pub struct Core {
     pub store: Arc<isu_server::Store>,
     /// called with every published state (overlay + Companion + spectate candidates are wired by app.rs)
     pub on_publish: Mutex<Vec<Box<dyn Fn(&Value) + Send + Sync>>>,
-    pub repaint: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    pub repaint: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 fn clone(v: &Value) -> Value {
@@ -79,7 +79,10 @@ impl Core {
     }
 
     fn repaint(&self) {
-        if let Some(r) = self.repaint.lock().unwrap().as_ref() {
+        // egui may already be rendering while a service requests a repaint. Never hold
+        // our callback lock while entering egui: the UI also requests repaints on edits.
+        let repaint = self.repaint.lock().unwrap().clone();
+        if let Some(r) = repaint {
             r();
         }
     }

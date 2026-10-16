@@ -16,6 +16,27 @@ fn core(tag: &str) -> (Arc<Core>, std::path::PathBuf) {
 fn wait_saves(c: &Core) { for _ in 0..40 { c.tick(); std::thread::sleep(Duration::from_millis(10)); } }
 
 #[test]
+fn repaint_callback_can_access_registration_without_deadlocking() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (c, dir) = core("repaint");
+    let weak = Arc::downgrade(&c);
+    let invoked = Arc::new(AtomicBool::new(false));
+    let called = Arc::clone(&invoked);
+    *c.repaint.lock().unwrap() = Some(Arc::new(move || {
+        let c = weak.upgrade().unwrap();
+        assert!(c.repaint.try_lock().is_ok(), "callback lock must be released before entering egui");
+        assert!(c.inner.try_lock().is_ok(), "state lock must be released before entering egui");
+        called.store(true, Ordering::Release);
+    }));
+    c.commit("UI edit during OCR repaint", |_| {});
+    assert!(invoked.load(Ordering::Acquire));
+    invoked.store(false, Ordering::Release);
+    c.overwatch_snapshot(&json!({"teams": {"home": {"players": []}, "away": {"players": []}}}));
+    assert!(invoked.load(Ordering::Acquire), "OCR callbacks use the same safe repaint path");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn commit_undo_save_reload() {
     let (c, dir) = core("undo");
     for i in 0..35 { c.commit("score", |s| s["games"]["valorant"]["teams"][0]["score"] = json!(i)); }
