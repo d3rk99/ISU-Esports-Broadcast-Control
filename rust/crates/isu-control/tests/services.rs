@@ -35,6 +35,25 @@ fn services_start_and_serve() {
     assert_eq!(c, 200);
     assert_eq!(st["selectedGame"], core.state()["selectedGame"]);
 
+    // Companion must receive the original timestamp, rather than the timestamp-free
+    // overlay projection, and retain the same ten-second expiry as the JS service.
+    core.store.set_spectated(isu_server::store::Spectated {
+        name: "Spectator test".into(), station: Some(3.0), side: "home".into(),
+        team: "IDAHO STATE".into(), received_at: isu_control::core::now_ms(),
+    });
+    let vars_request = "GET /api/companion/variables HTTP/1.1\r\nHost: x\r\nX-ISU-API-Key: test-token-0123456789\r\nConnection: close\r\n\r\n";
+    let (_, vars) = http(3176, vars_request);
+    assert_eq!(vars["spectated_name"], "Spectator test");
+    assert_eq!(vars["spectated_station"], 3);
+    assert_eq!(vars["spectated_known"], true);
+    core.store.set_spectated(isu_server::store::Spectated {
+        name: "Spectator test".into(), received_at: isu_control::core::now_ms() - 11_000.0,
+        ..Default::default()
+    });
+    let (_, expired) = http(3176, vars_request);
+    assert_eq!(expired["spectated_name"], "");
+    assert_eq!(expired["spectated_known"], false);
+
     let body = json!({ "action": "score.increment", "game": "valorant", "team": "away" }).to_string();
     let (c, r) = http(3176, &format!("POST /api/companion/action HTTP/1.1\r\nHost: x\r\nX-ISU-API-Key: test-token-0123456789\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()));
     assert_eq!(c, 200, "{r}");

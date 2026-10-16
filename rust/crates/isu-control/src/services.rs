@@ -73,8 +73,11 @@ impl Services {
         let s2 = Arc::clone(&store);
         let companion = isu_server::companion::Companion::new(Arc::clone(&store), Arc::new(move || {
             let mut st = d2.status();
-            let sp = s2.with_spectated();
-            st["spectated"] = sp["spectated"].clone();
+            // Companion performs its own freshness check (like currentSpectated in
+            // main.cjs), so it needs the raw receipt timestamp, not the overlay DTO.
+            let sp = s2.lock().spectated.clone();
+            st["spectated"] = json!({ "name": sp.name, "station": sp.station,
+                "side": sp.side, "team": sp.team, "receivedAt": sp.received_at });
             st
         }), atx);
         let c3 = Arc::clone(&core);
