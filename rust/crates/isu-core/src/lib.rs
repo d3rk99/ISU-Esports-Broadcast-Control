@@ -4,6 +4,7 @@
 //! Every function names the JS function it copies; tests/parity.rs runs both on the same input.
 
 pub mod actions;
+pub mod boards;
 pub mod display_presets;
 pub mod game_config;
 pub mod rocket_league;

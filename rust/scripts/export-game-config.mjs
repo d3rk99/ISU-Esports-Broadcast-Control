@@ -1,6 +1,6 @@
 // Writes rust/crates/isu-core/data/game-config.json from the JS controller's src/game-config.js,
 // so the Rust port never keeps its own copy of the game tables (heroes, agents, modes, arenas,
-// initial state). Run after changing src/game-config.js:  node rust/scripts/export-game-config.mjs
+// initial state, Overwatch hero roles, VALORANT agent roles). Run after changing src/game-config.js:  node rust/scripts/export-game-config.mjs
 // The Rust build embeds the JSON; tests/parity.rs checks it is current.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const m = await import(join(here, '..', '..', 'src', 'game-config.js'));
+const heroRoles = (await import(join(here, '..', '..', 'src', 'overwatch-hero-roles.js'))).OVERWATCH_HERO_ROLES;
+const agentRoles = (await import(join(here, '..', '..', 'src', 'valorant-board-panel.js'))).VALORANT_AGENT_ROLES;
 const configs = Object.fromEntries(m.GAME_ORDER.map((k) => [k, m.GAME_CONFIGS[k]]));
 const out = join(here, '..', 'crates', 'isu-core', 'data', 'game-config.json');
 mkdirSync(dirname(out), { recursive: true });
@@ -17,6 +19,8 @@ const data = {
   configs,
   arenaNames: m.ROCKET_LEAGUE_ARENA_NAMES,
   initialState: m.createInitialState(),
+  overwatchHeroRoles: heroRoles,
+  valorantAgentRoles: agentRoles,
 };
 delete data.initialState.updatedAt;
 writeFileSync(out, JSON.stringify(data, null, 1) + '\n');
