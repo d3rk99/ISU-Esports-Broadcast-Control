@@ -3,5 +3,6 @@
 pub mod bridge;
 pub mod displays;
 pub mod link;
+pub mod obs;
 pub mod rocket_league;
 pub mod spectate;
