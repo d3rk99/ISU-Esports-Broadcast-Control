@@ -1,5 +1,6 @@
 //! The controller window (src/app.js render + src/styles.css look) in egui. One module per view.
 pub mod control;
+pub mod maps;
 pub mod widgets;
 
 use std::sync::Arc;
@@ -201,6 +202,7 @@ impl eframe::App for App {
             ui.separator();
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| match st["activeView"].as_str().unwrap_or("control") {
                 "control" => control::view(self, ui, &st),
+                "maps" => maps::view(self, ui, &st),
                 other => {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));
@@ -231,4 +233,26 @@ impl eframe::App for App {
 pub fn local_addresses() -> Vec<String> {
     let s = std::net::UdpSocket::bind("0.0.0.0:0").ok();
     s.and_then(|s| s.connect("10.255.255.255:1").ok().and_then(|_| s.local_addr().ok())).map(|a| vec![a.ip().to_string()]).unwrap_or_default()
+}
+
+/// overlayOutputUrl(details): only the known overlay pages, query values that are set.
+pub fn overlay_url(name: &str, query: &[(&str, &str)]) -> Option<String> {
+    if !["scoreboard", "map-pool", "roster", "program", "clean"].contains(&name) {
+        return None;
+    }
+    let q: Vec<String> = query.iter().filter(|(_, v)| !v.is_empty()).map(|(k, v)| format!("{k}={}", v.replace(' ', "+"))).collect();
+    Some(format!("http://127.0.0.1:3174/overlays/{name}.html{}", if q.is_empty() { String::new() } else { format!("?{}", q.join("&")) }))
+}
+
+/// Open a page in the default browser (the Electron app opened its own preview window).
+pub fn open_url(url: &str) {
+    if url.is_empty() {
+        return;
+    }
+    #[cfg(windows)]
+    let _ = std::process::Command::new("cmd").args(["/C", "start", "", url]).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }

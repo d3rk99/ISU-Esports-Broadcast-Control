@@ -232,3 +232,76 @@ pub fn apply(state: &mut Value, action: &str, index: usize, winner: Option<f64>,
         _ => None,
     }
 }
+
+/// One field edit of the controller window (app.js 'change' handler), on the selected game.
+pub enum Field<'a> {
+    /// data-map-index + data-map-prop (mode / map)
+    MapProp { row: usize, prop: &'a str, value: &'a str },
+    /// data-map-index + data-map-score (0 / 1)
+    MapScore { row: usize, side: usize, value: &'a str },
+    /// data-veto-ban
+    VetoBan { index: usize, value: &'a str },
+    /// data-veto-pick + data-veto-prop (map / attackers)
+    VetoPick { index: usize, prop: &'a str, value: &'a str },
+    /// data-player + data-player-prop on the active roster (writes back to the library)
+    Player { index: usize, prop: &'a str, value: &'a str },
+    /// data-away-roster-toggle
+    AwayRoster { on: bool },
+    /// data-roster-first-side
+    RosterFirstSide { value: &'a str },
+}
+
+/// Returns the commit message app.js uses (None = the default 'Changes saved').
+pub fn set_field(state: &mut Value, f: Field<'_>) -> Option<String> {
+    let key = sel(state);
+    match f {
+        Field::MapProp { row, prop, value } => {
+            let g = &mut state["games"][key.as_str()];
+            g["mapRows"][row][prop] = json!(value);
+            if key == "valorant" && prop == "map" && g.pointer(&format!("/veto/picks/{row}")).is_some_and(|p| crate::game_config::truthy(Some(p))) {
+                g["veto"]["picks"][row]["map"] = json!(value);
+            }
+            None
+        }
+        Field::MapScore { row, side, value } => {
+            state["games"][key.as_str()]["mapRows"][row]["score"][side] = json!(value);
+            None
+        }
+        Field::VetoBan { index, value } => {
+            state["games"][key.as_str()]["veto"]["bans"][index] = json!(value);
+            None
+        }
+        Field::VetoPick { index, prop, value } => {
+            let v = if prop == "attackers" { jnum(crate::game_config::js_number(value).unwrap_or(f64::NAN)) } else { json!(value) };
+            let g = &mut state["games"][key.as_str()];
+            g["veto"]["picks"][index][prop] = v.clone();
+            if key == "valorant" && prop == "map" && g["mapRows"].get(index).is_some_and(|r| crate::game_config::truthy(Some(r))) {
+                g["mapRows"][index]["map"] = v;
+            }
+            None
+        }
+        Field::Player { index, prop, value } => {
+            let side = if state["activeRosterSide"] == "away" { "away" } else { "home" };
+            let coll = if side == "away" { "awayRosters" } else { "rosters" };
+            let rk = roster_key(state);
+            state["games"][key.as_str()][coll][rk.as_str()][index][prop] = json!(value);
+            crate::roster_manager::write_back_from_match(&mut state["games"][key.as_str()], side);
+            None
+        }
+        Field::AwayRoster { on } => {
+            state["games"][key.as_str()]["showAwayRoster"] = json!(on);
+            if !on {
+                let first = state["games"][key.as_str()]["rosterFirstSide"] == "away";
+                state["activeRosterSide"] = json!(if first { "away" } else { "home" });
+            }
+            Some(if on { "Second roster enabled" } else { "First-team-only roster enabled" }.into())
+        }
+        Field::RosterFirstSide { value } => {
+            let side = if value == "away" { "away" } else { "home" };
+            state["games"][key.as_str()]["rosterFirstSide"] = json!(side);
+            state["activeRosterSide"] = json!(side);
+            let name = crate::game_config::js_string(state["games"][key.as_str()].pointer(&format!("/teams/{}/name", if value == "away" { 1 } else { 0 })));
+            Some(format!("{name} will show first on the roster overlay"))
+        }
+    }
+}
