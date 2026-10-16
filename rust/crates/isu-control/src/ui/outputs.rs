@@ -145,7 +145,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let keyu = crate::ui::overlay_url("program", &[("output", "key")]).unwrap();
     let shown = PROGRAM.iter().find(|p| p.0 == active).map_or("Scoreboard", |p| p.1);
     let mut take: Option<(&str, &str)> = None;
-    let clicked = output_card(ui, "pair", "PROGRAM", ("FILL", if active == "clean" { "CLEAR" } else { shown }, "KEY"), "Program Fill+Key Output", "One persistent dual-screen output. Fill and Key stay open on the selected displays while the active HTML changes.", "2x 1920 × 1080", &pair, "PROGRAM OUTPUT", &["OPEN PROGRAM", "COPY FILL URL", "COPY KEY URL", "COPY OBS PAIR URL"], |ui| {
+    let clicked = output_card(ui, "pair", "PROGRAM", ("FILL", if active == "clean" { "CLEAR" } else { shown }, "KEY"), "Program output (for a video switcher)", "Opens the graphics full screen on two monitors (FILL + KEY, set in Settings). Then pick which graphic is on air below; switching fades over without reopening anything.", "2x 1920 × 1080", &pair, "PROGRAM OUTPUT", &["OPEN PROGRAM", "COPY FILL URL", "COPY KEY URL", "COPY OBS PAIR URL"], |ui| {
         // .program-output-actions: 4 equal take buttons
         egui::Frame::NONE.fill(Color32::from_rgb(0x11, 0x13, 0x18)).inner_margin(egui::Margin::symmetric(15, 12)).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -187,7 +187,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         _ => {}
     }
     ui.add_space(8.0);
-    title(ui, "01", "Browser-source outputs", &format!("Individual Fill and Key HTML graphics · current game: {}", s(config(key).and_then(|c| c.get("name")))));
+    title(ui, "01", "Pages for OBS", &format!("Add one of these as a Browser Source in OBS (COPY URL). FILL = the picture, KEY = its black/white cut-out mask for a video switcher; with OBS you only need FILL. Game: {}", s(config(key).and_then(|c| c.get("name")))));
     let away = truthy(game.get("showAwayRoster"));
     let fills: Vec<(&str, &str, &str, String, Vec<(String, String)>)> = vec![
         ("scoreboard", "SCORE", "Main Scoreboard Fill", "Full-color scoreboard graphic for the switcher fill input.".into(), vec![("output".into(), "fill".into())]),

@@ -89,7 +89,7 @@ fn name_box(ui: &mut egui::Ui, id: &str, value: &str, manual: bool, hint: &str) 
         if manual {
             ui.visuals_mut().widgets.inactive.bg_stroke = egui::Stroke::new(1.0, c::ORANGE);
         }
-        ui.add(egui::TextEdit::singleline(&mut draft).hint_text("(OCR)").desired_width(ui.available_width()).margin(egui::vec2(6.0, 4.0)).text_color(if manual { Color32::from_rgb(0xff, 0xd3, 0x7a) } else { c::TEXT }))
+        ui.add(egui::TextEdit::singleline(&mut draft).hint_text("(read)").desired_width(ui.available_width()).margin(egui::vec2(6.0, 4.0)).text_color(if manual { Color32::from_rgb(0xff, 0xd3, 0x7a) } else { c::TEXT }))
     }).inner.on_hover_text(hint);
     if r.has_focus() || r.changed() {
         ui.data_mut(|d| d.insert_temp(key, draft.clone()));
@@ -159,7 +159,7 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                                 Err(e) => { let _ = tx.send(format!("Test read failed: {e}")); }
                             });
                         } else {
-                            app.toast("Test read failed: the OCR models are not installed");
+                            app.toast("Test read failed: the reading files are missing (reinstall the app)");
                         }
                     }
                     if app.confirm_button(ui, "vb-clear", "CLEAR", "Clear?") {
@@ -365,7 +365,7 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                         let (tx, core) = (app.toast_tx.clone(), std::sync::Arc::clone(&app.svc.core));
                         std::thread::spawn(move || match o.sweep() { Ok(_) => { core.overwatch_snapshot(&o.snapshot()); let _ = tx.send("Read the scoreboard once".into()); } Err(e) => { let _ = tx.send(format!("Test read failed: {e}")); } });
                     }
-                    None => app.toast("Test read failed: the OCR models are not installed"),
+                    None => app.toast("Test read failed: the reading files are missing (reinstall the app)"),
                 }
             }
             if ui.add(secondary_button("DEBUG CAPTURE")).on_hover_text("For fixing problems: shows the captured picture with every read box and what was read in it.").clicked() {
@@ -378,7 +378,7 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                             Err(e) => { let _ = tx.send(format!("Debug capture failed: {e}")); }
                         });
                     }
-                    None => app.toast("Debug capture failed: the OCR models are not installed"),
+                    None => app.toast("Debug capture failed: the reading files are missing (reinstall the app)"),
                 }
             }
             if app.ow_debug.lock().unwrap().is_some() && ui.add(secondary_button("HIDE DEBUG")).clicked() {
@@ -399,10 +399,10 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
             }
             let on = val == json!(true);
             app.toast(&match k.as_str() {
-                "enabled" => if on { "Overwatch scoreboard OCR on".into() } else { "Overwatch scoreboard OCR off".into() },
-                "autoAlign" => if on { "OCR auto-align on".into() } else { "OCR auto-align off: fixed boxes".into() },
-                "view" => format!("OCR board view: {}", s(Some(&val))),
-                _ => "Overwatch OCR settings saved".to_string(),
+                "enabled" => if on { "Overwatch scoreboard reader on".into() } else { "Overwatch scoreboard reader off".into() },
+                "autoAlign" => if on { "Following moving boxes".into() } else { "Fixed boxes".into() },
+                "view" => format!("Scoreboard type: {}", s(Some(&val))),
+                _ => "Overwatch reader settings saved".to_string(),
             });
         }
         status_line(ui, &ow["status"]);
@@ -419,7 +419,7 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                     0 => cell_text(ui, &format!("{}", i + 1)),
                     1 => {
                         let manual = truthy(p.get("nameManual"));
-                        let hint = if manual { "Set by hand. Clear it to go back to OCR." } else { "Read by OCR. Type to set it by hand." };
+                        let hint = if manual { "Typed by hand. Clear it to let the reader read it again." } else { "Read from the scoreboard. Type to fix it by hand." };
                         if let Some(x) = name_box(ui, &format!("own{side}{i}"), &s(p.get("name")), manual, hint) {
                             name_edit = Some((side.to_string(), i, x));
                         }
@@ -434,10 +434,10 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         if let Some((side, i, x)) = name_edit {
             match app.svc.overwatch.clone() {
                 Some(o) => match o.set_player_name(&side, i as f64, &x) {
-                    Ok(_) => { app.svc.core.overwatch_snapshot(&o.snapshot()); app.toast(&if x.trim().is_empty() { "Name cleared, OCR reads it again".into() } else { format!("Name set to {} (stays until cleared)", x.trim()) }); }
+                    Ok(_) => { app.svc.core.overwatch_snapshot(&o.snapshot()); app.toast(&if x.trim().is_empty() { "Name cleared, the reader reads it again".into() } else { format!("Name set to {} (stays until cleared)", x.trim()) }); }
                     Err(e) => app.toast(&format!("Could not set name: {e}")),
                 },
-                None => app.toast("Could not set name: the OCR models are not installed"),
+                None => app.toast("Could not set name: the reading files are missing (reinstall the app)"),
             }
         }
         debug_view(app, ui);

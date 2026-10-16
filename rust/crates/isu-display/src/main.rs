@@ -380,7 +380,7 @@ impl App {
         }
         // paint(): station title + the first problem
         let mut problems = Vec::new();
-        if link.0 != "connected" { problems.push(if link.1.is_empty() { "Controller not connected".to_string() } else { link.1.clone() }); }
+        if link.0 != "connected" { problems.push(if link.1.is_empty() { format!("Not connected to Broadcast Control at {} (Ctrl+Alt+S to change)", cfg["controller"].as_str().unwrap_or("?")) } else { link.1.clone() }); }
         if mode.0 == "ndi" && ndi_st.state != "receiving" {
             problems.push(if ndi_st.error.is_empty() { format!("Looking for {}…", if !ndi_st.source.is_empty() { &ndi_st.source } else if !mode.1.is_empty() { &mode.1 } else { "NDI feed" }) } else { ndi_st.error.clone() });
         }
@@ -389,6 +389,7 @@ impl App {
             let detail = problems.first().cloned().unwrap_or_else(|| if mode.0 == "mirror" { "Game mirror".into() } else { format!("NDI · {}", if ndi_st.source.is_empty() { &mode.1 } else { &ndi_st.source }) });
             ui.painter().text(rect.center() - egui::vec2(0.0, 30.0), egui::Align2::CENTER_CENTER, station, egui::FontId::proportional(72.0), Color32::from_rgb(0xf4, 0x79, 0x20));
             ui.painter().text(rect.center() + egui::vec2(0.0, 40.0), egui::Align2::CENTER_CENTER, detail, egui::FontId::proportional(22.0), Color32::from_gray(200));
+            ui.painter().text(rect.center_bottom() - egui::vec2(0.0, 28.0), egui::Align2::CENTER_CENTER, "Ctrl+Alt+S = settings", egui::FontId::proportional(14.0), Color32::from_gray(110));
         } else if !problems.is_empty() {
             let t = problems.join(" · ");
             let pos = rect.right_bottom() - egui::vec2(16.0, 16.0);
@@ -421,24 +422,19 @@ impl App {
                 ui.add_space(4.0);
                 ui.label(RichText::new(t).size(10.0).strong().extra_letter_spacing(1.2).color(isu_ui::c::LABEL));
             };
-            section(ui, "CONNECTION");
-            isu_ui::cols(ui, &[90.0, -1.0, 90.0], 10.0, |j, ui| match j {
+            ui.add(egui::Label::new(RichText::new("This PC shows the game or a graphic on the screen at one player station. Set which station it is and where Broadcast Control runs; the rest normally needs no change.").size(11.0).color(isu_ui::c::DIM)).wrap());
+            section(ui, "STATION");
+            isu_ui::cols(ui, &[110.0, -1.0], 10.0, |j, ui| match j {
                 0 => {
                     let st = f["station"].as_i64().unwrap_or(1);
                     let opts: Vec<(i64, String)> = (1..=10).map(|n| (n, format!("{n:02}"))).collect();
-                    if let Some(n) = isu_ui::select(ui, "st", "Station", &st, &opts) { f["station"] = json!(n); }
+                    if let Some(n) = isu_ui::select(ui, "st", "Station number", &st, &opts) { f["station"] = json!(n); }
                 }
-                1 => text(ui, &mut f, "Controller PC (IP or name)", "controller", "192.168.1.20", false),
-                _ => text(ui, &mut f, "Port", "port", "", false),
+                _ => text(ui, &mut f, "Broadcast Control PC address", "controller", "192.168.1.20 (see Settings → Network & keys)", false),
             });
+            section(ui, "SCREENS");
             isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| if j == 0 {
-                text(ui, &mut f, "Display key", "key", "Same as the controller (blank if none)", true);
-            } else {
-                text(ui, &mut f, "OBS PC for NDI (optional)", "ndiHost", "Only if NDI can't find the feed by itself", false);
-            });
-            section(ui, "MONITORS");
-            isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| if j == 0 {
-                text(ui, &mut f, "Player monitor (game mirror)", "playerDisplay", "1", false);
+                text(ui, &mut f, "Player's monitor (number)", "playerDisplay", "1", false);
             } else {
                 text(ui, &mut f, "Audience monitor (this window)", "stageDisplay", "2", false);
             });
@@ -451,13 +447,20 @@ impl App {
                 opts.extend(devices.iter().map(|d| (d.clone(), d.clone())));
                 if let Some(pick) = isu_ui::select(ui, "dev", "Headset output", &cur, &opts) { f["noiseDevice"] = json!(pick.clone()); f["noiseDeviceLabel"] = json!(pick); }
             } else {
-                text(ui, &mut f, "Max volume on this PC (%)", "noiseMaxVolume", "60", false);
+                text(ui, &mut f, "Loudest allowed here (%)", "noiseMaxVolume", "60", false);
             });
-            section(ui, "STATION");
             let mut lock = f["cursorLock"] == true;
-            if isu_ui::toggle(ui, &mut lock, "Keep the mouse on the player monitor", "Ctrl+Alt+L toggles it on the station") { f["cursorLock"] = json!(lock); }
+            if isu_ui::toggle(ui, &mut lock, "Keep the mouse on the player's monitor", "So the player can't click onto the audience screen. Ctrl+Alt+L toggles it.") { f["cursorLock"] = json!(lock); }
             let mut sww = f["startWithWindows"] != false;
-            if isu_ui::toggle(ui, &mut sww, "Start with Windows", "On by default") { f["startWithWindows"] = json!(sww); }
+            if isu_ui::toggle(ui, &mut sww, "Start with Windows", "Opens by itself when this PC starts") { f["startWithWindows"] = json!(sww); }
+            isu_ui::advanced(ui, "dc-adv", |ui| {
+                isu_ui::cols(ui, &[110.0, -1.0], 10.0, |j, ui| if j == 0 {
+                    text(ui, &mut f, "Port", "port", "3178", false);
+                } else {
+                    text(ui, &mut f, "Station key", "key", "Only if one is set in Broadcast Control", true);
+                });
+                text(ui, &mut f, "OBS PC address (for NDI)", "ndiHost", "Only if the graphic does not show up by itself", false);
+            });
             ui.separator();
             let mut save = false;
             ui.horizontal(|ui| {

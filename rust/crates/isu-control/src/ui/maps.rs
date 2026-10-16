@@ -97,8 +97,8 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     }
     ui.add_space(4.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new("LIVE OUTPUT").size(9.5).strong().extra_letter_spacing(1.2).color(c::ORANGE));
-        ui.label(RichText::new("Changes on this page are sent to the Map Pool browser source immediately.").size(11.0).color(c::DIM));
+        ui.label(RichText::new("LIVE").size(9.5).strong().extra_letter_spacing(1.2).color(c::ORANGE));
+        ui.label(RichText::new("Changes here show up on the Map Pool graphic right away. Click a map number to make it the current map; click a team name to say who won it.").size(11.0).color(c::DIM));
     });
 }
 

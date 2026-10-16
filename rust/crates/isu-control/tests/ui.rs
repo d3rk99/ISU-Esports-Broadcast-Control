@@ -44,6 +44,10 @@ fn controller_window_like_a_user() {
     let mut h = Harness::builder().with_size(egui::vec2(1600.0, 1000.0)).build_eframe(move |cc| isu_control::ui::App::new(&cc.egui_ctx, svc2));
     settle(&mut h);
 
+    // first start opens the setup checklist; it links to every page
+    assert!(h.query_all_by_label_contains("Show setup").next().is_some(), "setup checklist on first start");
+    assert!(h.query_all_by_label_contains("status Overlays").next().is_some(), "status strip");
+    h.get_by_label("Match Control").click(); settle(&mut h);
     // --- Match Control: score +, swap (no "Take live" any more: it did nothing on the overlays)
     assert!(h.query_by_label_contains("Take live").is_none(), "Take live removed");
     let plus: Vec<_> = h.get_all_by_label("+").collect();
@@ -95,7 +99,7 @@ fn controller_window_like_a_user() {
     });
     std::thread::sleep(Duration::from_millis(300));
     settle(&mut h);
-    h.get_by_label("ALL: GAME MIRROR").click(); settle(&mut h);
+    h.get_by_label("ALL: GAME").click(); settle(&mut h);
     std::thread::sleep(Duration::from_millis(200));
     assert_eq!(msgs.lock().unwrap().iter().rev().find(|m| m["type"] == "mode").unwrap()["mode"], "mirror", "station got mirror");
     let noise_buttons: Vec<_> = h.get_all_by_label("PINK NOISE OFF").collect();
@@ -135,8 +139,8 @@ fn controller_window_like_a_user() {
 
     // --- Settings: Companion on with a key, then the API answers
     h.get_by_label("Settings").click(); settle(&mut h);
-    h.get_by_label("Enable LAN API").scroll_to_me(); settle(&mut h);
-    let cb: Vec<_> = h.get_all_by_label_contains("Enable LAN API").collect();
+    h.get_by_label("Allow Stream Deck control").scroll_to_me(); settle(&mut h);
+    let cb: Vec<_> = h.get_all_by_label_contains("Allow Stream Deck control").collect();
     cb[0].click(); for _ in 0..10 { settle(&mut h); }
     assert_eq!(svc.companion.status()["listening"], true, "Companion API listening after the checkbox");
     let tok = svc.companion.settings().token;

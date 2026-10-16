@@ -2,11 +2,11 @@
 
 Taken on a Linux virtual screen (no game, no stations online, fresh settings), so live parts are empty.
 
+## Controller · Show setup (opens on first start)
+![Show setup](screenshots/controller-setup-valorant.png)
+
 ## Controller · Match Control (VALORANT)
 ![Controller · Match Control (VALORANT)](screenshots/controller-control-valorant.png)
-
-## Controller · Match Control (Overwatch)
-![Controller · Match Control (Overwatch)](screenshots/controller-control-overwatch.png)
 
 ## Controller · Match Control (Rocket League)
 ![Controller · Match Control (Rocket League)](screenshots/controller-control-rocketleague.png)

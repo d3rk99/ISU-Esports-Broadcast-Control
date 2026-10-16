@@ -63,3 +63,14 @@ Plan (needs Derk's OK, see chat):
 - F. One "Network & keys" section in Settings that holds all 4 keys/ports.
 - G. Same for the Game Bridge (big "1-2-3" steps, advanced box positions folded) and the Display Client (only station +
   controller up front, the rest under Advanced).
+
+## Done (2026-10-16, Derk: "do a-g", delete the growing round bar)
+- A: Take live removed everywhere (Rust UI, Companion actions/variable/feedback/preset, JS Companion service, overlay tag;
+  the old Electron app.js keeps its own button). Growing round bar removed (overlay JS + CSS, setting). Auto roster label.
+- B: "Advanced" folds (closed by default) on the Rocket League panel, both readers, Game Bridge, Display Client.
+- C: plain-language titles/labels/hover help on every page; GAME / GRAPHICS instead of mirror / NDI on Displays.
+- D: status strip under the top bar (Overlays, Program, Game data / Scoreboard, Stations, Stream Deck), click = page.
+- E: "Show setup" checklist page (first in the sidebar, opens on first start), 7 steps that tick from the real state.
+- F: Settings → Network & keys: this PC's address + all keys/ports (Rocket League game PC, camera PC, station key), Stream Deck.
+- G: Game Bridge = STEP 1/2/3 with Advanced box positions; Display Client settings = station + controller up front,
+  station screen says which address it waits for and "Ctrl+Alt+S = settings".

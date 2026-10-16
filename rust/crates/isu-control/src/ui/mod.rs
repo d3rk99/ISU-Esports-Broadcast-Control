@@ -5,6 +5,8 @@ pub mod maps;
 pub mod outputs;
 pub mod readers;
 pub mod settings;
+pub mod setup;
+pub mod status;
 pub mod roster;
 pub mod roster_manager;
 pub mod widgets;
@@ -40,12 +42,18 @@ pub struct App {
     pub ow_debug: std::sync::Arc<std::sync::Mutex<Option<(Value, Option<readers::DebugTex>)>>>,
 }
 
-const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
+const NAV: [(&str, &str); 6] = [("setup", "Show setup"), ("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
 
 impl App {
     pub fn new(ctx: &egui::Context, svc: Arc<Services>) -> Self {
         apply_theme(ctx);
         egui_extras::install_image_loaders(ctx);
+        // first start: open the setup checklist once
+        if svc.core.state().get("setupSeen").is_none() {
+            let mut g = svc.core.lock();
+            g.state["activeView"] = json!("setup");
+            g.state["setupSeen"] = json!(true);
+        }
         let ctx = ctx.clone();
         *svc.core.repaint.lock().unwrap() = Some(Arc::new(move || ctx.request_repaint()));
         let (toast_tx, toast_rx) = std::sync::mpsc::channel();
@@ -191,12 +199,13 @@ impl App {
         let cfg = config(game).unwrap();
         let name = js_string(cfg.get("name"));
         let (title, sub) = match st["activeView"].as_str().unwrap_or("control") {
-            "maps" => ("Map Pool".to_string(), format!("Plan and record the {name} series")),
-            "roster" => ("Team Rosters".into(), "Manage Home and Away Varsity/JV lineups".into()),
-            "outputs" => ("OBS Outputs".into(), "Browser-source graphics and live asset status".into()),
-            "stage" => ("Displays".into(), "Audience displays: game mirror or NDI presets from OBS".into()),
-            "settings" => ("Workspace Settings".into(), "Defaults, data, and application information".into()),
-            _ => ("Match Control".into(), "Run the live score and match state".into()),
+            "maps" => ("Map Pool".to_string(), format!("The maps of this {name} series and who won each one")),
+            "roster" => ("Rosters".into(), "Teams and players: build the library once, load a team for each match".into()),
+            "outputs" => ("OBS Outputs".into(), "The graphics pages for OBS and the full-screen program output".into()),
+            "stage" => ("Displays".into(), "The screens at the player stations: show the game or graphics from OBS".into()),
+            "settings" => ("Settings".into(), "Network, keys, output screens and Stream Deck".into()),
+            "setup" => ("Show setup".into(), "Step by step: everything a broadcast needs".into()),
+            _ => ("Match Control".into(), "Teams, score and the live game data during the match".into()),
         };
         egui::Frame::NONE.inner_margin(egui::Margin { left: 36, right: 36, top: 22, bottom: 18 }).show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -243,6 +252,7 @@ impl eframe::App for App {
         egui::Panel::left("sidebar").exact_size(256.0).frame(egui::Frame::NONE.fill(Color32::from_rgb(0x0f, 0x0f, 0x11)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x28, 0x28, 0x2b))).inner_margin(egui::Margin { left: 20, right: 20, top: 16, bottom: 18 })).show(root, |ui| { egui::ScrollArea::vertical().id_salt("sidebar").auto_shrink([false, false]).show(ui, |ui| self.sidebar(ui, &st)); });
         egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::from_rgb(0x0d, 0x0d, 0x0f))).show(root, |ui| {
             self.topbar(ui, &st);
+            status::strip(self, ui, &st);
             if !overlay_err.is_empty() {
                 ui.colored_label(c::RED, format!("Overlay server could not start: {overlay_err}"));
             }
@@ -263,6 +273,7 @@ impl eframe::App for App {
                 "stage" => displays::view(self, ui, &st),
                 "outputs" => outputs::view(self, ui, &st),
                 "settings" => settings::view(self, ui, &st),
+                "setup" => setup::view(self, ui, &st),
                 other => {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));

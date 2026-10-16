@@ -10,7 +10,7 @@ v,g,u=sys.argv[1:4]
 st=json.load(open("crates/isu-core/data/game-config.json"))["initialState"] if False else None
 P
 cat > $U/control-state.json <<J
-{"version":4,"games":{},"selectedGame":"$G","activeView":"$V"}
+{"version":4,"games":{},"selectedGame":"$G","activeView":"$V","setupSeen":true}
 J
 D=:97
 Xvfb $D -screen 0 ${W}x${H}x24 -extension GLX >/dev/null 2>&1 & XP=$!

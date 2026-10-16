@@ -79,8 +79,8 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
             ui.add(egui::Label::new(RichText::new(note).size(9.5).color(c::DIM)).wrap());
         };
         cols(ui, &[-1.0, -1.0, -1.0], 10.0, |j, ui| match j {
-            0 => screen(app, ui, "fillDisplayId", "Fill screen", "Primary display", "Used by Fill and the left side of Paired dual output."),
-            1 => screen(app, ui, "keyDisplayId", "Key screen", "Second display", "Used by Key and the right side of Paired dual output."),
+            0 => screen(app, ui, "fillDisplayId", "Fill screen", "Primary display", "The full picture (FILL)."),
+            1 => screen(app, ui, "keyDisplayId", "Key screen", "Second display", "The cut-out mask (KEY), only for a video switcher."),
             _ => screen(app, ui, "gameOverlayDisplayId", "Game overlay screen", "Primary display", "Used by the transparent Valorant alignment overlay."),
         });
         ui.add_space(4.0);

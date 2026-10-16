@@ -266,13 +266,13 @@ impl eframe::App for App {
                     isu_ui::cols(ui, &[-1.0, 230.0], 16.0, |j, ui| {
                         if j == 0 {
                             ui.spacing_mut().item_spacing.y = 4.0;
-                            ui.label(RichText::new("NETWORK TELEMETRY").size(9.5).strong().extra_letter_spacing(1.3).color(accent));
-                            ui.label(RichText::new("Send live game data to Broadcast Control").strong().size(19.0).color(c::TEXT));
-                            ui.label(RichText::new("One bridge for Rocket League, VALORANT and Overwatch.").size(11.5).color(c::DIM));
+                            ui.label(RichText::new("STEP 1 · WHICH GAME").size(9.5).strong().extra_letter_spacing(1.3).color(accent));
+                            ui.label(RichText::new("Sends live game data from this PC to Broadcast Control").strong().size(19.0).color(c::TEXT));
+                            ui.label(RichText::new("Rocket League: score, clock, players. VALORANT / Overwatch: which player the camera is on.").size(11.5).color(c::DIM));
                         } else {
                             let before = self.form.game.clone();
                             let opts = [("rocketleague".to_string(), "Rocket League".to_string()), ("valorant".to_string(), "VALORANT".to_string()), ("overwatch".to_string(), "Overwatch 2".to_string())];
-                            if let Some(g) = isu_ui::select(ui, "game", "Active game adapter", &self.form.game, &opts) {
+                            if let Some(g) = isu_ui::select(ui, "game", "Game on this PC", &self.form.game, &opts) {
                                 self.form.game = g;
                             }
                             if before != self.form.game {
@@ -280,20 +280,21 @@ impl eframe::App for App {
                             }
                         }
                     });
-                    ui.add_space(4.0);
-                    // network: host | port | key
+                    ui.add_space(6.0);
+                    ui.label(RichText::new("STEP 2 · WHERE IS BROADCAST CONTROL").size(9.5).strong().extra_letter_spacing(1.3).color(accent));
+                    ui.add(egui::Label::new(RichText::new("Copy these from Broadcast Control → Settings → Network & keys (the address, the port and the key of the matching section).").size(10.5).color(c::DIM)).wrap());
                     isu_ui::cols(ui, &[-1.0, 110.0, -1.6], 10.0, |j, ui| {
                         match j {
-                            0 => { edit(ui, "Graphics PC IP address", &mut self.form.host, "192.168.1.50"); }
-                            1 => { edit(ui, "Bridge port", &mut self.form.port, ""); }
-                            _ => { edit(ui, "Private bridge key", &mut self.form.token, "Paste the key from Broadcast Control"); }
+                            0 => { edit(ui, "Broadcast Control PC address", &mut self.form.host, "192.168.1.50"); }
+                            1 => { edit(ui, "Port", &mut self.form.port, "3175"); }
+                            _ => { edit(ui, "Key", &mut self.form.token, "Paste the key from Broadcast Control"); }
                         }
                     });
                 });
                 let mut changed = false;
                 if self.form.game == "rocketleague" {
                     isu_ui::panel(ui, |ui| {
-                        isu_ui::heading(ui, "", "Rocket League adapter", "Local Stats API connection on this PC", |ui| {
+                        isu_ui::heading(ui, "", "Rocket League on this PC", "Rocket League must run on this PC with its stats feed on. RUN TEST FEED sends a fake match to check the connection.", |ui| {
                             let sim = status["source"]["state"] == "simulating";
                             let b = if sim { egui::Button::new(RichText::new("STOP TEST FEED").strong().color(Color32::from_rgb(0xff, 0x6b, 0x63))).fill(Color32::from_rgb(0x2a, 0x13, 0x12)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0xd9, 0x47, 0x3e))).min_size(egui::vec2(0.0, 37.0)) } else { isu_ui::secondary_button("RUN TEST FEED") };
                             if ui.add(b).clicked() {
@@ -306,7 +307,7 @@ impl eframe::App for App {
                                 }
                             }
                         });
-                        isu_ui::cols(ui, &[-1.2, -1.2, -0.8, -0.8], 10.0, |j, ui| match j {
+                        isu_ui::advanced(ui, "br-rl", |ui| isu_ui::cols(ui, &[-1.2, -1.2, -0.8, -0.8], 10.0, |j, ui| match j {
                             0 => {
                                 let opts = [("auto".to_string(), "Automatic".to_string()), ("websocket".to_string(), "WebSocket".to_string()), ("tcp".to_string(), "TCP".to_string())];
                                 if let Some(t) = isu_ui::select(ui, "transport", "Transport", &self.form.transport, &opts) { self.form.transport = t; }
@@ -314,28 +315,28 @@ impl eframe::App for App {
                             1 => { edit(ui, "Local game host", &mut self.form.rl_host, ""); }
                             2 => { edit(ui, "TCP port", &mut self.form.tcp, ""); }
                             _ => { edit(ui, "WebSocket port", &mut self.form.web, ""); }
-                        });
+                        }));
                     });
                 } else {
                     isu_ui::panel(ui, |ui| {
-                        isu_ui::title(ui, "", "Spectated player", "Player-POV spectator: who is being watched. The bridge reads the small player name on screen and matches it to the names the controller sends (rosters + scoreboard), so it only ever reports one of your players.");
-                        isu_ui::cols(ui, &[-1.2, -0.7, -1.4], 10.0, |j, ui| match j {
-                            0 => { changed |= edit(ui, "Window title contains", &mut self.form.window, "").lost_focus(); }
-                            1 => { changed |= edit(ui, "Read every (ms)", &mut self.form.interval, "").lost_focus(); }
-                            _ => {
-                                let opts = [("both".to_string(), "Agent icon, then name (OCR)".to_string()), ("icon".to_string(), "Agent icon only (experiment, no OCR)".to_string())];
-                                if let Some(m) = isu_ui::select(ui, "method", "How to find the player", &self.form.method, &opts) { self.form.method = m; changed = true; }
-                            }
-                        });
-                        // box positions: name x/y/w/h | icon x/y/size
-                        let n = if self.form.game == "valorant" { 7 } else { 4 };
-                        let widths = vec![-1.0; n];
-                        isu_ui::cols(ui, &widths, 8.0, |j, ui| {
-                            let labels = ["Name box X", "Name box Y", "Name box W", "Name box H", "Icon box X", "Icon box Y", "Icon size"];
-                            let r = if j < 4 { edit(ui, labels[j], &mut self.form.roi[j], "") } else { edit(ui, labels[j], &mut self.form.portrait[j - 4], "") };
-                            changed |= r.lost_focus();
-                        });
-                        ui.horizontal(|ui| {
+                        isu_ui::title(ui, "", "Who the camera is on", "For the PC that shows a player's view. The bridge reads the player name / agent icon on screen and matches it to the roster names Broadcast Control sends, so it only ever reports one of your players.");
+                        isu_ui::advanced(ui, "br-sp", |ui| {
+                            isu_ui::cols(ui, &[-1.2, -0.7, -1.4], 10.0, |j, ui| match j {
+                                0 => { changed |= edit(ui, "Game window name contains", &mut self.form.window, "").lost_focus(); }
+                                1 => { changed |= edit(ui, "Read every (ms)", &mut self.form.interval, "").lost_focus(); }
+                                _ => {
+                                    let opts = [("both".to_string(), "Agent icon, then name".to_string()), ("icon".to_string(), "Agent icon only (test)".to_string())];
+                                    if let Some(m) = isu_ui::select(ui, "method", "How to find the player", &self.form.method, &opts) { self.form.method = m; changed = true; }
+                                }
+                            });
+                            ui.add(egui::Label::new(RichText::new("Where the name (and agent icon) is on a 1920×1080 screen. Press CAPTURE FRAME to see the boxes on the real picture.").size(10.0).color(c::DIM)).wrap());
+                            let n = if self.form.game == "valorant" { 7 } else { 4 };
+                            let widths = vec![-1.0; n];
+                            isu_ui::cols(ui, &widths, 8.0, |j, ui| {
+                                let labels = ["Name box X", "Name box Y", "Name box W", "Name box H", "Icon box X", "Icon box Y", "Icon size"];
+                                let r = if j < 4 { edit(ui, labels[j], &mut self.form.roi[j], "") } else { edit(ui, labels[j], &mut self.form.portrait[j - 4], "") };
+                                changed |= r.lost_focus();
+                            });
                             if ui.add(isu_ui::secondary_button("CAPTURE FRAME TO PLACE THE BOXES")).clicked() {
                                 self.capture_frame(ctx);
                             }
@@ -385,7 +386,8 @@ impl eframe::App for App {
                 }
                 // start / stop + status cards
                 ui.horizontal(|ui| {
-                    if ui.add(isu_ui::primary_button("START BRIDGE").min_size(egui::vec2(160.0, 40.0))).clicked() {
+                    ui.label(RichText::new("STEP 3").size(9.5).strong().extra_letter_spacing(1.3).color(accent));
+                    if ui.add(isu_ui::primary_button("START SENDING").min_size(egui::vec2(170.0, 40.0))).on_hover_text("Saves the settings and connects to Broadcast Control. Both cards below turn green when it works.").clicked() {
                         let cfg = self.form.read();
                         save_config(&cfg);
                         let st = self.run(|b| b.start(&cfg));
@@ -398,15 +400,15 @@ impl eframe::App for App {
                 });
                 isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| {
                     if j == 0 {
-                        status_card(ui, "GRAPHICS PC", if status["remote"].is_object() { &status["remote"] } else { &Value::Null });
+                        status_card(ui, "BROADCAST CONTROL", if status["remote"].is_object() { &status["remote"] } else { &Value::Null });
                     } else {
-                        status_card(ui, if self.form.game == "rocketleague" { "ROCKET LEAGUE" } else { "SPECTATED PLAYER" }, if status["source"].is_object() { &status["source"] } else { &Value::Null });
+                        status_card(ui, if self.form.game == "rocketleague" { "ROCKET LEAGUE" } else { "CAMERA PLAYER" }, if status["source"].is_object() { &status["source"] } else { &Value::Null });
                     }
                 });
                 ui.add(egui::Label::new(RichText::new(if self.form.game != "rocketleague" {
-                    "SETUP: On the Graphics PC (Broadcast Control → Settings → Spectated player receiver), turn the receiver on, generate a bridge key, and use the same port and key here. Place the name box on the spectated player's name."
+                    "On the Broadcast Control PC: Settings → Network & keys → \"Who the camera is on\": turn LISTEN FOR THE CAMERA PC on and copy its port and key here."
                 } else {
-                    "SETUP: On the Graphics PC, choose Rocket League, set Data Source to Game PC Bridge, and use the same port and key. The spectated player comes from the Rocket League API; no name box needed."
+                    "On the Broadcast Control PC: Match Control → Rocket League → \"On another PC\", and copy the Rocket League game PC port and key from Settings → Network & keys."
                 }).size(10.5).color(c::DIM)).wrap());
                 });
             });

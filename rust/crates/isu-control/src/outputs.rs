@@ -38,11 +38,13 @@ pub struct Outputs {
     pub program: Mutex<String>,
     game_setup_open: Mutex<bool>,
     pub monitors: Mutex<Vec<Value>>,
+    /// program fill + key windows are open (for the status strip)
+    pub program_open: std::sync::atomic::AtomicBool,
 }
 
 impl Outputs {
     pub fn new(files: Files) -> Arc<Self> {
-        Arc::new(Self { files, helper: Mutex::new(None), program: Mutex::new("scoreboard".into()), game_setup_open: Mutex::new(false), monitors: Mutex::new(Vec::new()) })
+        Arc::new(Self { files, helper: Mutex::new(None), program: Mutex::new("scoreboard".into()), game_setup_open: Mutex::new(false), monitors: Mutex::new(Vec::new()), program_open: false.into() })
     }
 
     /// readOutputDisplaySettings(): normalized and written back.
@@ -130,6 +132,7 @@ impl Outputs {
         let key = crate::ui::overlay_url("program", &[("output", "key")]).unwrap();
         let a = self.open_window("program-fill", &fill, s["fillDisplayId"].as_str().unwrap_or(""), 0, &json!({ "output": "fill" }), "program fill output");
         let b = self.open_window("program-key", &key, s["keyDisplayId"].as_str().unwrap_or(""), 1, &json!({ "output": "key" }), "program key output");
+        self.program_open.store(a && b, std::sync::atomic::Ordering::Release);
         if !(a && b) {
             return false;
         }

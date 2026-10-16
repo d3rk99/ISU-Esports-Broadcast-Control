@@ -103,10 +103,10 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let preset_of = |n: usize| st.pointer(&format!("/displays/stations/{n}/preset")).and_then(Value::as_str).unwrap_or("idle").to_string();
     let header = format!("{} of 10 display clients online · port {}{}", num_or_zero(ds.get("onlineCount")), { let p = num_or_zero(ds.get("port")); if p == 0.0 { 3178.0 } else { p } }, if truthy(ds.get("error")) { format!(" · {}", s(ds.get("error"))) } else { String::new() });
     heading(ui, "01", "Stations", &header, |ui| {
-        if ui.add(secondary_button("ALL: NDI")).clicked() {
+        if ui.add(secondary_button("ALL: GRAPHICS")).on_hover_text("Every station screen shows its graphic from OBS.").clicked() {
             mode(app, "all", "ndi");
         }
-        if ui.add(secondary_button("ALL: GAME MIRROR")).clicked() {
+        if ui.add(secondary_button("ALL: GAME")).on_hover_text("Every station screen shows what that player sees.").clicked() {
             mode(app, "all", "mirror");
         }
     });
@@ -114,13 +114,13 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         panel(ui, |ui| {
             let all_noise = |v: bool| list.iter().all(|n| truthy(row(*n).get("noise")) == v);
             let all_mode = |m: &str| list.iter().all(|n| row(*n)["mode"] == m);
-            heading(ui, "", &format!("Stations {key}"), "Game mirror or NDI preset for these five only", |ui| {
+            heading(ui, "", &format!("Stations {key}"), "GAME = the screen shows what the player sees. GRAPHICS = the screen shows a graphic from OBS (pick which below).", |ui| {
                 if pill(ui, "OFF", all_noise(false), BLUE).clicked() { noise(app, key, false); }
                 if pill(ui, "ON", all_noise(true), PINK).clicked() { noise(app, key, true); }
                 ui.label(RichText::new("PINK NOISE").size(9.5).strong().extra_letter_spacing(1.3).color(PINK));
                 ui.add_space(12.0);
-                if pill(ui, &format!("{key}: NDI"), all_mode("ndi"), BLUE).clicked() { mode(app, key, "ndi"); }
-                if pill(ui, &format!("{key}: GAME MIRROR"), all_mode("mirror"), BLUE).clicked() { mode(app, key, "mirror"); }
+                if pill(ui, &format!("{key}: GRAPHICS"), all_mode("ndi"), BLUE).clicked() { mode(app, key, "ndi"); }
+                if pill(ui, &format!("{key}: GAME"), all_mode("mirror"), BLUE).clicked() { mode(app, key, "mirror"); }
             });
             // .disp-grid: 5 equal cards
             cols(ui, &[-1.0; 5], 10.0, |j, ui| station_card(app, ui, &row(list[j]), &preset_of(list[j]), list[j]));
@@ -130,7 +130,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     }
     // 02 pink noise all
     panel(ui, |ui| {
-        title(ui, "02", "Pink noise (player headsets)", "Players hear game + comms in their IEMs; the headset on top plays pink noise so they can't hear the room. Each display client plays it on the headset output picked in its settings (Ctrl+Alt+S), capped by that PC's max volume.");
+        title(ui, "02", "Pink noise (player headsets)", "A soft hiss in the players' over-ear headsets so they can't hear the crowd or casters (game and team chat come through their in-ear monitors). Each station PC plays it on the headset picked in its settings, never louder than that PC allows.");
         ui.horizontal(|ui| {
             let all_noise = |v: bool| (1..=10).all(|n| truthy(row(n).get("noise")) == v);
             ui.label(RichText::new("PINK NOISE · ALL 10").size(9.5).strong().extra_letter_spacing(1.3).color(PINK));
@@ -152,7 +152,7 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     });
     // 03 presets all
     panel(ui, |ui| {
-        title(ui, "03", "NDI presets (all 10 stations)", "What OBS draws on every ISU Stage NN feed. Changes are instant: the pages update live, OBS never reloads.");
+        title(ui, "03", "Station graphics (all 10)", "Which graphic the station screens show in GRAPHICS mode. Changes show up right away.");
         preset_buttons(app, ui, "all", &(1..=10).map(preset_of).collect::<Vec<_>>(), true);
         ui.add_space(6.0);
         ui.horizontal(|ui| {
@@ -249,7 +249,7 @@ fn preset_buttons(app: &mut App, ui: &mut egui::Ui, group: &str, current: &[Stri
 fn station_card(app: &mut App, ui: &mut egui::Ui, row: &Value, preset_now: &str, n: usize) {
     let online = row["online"] == true;
     let m = s(row.get("mode"));
-    let health = if !online { "offline".to_string() } else if truthy(row.get("error")) { s(row.get("error")) } else if m == "mirror" { "mirroring".into() } else if row["state"] == "receiving" { format!("NDI {} fps", s(row.get("fps"))).trim().to_string() } else { let x = s(row.get("state")); if x.is_empty() { "connecting".into() } else { x } };
+    let health = if !online { "no station PC connected".to_string() } else if truthy(row.get("error")) { s(row.get("error")) } else if m == "mirror" { "showing the game".into() } else if row["state"] == "receiving" { format!("graphic · {} fps", s(row.get("fps"))).trim().to_string() } else { let x = s(row.get("state")); if x.is_empty() { "connecting".into() } else { x } };
     let (dot, txt) = if !online { (Color32::from_rgb(0x44, 0x44, 0x44), GREY) } else if truthy(row.get("error")) { (Color32::from_rgb(0xff, 0x5a, 0x5a), Color32::from_rgb(0xff, 0x8a, 0x8a)) } else if m == "mirror" || row["state"] == "receiving" { (Color32::from_rgb(0x2f, 0xd2, 0x7a), Color32::from_rgb(0x6e, 0xe7, 0xa8)) } else { (Color32::from_rgb(0xff, 0xce, 0x47), Color32::from_rgb(0xff, 0xdf, 0x7a)) };
     egui::Frame::NONE.fill(Color32::from_rgb(0x11, 0x13, 0x17)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x26, 0x2a, 0x31))).corner_radius(8.0).inner_margin(12.0).show(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -265,7 +265,7 @@ fn station_card(app: &mut App, ui: &mut egui::Ui, row: &Value, preset_now: &str,
         });
         ui.add(egui::Label::new(RichText::new(&health).size(11.0).color(txt)).truncate());
         cols(ui, &[-1.0, -1.0], 6.0, |j, ui| {
-            let (lbl, md) = if j == 0 { ("GAME MIRROR", "mirror") } else { ("NDI", "ndi") };
+            let (lbl, md) = if j == 0 { ("GAME", "mirror") } else { ("GRAPHICS", "ndi") };
             if ui.add(pill_btn(lbl, m == md, BLUE).min_size(egui::vec2(ui.available_width(), 30.0))).clicked() {
                 mode(app, &n.to_string(), md);
             }
@@ -278,7 +278,7 @@ fn station_card(app: &mut App, ui: &mut egui::Ui, row: &Value, preset_now: &str,
             noise(app, &n.to_string(), !on);
         }
         let options: Vec<(String, String)> = PRESETS.iter().map(|p| (p.0.to_string(), p.1.to_string())).collect();
-        if let Some(pick) = select(ui, &format!("dp{n}"), "NDI preset", &preset_now.to_string(), &options) {
+        if let Some(pick) = select(ui, &format!("dp{n}"), "Graphic", &preset_now.to_string(), &options) {
             // data-display-preset change: keeps the station's team
             let p2 = pick.clone();
             app.commit(&format!("Display {n:02}: {pick}"), |st| {
@@ -300,7 +300,7 @@ fn pill_btn(label: &str, on: bool, accent: Color32) -> egui::Button<'static> {
 
 fn obs_panel(app: &mut App, ui: &mut egui::Ui) {
     panel(ui, |ui| {
-        title(ui, "04", "OBS (draws + sends the NDI feeds)", "Needs OBS 31.1+ with DistroAV and Tools → WebSocket Server on. SET UP OBS makes 10 scenes with a browser page each and a DistroAV NDI filter named ISU Stage 01-10. Run it again any time; it only adds what's missing.");
+        title(ui, "04", "OBS (makes the station graphics)", "OBS draws the 10 station graphics and sends them over the network (NDI). One time: in OBS install the DistroAV plugin and turn on Tools → WebSocket Server, then press SET UP OBS here. Safe to press again; it only adds what is missing.");
         let edit = |ui: &mut egui::Ui, label: &str, v: &mut String, hint: &str, pw: bool| {
             field_label(ui, label);
             ui.add(egui::TextEdit::singleline(v).password(pw).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)));
