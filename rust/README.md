@@ -24,6 +24,7 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Display presets | `src/display-presets.js` | `isu-core::display_presets` | via actions |
 | Overlay server 3174 (/api/state, /api/health, SSE /events, WebSocket /ws, static pages, user assets, RL pack) | `electron/main.cjs`, `overlay-events.cjs` | `isu-server::overlay`, `hub`, `store` | socket tests + the real `public/overlays/scoreboard.html` in Chromium: WS connected, live update shown |
 | Companion API 3176 (health, variables, capabilities, state, SSE events, action) | `electron/companion-api-service.cjs` | `isu-server::companion` | socket tests (keys, errors, CORS, restart/free port) |
+| Controller logic without UI: Rocket League live state, VALORANT/Overwatch roster sync + team mapping + round timeline, Roster Manager | `src/app.js`, `rl-roster-sync.js`, `rl-loadout.js`, `valorant-board-*.js`, `overwatch-ocr-panel.js`, `roster-manager.js` | `isu-core::rocket_league`, `boards`, `roster_manager` | parity: the real JS functions on scripted sessions, identical state at every step |
 | Controller UI (native egui, Derk chose option 2: everything in Rust) | `src/app.js` + panels | todo | |
 | VALORANT board reader: align, cells, credits, glyph count, parse, read ladder (native Tesseract, Derk OK'd 2026-10-15) | `electron/valorant-board-parse.cjs`, `valorant-ocr-engine.cjs` | `isu-ocr::board`, `tess` | real frames: 139/140 cells identical to JS; Windows 7900X: 2.0-2.8x faster, 6.5x less RAM (`bench/RESULTS.md`) |
 | VALORANT agents, guns, shields, block colours, consensus, player identity (rows re-sort) | `valorant-board-parse.cjs`, `valorant-board-identity.cjs` | `isu-ocr::icons`, `consensus`, `board::block_color` | real frames + scripted sweeps: identical to JS (`tests/parity_board.rs`) |
@@ -39,7 +40,6 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Display Manager (3178 /display: hello/status/welcome/mode/noise, key 4003, station in use 4009, groups, pink-noise toggle by majority) | `displays/display-manager.cjs` | `isu-net::displays` | test/display-manager.test.cjs ported 1:1 (real sockets): all pass; plain HTTP 426 |
 | Display Client app (config + CLI args, link with backoff, NDI receiver via the NDI runtime DLL, game mirror, pink noise, cursor lock, start with Windows, settings, crash log) | `displays/display-client-main.cjs`, `ndi-receiver.cjs`, `cursor-lock.cjs`, `client/*` | `isu-display` -> `isu-display-client` | pink noise sample-for-sample = noise.js; normalize = JS; real client <-> real manager on a virtual screen (mode / noise / status round trip, STATION 03 screen) |
 | OBS setup for the stage displays (obs-websocket 5: auth, 10 scenes + browser pages + DistroAV NDI filters, idempotent, live status) | `displays/obs-displays.cjs` | `isu-net::obs` | test/obs-displays.test.cjs ported, run against the SAME fake OBS server (rust/scripts/fake-obs.cjs) |
-| Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
 | Restream | already Rust (`../restream`) | — | |
 
 ## Building isu-ocr
