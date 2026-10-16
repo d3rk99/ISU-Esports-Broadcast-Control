@@ -3,6 +3,8 @@
 Derk 2026-10-15: rewrite the Broadcast Control controller, the Game Bridge, the Display Client and
 Restream in Rust with the same features, abilities and logic, to measure whether it is faster.
 `main` keeps the Electron/Node apps; this branch adds the Rust versions next to them.
+Screens are native Rust (egui, like Restream), Derk 2026-10-15 ("2"). The OBS overlay and stage
+pages stay HTML (OBS browser sources need web pages); the Rust server serves the same files.
 
 ## Rules for the port
 - **Same behaviour, proven.** Every ported piece is checked against the real JS code: a script
@@ -20,8 +22,9 @@ Restream in Rust with the same features, abilities and logic, to measure whether
 | Companion variables + capabilities, stage variables | `electron/companion-api-service.cjs` | `isu-core::variables` | all states |
 | Gamertag folding / similarity | `src/overwatch-ocr-panel.js` | `isu-core::tags` | 10 pairs |
 | Display presets | `src/display-presets.js` | `isu-core::display_presets` | via actions |
-| Overlay server (HTTP, SSE, WebSocket), Companion API server | `electron/main.cjs`, `overlay-events.cjs`, `companion-api-service.cjs` | todo | |
-| Controller UI | `src/app.js` + panels | todo | |
+| Overlay server 3174 (/api/state, /api/health, SSE /events, WebSocket /ws, static pages, user assets, RL pack) | `electron/main.cjs`, `overlay-events.cjs` | `isu-server::overlay`, `hub`, `store` | socket tests + the real `public/overlays/scoreboard.html` in Chromium: WS connected, live update shown |
+| Companion API 3176 (health, variables, capabilities, state, SSE events, action) | `electron/companion-api-service.cjs` | `isu-server::companion` | socket tests (keys, errors, CORS, restart/free port) |
+| Controller UI (native egui, Derk chose option 2: everything in Rust) | `src/app.js` + panels | todo | |
 | Game Bridge, OCR readers, spectate tracker | `electron/game-bridge.cjs`, `*-ocr-*`, `spectate-*` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |

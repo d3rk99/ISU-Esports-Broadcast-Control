@@ -1,0 +1,21 @@
+[package]
+name = "isu-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Overlay server (3174: /api/state, /api/health, /events SSE, /ws, static pages, user assets) and Companion API (3176). Port of electron/main.cjs startOverlayServer, overlay-events.cjs, companion-api-service.cjs."
+
+[dependencies]
+isu-core = { path = "../isu-core" }
+serde_json.workspace = true
+tokio.workspace = true
+axum.workspace = true
+tokio-stream.workspace = true
+futures-util.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+rand.workspace = true
+subtle.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

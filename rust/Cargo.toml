@@ -3,7 +3,7 @@
 # Restream is already Rust (../restream); it stays its own workspace.
 [workspace]
 resolver = "2"
-members = ["crates/isu-core"]
+members = ["crates/isu-core", "crates/isu-server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -14,3 +14,12 @@ license = "MIT"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 unicode-normalization = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util", "fs", "signal", "process"] }
+axum = { version = "0.8", features = ["ws"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+anyhow = "1"
+tracing = "0.1"
+rand = "0.9"
+subtle = "2"
