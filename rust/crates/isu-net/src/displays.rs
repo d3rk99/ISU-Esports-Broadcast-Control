@@ -159,10 +159,14 @@ impl DisplayManager {
         let n = tcp.peek(&mut peek).await.unwrap_or(0);
         let head = String::from_utf8_lossy(&peek[..n]).to_ascii_lowercase();
         if !head.contains("upgrade: websocket") {
-            use tokio::io::AsyncWriteExt;
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut tcp = tcp;
+            // peek() leaves the request queued. Closing with unread bytes can reset
+            // the connection on Windows and truncate the HTTP response at the peer.
+            if tcp.read_exact(&mut peek[..n]).await.is_err() { return; }
             let body = "ISU display manager: WebSocket only";
             let _ = tcp.write_all(format!("HTTP/1.1 426 Upgrade Required\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await;
+            let _ = tcp.shutdown().await;
             return;
         }
         let cb = |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
