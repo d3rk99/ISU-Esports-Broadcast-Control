@@ -167,7 +167,7 @@ fn sse(app: &App) -> Response {
         let chunk = match m {
             Msg::State(j) => {
                 let n = j.len();
-                let _ = pending.fetch_update(std::sync::atomic::Ordering::Relaxed, std::sync::atomic::Ordering::Relaxed, |v| Some(v.saturating_sub(n)));
+                crate::hub::release_pending(&pending, n);
                 if std::mem::take(&mut first) { format!("retry: 1000\ndata: {j}\n\n") } else { format!("data: {j}\n\n") }
             }
             Msg::Heartbeat => ": ping\n\n".to_string(),

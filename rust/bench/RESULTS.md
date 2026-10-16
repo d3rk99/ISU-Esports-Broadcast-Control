@@ -1,6 +1,22 @@
 # Benchmarks: JS (Electron/Node) vs Rust
 
-Machine: 16-core Linux test box (not the broadcast PC), 2026-10-16. Re-run on Windows for the real numbers.
+## Windows, Derk's home PC (2026-10-15, commit 115d6e2) - the real numbers
+Ryzen 9 7900X (12 cores / 24 threads), Node 22.12, Rust 1.99.1, Tesseract 5.5.3 (vcpkg).
+Same benchmark programs as below, 5 timed sweeps + 1 discarded start-up sweep per board.
+
+| workers | board | JS | Rust | Rust is |
+| --- | --- | --- | --- | --- |
+| 4 | val-board-1 | 183 ms | 87 ms | 2.1x faster |
+| 4 | val-board-2 | 181 ms | 90 ms | 2.0x faster |
+| 8 | val-board-1 | 135 ms | 62 ms | 2.2x faster |
+| 8 | val-board-2 | 146 ms | 52 ms | 2.8x faster |
+
+Peak memory of the benchmark process, 4 workers: **JS 695 MiB, Rust 108 MiB (6.5x less).**
+Same answers as on Linux: 139/140 cells identical, the same single name difference (see below).
+Tests: cargo test all green; the real scoreboard overlay ran against the Rust server in Chrome.
+
+## Linux test box (2026-10-16), first measurement
+16-core Linux box.
 
 ## VALORANT scoreboard reader, one full sweep (align + all 70 OCR cells)
 Input: Derk's real frames `test/fixtures/val-board-1.png` / `-2.png`. Same models both sides

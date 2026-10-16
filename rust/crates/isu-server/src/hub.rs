@@ -117,9 +117,21 @@ impl Hub {
     }
 }
 
+/// pending -= n, never below 0. A plain CAS loop: fetch_update is deprecated in Rust 1.99 and
+/// its replacement try_update does not exist before 1.99 (Derk's PC has 1.99, the test box 1.98).
+pub fn release_pending(pending: &AtomicUsize, n: usize) {
+    let mut cur = pending.load(Ordering::Relaxed);
+    loop {
+        match pending.compare_exchange_weak(cur, cur.saturating_sub(n), Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return,
+            Err(now) => cur = now,
+        }
+    }
+}
+
 impl Viewer {
     /// Mark `n` bytes as actually written to the socket.
     pub fn sent(&self, n: usize) {
-        let _ = self.pending.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| Some(v.saturating_sub(n)));
+        release_pending(&self.pending, n);
     }
 }

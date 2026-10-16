@@ -25,7 +25,7 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Overlay server 3174 (/api/state, /api/health, SSE /events, WebSocket /ws, static pages, user assets, RL pack) | `electron/main.cjs`, `overlay-events.cjs` | `isu-server::overlay`, `hub`, `store` | socket tests + the real `public/overlays/scoreboard.html` in Chromium: WS connected, live update shown |
 | Companion API 3176 (health, variables, capabilities, state, SSE events, action) | `electron/companion-api-service.cjs` | `isu-server::companion` | socket tests (keys, errors, CORS, restart/free port) |
 | Controller UI (native egui, Derk chose option 2: everything in Rust) | `src/app.js` + panels | todo | |
-| VALORANT board reader: align, cells, credits, glyph count, parse, read ladder (native Tesseract, Derk OK'd 2026-10-15) | `electron/valorant-board-parse.cjs`, `valorant-ocr-engine.cjs` | `isu-ocr::board`, `tess` | real frames: 139/140 cells identical to JS, see `bench/RESULTS.md` |
+| VALORANT board reader: align, cells, credits, glyph count, parse, read ladder (native Tesseract, Derk OK'd 2026-10-15) | `electron/valorant-board-parse.cjs`, `valorant-ocr-engine.cjs` | `isu-ocr::board`, `tess` | real frames: 139/140 cells identical to JS; Windows 7900X: 2.0-2.8x faster, 6.5x less RAM (`bench/RESULTS.md`) |
 | VALORANT agents / guns / shields, consensus, identity, HUD, capture; Overwatch reader | `electron/valorant-*.cjs`, `overwatch-*.cjs` | todo | |
 | Game Bridge, spectate tracker | `electron/game-bridge.cjs`, `spectate-*` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
