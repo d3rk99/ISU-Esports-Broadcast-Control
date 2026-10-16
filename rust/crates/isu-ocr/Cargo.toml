@@ -1,0 +1,15 @@
+[package]
+name = "isu-ocr"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Scoreboard OCR (VALORANT board, HUD, Overwatch board) on native Tesseract 5 through its C API. Port of electron/valorant-*.cjs and overwatch-*.cjs."
+build = "build.rs"
+
+[dependencies]
+serde_json.workspace = true
+flate2.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+png.workspace = true
