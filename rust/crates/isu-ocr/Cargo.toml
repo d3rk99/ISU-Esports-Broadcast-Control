@@ -14,6 +14,7 @@ isu-core = { path = "../isu-core" }
 
 [dev-dependencies]
 png.workspace = true
+sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-capture = "2.0.1"

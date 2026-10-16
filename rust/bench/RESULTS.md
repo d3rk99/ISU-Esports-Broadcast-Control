@@ -40,3 +40,22 @@ the Tesseract version (5.1 vs 5.5), not the port. Engine start: 232 ms for 4 wor
 Run: `node rust/bench/js-board-sweep.cjs 5 4` then
 `cargo run --release -p isu-ocr --example board_bench 5 4` (prints both + the differences).
 `js-cell-trace.cjs` / `--example cell_trace` show every OCR attempt of one cell on each side.
+
+## Overwatch scoreboard reader, one full service sweep (align + OCR + ult rings + heroes)
+Linux test box, 2026-10-16. Input: Derk's real spectator board `test/fixtures/ow-board-table.png`,
+4 workers, heroes matched every sweep on both sides. `node rust/bench/js-ow-sweep.cjs 5 4` vs
+`cargo run --release -p isu-ocr --example ow_bench 5 4`.
+
+| | JS | Rust |
+| --- | --- | --- |
+| median sweep | 167 ms | 108 ms |
+
+The first straight port was 165 ms (no faster): the hero matcher (10 rows x 46 heroes x 16
+offsets of normalised correlation) took 53 ms on one thread in both. Rust now matches the 10 rows
+in parallel (same math, same results): 7 ms. `ISU_OW_TIMING=1` prints align / OCR / rings+heroes.
+
+Accuracy: same 240 cell boxes, glyph counts and byte-identical OCR images as the JS on the 3 real
+boards (normal, perks, player view); 20/20 heroes identical. The service reads 79/80 stats of the
+real board vs JS 80/80: away3 assists reads "0" in both, but native Tesseract 5.5 gives 0.70
+confidence (< the 0.75 cut) vs tesseract.js 0.82, so Rust leaves it blank (blank, never wrong).
+Traced with `rust/bench/js-ow-cell-trace.cjs` / `--example ow_cell_trace away 2 assists`.

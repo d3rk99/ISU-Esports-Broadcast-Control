@@ -423,8 +423,11 @@ fn plausible(field: &str, v: Option<Value>, glyphs: Option<i32>) -> Option<Value
     }
 }
 
-/// test/valorant-board-fixtures.cjs cellImage: lum -> bilinear `scale`x -> threshold -> black ink
-/// on white, 16 px white border. (The live capture builds the same input: crop, scale, threshold, invert.)
+/// The OCR input: test/valorant-board-fixtures.cjs cellImage = lum -> bilinear `scale`x ->
+/// `>= threshold` is ink -> black on white, 16 px white border. This is the path the JS accuracy
+/// tests prove on Derk's frames. NOT identical to the Electron live path
+/// (valorant-capture.cjs preprocessNativeImage: Electron 'best' resize, `> threshold`, no border),
+/// which cannot be reproduced bit for bit outside Electron. See rust/README.md "OCR input".
 pub fn cell_image(f: &dyn Frame, roi: Roi, scale: i32, threshold: u8) -> Gray {
     let pad = 16;
     let (w, h) = ((roi.w * scale + pad * 2) as usize, (roi.h * scale + pad * 2) as usize);

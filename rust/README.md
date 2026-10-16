@@ -30,7 +30,7 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | VALORANT top HUD (round score, timer, spike) | `valorant-hud-reader.cjs` | `isu-ocr::hud` | 154 real images identical to JS (`tests/parity_hud.rs`) |
 | Window capture: Windows Graphics Capture, size check, normalise to 1080p | `valorant-native-capture.cjs`, `valorant-capture.cjs` | `isu-ocr::capture` (windows-capture crate) | unit tests; live test on Windows: `--example live_board` |
 | VALORANT board service (sweep loop, HUD votes, workers, names, known names, colours) | `valorant-board-service.cjs` | `isu-ocr::service` | real board through 3 sweeps: agents, K/D/A, guns, shields, colours right (`tests/service.rs`) |
-| Overwatch reader | `overwatch-*.cjs` | todo | |
+| Overwatch reader: header bar, perks / player view, align, cells, ult ring + READY disc, heroes, consensus, service | `overwatch-ocr-parse.cjs`, `overwatch-hero-match.cjs`, `overwatch-ocr-service.cjs` | `isu-ocr::overwatch`, `ow_service` | 3 real boards: boxes + OCR images identical, 20/20 heroes, 79/80 stats (1 blank, traced); 108 vs 167 ms |
 | Game Bridge, spectate tracker | `electron/game-bridge.cjs`, `spectate-*` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
@@ -39,6 +39,12 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 ## Building isu-ocr
 Needs Tesseract 5 (C library). Linux: the distro package. Windows: `vcpkg install tesseract:x64-windows`,
 then `set TESSERACT_LIB_DIR=<vcpkg>\installed\x64-windows\lib` before `cargo build` and copy its DLLs next to the exe.
+
+## OCR input (one known difference from the live Electron app)
+The cell images Rust gives Tesseract are the ones the JS accuracy tests build (`cellImage` in
+test/valorant-board-fixtures.cjs and test/overwatch-ocr.test.cjs): bilinear upscale, threshold,
+white border. The Electron live path makes them with Electron's own `nativeImage.resize('best')`,
+which can't be reproduced bit for bit outside Electron. Both are validated on Derk's real frames.
 
 ## Commands
 ```
