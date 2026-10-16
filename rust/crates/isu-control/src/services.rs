@@ -27,7 +27,7 @@ pub struct Services {
 /// The folder with public/ + electron/ (packaged: next to the exe or resources\, dev: the repo).
 pub fn data_root() -> PathBuf {
     let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())).unwrap_or_default();
-    for c in [exe.join("resources"), exe.clone(), PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")] {
+    for c in [exe.join("resources"), exe.clone()].into_iter().chain(std::env::var_os("ISU_NO_DEV_ROOT").is_none().then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.."))) {
         if c.join("public").join("overlays").exists() {
             return c.canonicalize().unwrap_or(c);
         }
@@ -120,12 +120,16 @@ impl Services {
         let source: Arc<dyn isu_ocr::capture::Source> = std::env::var("ISU_CAPTURE_FILE").ok().and_then(|f| file_source(&f)).unwrap_or_else(make_source);
         let c8 = Arc::clone(&core);
         let c9 = Arc::clone(&core);
-        let board = isu_ocr::service::dev_models(&root, &cache).ok().map(|m| {
+        // English model: the repo's tesseract.js copy (dev) or tessdata/eng.traineddata next to the exe (installed)
+        let eng = isu_ocr::tess::unpack_gz_model(&root.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &cache, "eng")
+            .ok()
+            .or_else(|| root.join("tessdata/eng.traineddata").exists().then(|| root.join("tessdata")));
+        let board = eng.clone().map(|eng_dir| isu_ocr::service::Models { eng_dir, val_dir: root.join("electron/ocr-models"), templates_dir: root.join("electron") }).map(|m| {
             isu_ocr::service::BoardService::new(Arc::clone(&source), m, Box::new(move |snap| { c8.valorant_board_snapshot(&snap); }), Box::new(move |st| c9.valorant_board_status(&st)))
         });
         let c10 = Arc::clone(&core);
         let c11 = Arc::clone(&core);
-        let ow_models = isu_ocr::tess::unpack_gz_model(&root.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &cache, "eng").ok().map(|eng| isu_ocr::ow_service::Models { eng_dir: eng, ow_dir: root.join("electron/ocr-models"), data_dir: root.join("electron") });
+        let ow_models = eng.map(|eng| isu_ocr::ow_service::Models { eng_dir: eng, ow_dir: root.join("electron/ocr-models"), data_dir: root.join("electron") });
         let overwatch = ow_models.and_then(|m| isu_ocr::ow_service::OverwatchService::new(Arc::clone(&source), m, Box::new(move |snap| c10.overwatch_snapshot(&snap)), Box::new(move |st| c11.overwatch_status(&st))).ok());
 
         let me = Arc::new(Self { core: Arc::clone(&core), rt, companion, displays, rl, spectate, board, overwatch, outputs: crate::outputs::Outputs::new(files.clone()), overlay_error: Mutex::new(String::new()), repo: root.clone(), exe_dir: exe_dir.clone() });
