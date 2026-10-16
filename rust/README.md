@@ -76,3 +76,12 @@ cargo test                                   # parity tests (need node for the c
 node scripts/export-game-config.mjs          # after editing src/game-config.js
 node scripts/parity-cases.mjs                # after changing the JS logic: regenerate the cases
 ```
+
+## Installers (Windows)
+`cd rust; powershell -ExecutionPolicy Bypass -File packaging\package.ps1` builds the three apps and
+writes to `rust\release\`: a folder, a `-Portable-<version>-x64.zip` and (with Inno Setup 6 installed)
+a `-Setup-<version>-x64.exe` for each. Version = the repo's package.json unless `-Version` is given.
+Contents match the Electron builds: controller = exe + isu-outputs.exe + public\ + electron\ (models,
+templates, ocr-models) + tessdata\eng.traineddata + Tesseract DLLs + assests\rocket-league-items.csv;
+Game Bridge = exe + the OCR data + DLLs; Display Client = exe + Processing.NDI.Lib.x64.dll + NDI license.
+Installed apps find their files next to the exe (checked on Linux with the repo hidden: `ISU_NO_DEV_ROOT=1`).

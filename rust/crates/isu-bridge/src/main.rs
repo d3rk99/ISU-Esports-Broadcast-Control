@@ -43,7 +43,7 @@ fn save_config(v: &Value) {
 /// Where the models / templates are: next to the exe (packaged: resources\), else the repo (dev).
 fn data_root() -> PathBuf {
     let exe = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())).unwrap_or_default();
-    for c in [exe.join("resources"), exe.clone(), PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")] {
+    for c in [exe.join("resources"), exe.clone()].into_iter().chain(std::env::var_os("ISU_NO_DEV_ROOT").is_none().then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.."))) {
         if c.join("electron").join("valorant-agent-templates.json").exists() {
             return c;
         }
