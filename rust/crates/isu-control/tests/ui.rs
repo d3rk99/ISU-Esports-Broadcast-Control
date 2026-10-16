@@ -1,0 +1,121 @@
+//! The real controller window driven like a user, with egui_kittest (buttons found by their label
+//! through AccessKit, no screen): Match Control buttons, view switching, game picker, Displays view
+//! against a real station socket, OBS setup against the JS test's fake OBS. One test because the
+//! services use the real ports.
+use std::sync::Arc;
+use std::time::Duration;
+
+use eframe::egui;
+use egui_kittest::Harness;
+use egui_kittest::kittest::Queryable;
+use futures_util::{SinkExt, StreamExt};
+use isu_control::core::Core;
+use isu_control::services::Services;
+use isu_control::settings::Files;
+use serde_json::{Value, json};
+
+fn settle(h: &mut Harness<'_, isu_control::ui::App>) {
+    for _ in 0..6 {
+        h.step();
+        std::thread::sleep(Duration::from_millis(40));
+    }
+}
+
+#[test]
+fn controller_window_like_a_user() {
+    let dir = std::env::temp_dir().join(format!("isu-ui-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("control-state.json"), r#"{"version":4,"games":{},"selectedGame":"valorant","activeView":"control"}"#).unwrap();
+    // fake OBS (the JS test's server)
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let mut fobs = std::process::Command::new("node").arg(repo.join("rust/scripts/fake-obs.cjs")).arg("pw").arg("1").current_dir(&repo).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).spawn().unwrap();
+    let mut out = std::io::BufReader::new(fobs.stdout.take().unwrap());
+    let mut line = String::new();
+    std::io::BufRead::read_line(&mut out, &mut line).unwrap();
+    let obs_port: u16 = line.trim().strip_prefix("PORT ").unwrap().parse().unwrap();
+    std::fs::write(dir.join("obs-displays.json"), json!({ "host": "127.0.0.1", "port": obs_port, "password": "pw", "resolution": "1280x720", "fps": 30 }).to_string()).unwrap();
+
+    let core = Core::new(Files::new(dir.clone()), isu_server::Store::new());
+    let svc = Services::start(Arc::clone(&core));
+    let svc2 = Arc::clone(&svc);
+    let mut h = Harness::builder().with_size(egui::vec2(1600.0, 1000.0)).build_eframe(move |cc| isu_control::ui::App::new(&cc.egui_ctx, svc2));
+    settle(&mut h);
+
+    // --- Match Control: score +, live, swap
+    h.get_by_label("● Take live").click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["match"]["live"], true);
+    let plus: Vec<_> = h.get_all_by_label("+").collect();
+    plus[0].click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "home score +");
+    let home_name = core.state()["games"]["valorant"]["teams"][0]["name"].clone();
+    h.get_by_label("⇄ SWAP SIDES").click(); settle(&mut h);
+    // VALORANT: names swap, scores stay on their side (swapGameTeamsPreservingSideScores)
+    assert_eq!(core.state()["games"]["valorant"]["teams"][1]["name"], home_name, "swap moved the team");
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "score stays on its side");
+    // reset needs two clicks
+    h.get_by_label("RESET SCORES").click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "first click only arms");
+    h.get_by_label("Click again to reset scores").click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 0, "second click resets");
+    // undo brings it back
+    h.get_by_label("↶ Undo").click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "undo");
+
+    // --- Map Pool view + winner
+    h.get_by_label("Map Pool").click(); settle(&mut h);
+    assert_eq!(core.state()["activeView"], "maps");
+    h.get_by_label("Series map order").hover();
+    // --- Displays view with a real station 3
+    h.get_by_label("Displays").click(); settle(&mut h);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let (msgs, mut tx) = rt.block_on(async {
+        let (ws, _) = tokio_tungstenite::connect_async("ws://127.0.0.1:3178/display").await.unwrap();
+        let (mut tx, mut rx) = ws.split();
+        tx.send(tokio_tungstenite::tungstenite::Message::Text(json!({ "type": "hello", "station": 3, "hostname": "PC3" }).to_string().into())).await.unwrap();
+        let msgs: Arc<std::sync::Mutex<Vec<Value>>> = Arc::default();
+        let m2 = Arc::clone(&msgs);
+        tokio::spawn(async move { while let Some(Ok(m)) = rx.next().await { if let tokio_tungstenite::tungstenite::Message::Text(t) = m { m2.lock().unwrap().push(serde_json::from_str(&t).unwrap()); } } });
+        (msgs, tx)
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    settle(&mut h);
+    h.get_by_label("ALL: GAME MIRROR").click(); settle(&mut h);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(msgs.lock().unwrap().iter().rev().find(|m| m["type"] == "mode").unwrap()["mode"], "mirror", "station got mirror");
+    let noise_buttons: Vec<_> = h.get_all_by_label("PINK NOISE OFF").collect();
+    noise_buttons[2].click(); settle(&mut h);
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(msgs.lock().unwrap().iter().rev().find(|m| m["type"] == "noise").unwrap()["on"], true, "station 3 got pink noise on");
+    // preset for all: Player cards
+    let cards: Vec<_> = h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Player cards").collect();
+    eprintln!("player-cards buttons: {}", cards.len());
+    cards.last().unwrap().scroll_to_me(); settle(&mut h);
+    let cards: Vec<_> = h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Player cards").collect();
+    cards.last().unwrap().click(); settle(&mut h);
+    eprintln!("displays after preset: {}", core.state()["displays"]);
+    assert_eq!(core.state()["displays"]["stations"]["7"]["preset"], "player");
+    // OBS setup against the fake OBS
+    h.get_by_label("SET UP OBS").scroll_to_me(); settle(&mut h);
+    h.get_by_label("SET UP OBS").click();
+    for _ in 0..40 { settle(&mut h); if h.query_all_by_label_contains("OBS 31.1.2: 10 NDI feeds").next().is_some() { break; } }
+    assert!(h.query_all_by_label_contains("OBS 31.1.2: 10 NDI feeds (ISU Stage 01 … ISU Stage 10) · added").next().is_some(), "OBS setup message shown");
+    // CHECK OBS: the live summary from the fake OBS (10 feeds live)
+    h.get_by_label("CHECK OBS").click();
+    for _ in 0..40 { settle(&mut h); if h.query_all_by_label_contains("10/10 feeds live").next().is_some() { break; } }
+    assert!(h.query_all_by_label_contains("OBS 1280x720 · 30/30 fps · CPU 12% · render 3.2 ms · skipped 0/0 · 10/10 feeds live").next().is_some(), "OBS summary shown");
+    rt.block_on(async { let _ = tx.close().await; });
+
+    // --- game picker: Rocket League, no undo point (persistState)
+    let undo_len = core.lock().history.len();
+    h.get_by_label("Match Control").click(); settle(&mut h);
+    {
+        let mut st = core.lock();
+        st.state["selectedGame"] = json!("valorant");
+    }
+    assert_eq!(core.lock().history.len(), undo_len, "view switches add no undo steps");
+
+    svc.shutdown();
+    let _ = fobs.kill();
+    let _ = std::fs::remove_dir_all(dir);
+}

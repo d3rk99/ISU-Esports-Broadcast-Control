@@ -1,5 +1,6 @@
 //! The controller window (src/app.js render + src/styles.css look) in egui. One module per view.
 pub mod control;
+pub mod displays;
 pub mod maps;
 pub mod roster;
 pub mod roster_manager;
@@ -11,7 +12,7 @@ use eframe::egui::{self, Color32, RichText};
 use isu_core::game_config::{config, game_order, js_string};
 use serde_json::{Value, json};
 
-use isu_control::services::Services;
+use crate::services::Services;
 
 /// styles.css :root colours.
 pub mod c {
@@ -47,22 +48,23 @@ pub struct App {
     pub armed: Option<(String, std::time::Instant)>,
     pub addresses: Vec<String>,
     pub rm: roster_manager::Ui,
+    pub obs: displays::Obs,
 }
 
 const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
 
 impl App {
-    pub fn new(cc: &eframe::CreationContext<'_>, svc: Arc<Services>) -> Self {
+    pub fn new(ctx: &egui::Context, svc: Arc<Services>) -> Self {
         let mut v = egui::Visuals::dark();
         v.panel_fill = c::BLACK;
         v.window_fill = c::PANEL;
         v.extreme_bg_color = c::BLACK;
         v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, c::LINE);
         v.selection.bg_fill = c::ORANGE.gamma_multiply(0.6);
-        cc.egui_ctx.set_visuals(v);
-        let ctx = cc.egui_ctx.clone();
+        ctx.set_visuals(v);
+        let ctx = ctx.clone();
         *svc.core.repaint.lock().unwrap() = Some(Box::new(move || ctx.request_repaint()));
-        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default() }
+        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default() }
     }
 
     pub fn state(&self) -> Value {
@@ -100,7 +102,7 @@ impl App {
 
     /// One control button through isu_core::controls (same as the app.js handler).
     pub fn control(&self, action: &str, index: usize, winner: Option<f64>) {
-        let now = isu_control::core::now_ms();
+        let now = crate::core::now_ms();
         let mut msg = None;
         self.svc.core.commit("Changes saved", |st| msg = isu_core::controls::apply(st, action, index, winner, now));
         if let Some(m) = msg {
@@ -131,7 +133,8 @@ impl App {
         });
         if pick != game {
             // game-select change: selectedGame + RL connection follow
-            self.svc.core.commit("Active title changed", |s| s["selectedGame"] = json!(pick));
+            // game-select change: state.selectedGame + persistState() (no undo point) + RL connection
+            self.set_and_persist(|s| s["selectedGame"] = json!(pick));
             self.svc.sync_rl();
         }
         ui.add_space(18.0);
@@ -207,6 +210,7 @@ impl eframe::App for App {
                 "control" => control::view(self, ui, &st),
                 "maps" => maps::view(self, ui, &st),
                 "roster" => roster::view(self, ui, &st),
+                "stage" => displays::view(self, ui, &st),
                 other => {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));

@@ -1,8 +1,6 @@
 //! ISU Esports Broadcast Control (controller) in Rust + egui.
-//! electron/main.cjs: single instance, services, then the controller window (src/app.js).
+//! electron/main.cjs: services, then the controller window (src/app.js).
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
-
-mod ui;
 
 use std::sync::Arc;
 
@@ -19,5 +17,5 @@ fn main() -> eframe::Result<()> {
         viewport: egui::ViewportBuilder::default().with_title("ISU Esports Broadcast Control").with_inner_size([1480.0, 940.0]).with_min_inner_size([1100.0, 700.0]),
         ..Default::default()
     };
-    eframe::run_native("ISU Esports Broadcast Control", opts, Box::new(move |cc| Ok(Box::new(ui::App::new(cc, svc)))))
+    eframe::run_native("ISU Esports Broadcast Control", opts, Box::new(move |cc| Ok(Box::new(isu_control::ui::App::new(&cc.egui_ctx, svc)))))
 }
