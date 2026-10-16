@@ -347,3 +347,12 @@ pub fn chip(ui: &mut egui::Ui, text: &str, fg: egui::Color32, bg: egui::Color32)
         ui.add(egui::Label::new(RichText::new(text).size(9.5).strong().color(fg)).truncate());
     }).response
 }
+
+/// Single instance (app.requestSingleInstanceLock): an OS file lock in `dir`. Returns the open
+/// file (keep it alive for the whole run) or None when another copy already holds the lock.
+pub fn single_instance(dir: &std::path::Path, name: &str) -> Option<std::fs::File> {
+    let _ = std::fs::create_dir_all(dir);
+    let f = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(name)).ok()?;
+    f.try_lock().ok().map(|_| f)
+}
+

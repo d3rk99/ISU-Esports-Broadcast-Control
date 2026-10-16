@@ -249,7 +249,7 @@ async fn link_loop(sh: Arc<Shared>) {
                             let Ok(msg) = serde_json::from_str::<Value>(&t) else { continue };
                             match msg["type"].as_str() {
                                 Some("welcome") => { sh.live.lock().unwrap().link = ("connected".into(), String::new()); sh.repaint(); }
-                                Some("mode") => sh.apply_mode(msg["mode"].as_str().unwrap_or("ndi"), &isu_core::game_config::js_string(Some(&msg["source"])).replace("null", "")),
+                                Some("mode") => sh.apply_mode(msg["mode"].as_str().unwrap_or("ndi"), &isu_core::game_config::text(msg.get("source"))),
                                 Some("noise") => sh.apply_noise(&msg),
                                 _ => {}
                             }
@@ -550,14 +550,15 @@ fn place_window(ctx: &egui::Context, cfg: &Value) {
 fn main() -> eframe::Result<()> {
     std::panic::set_hook(Box::new(|p| log_line(&format!("CRASH {p}"))));
     log_line(&format!("start v{VERSION} {}", std::env::consts::OS));
-    // single instance: a lock file next to the config
-    let lock = user_data().join("display-client.lock");
-    let _ = std::fs::create_dir_all(user_data());
+    // single instance (requestSingleInstanceLock): a second copy would fight over the station
+    let Some(_lock) = isu_ui::single_instance(&user_data(), "display-client.lock") else {
+        log_line("another Display Client is already running: quitting");
+        return Ok(());
+    };
     let opts = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_title("ISU Display Client").with_fullscreen(true).with_decorations(false).with_taskbar(false),
         ..Default::default()
     };
-    let _ = lock;
     eframe::run_native("ISU Display Client", opts, Box::new(|cc| Ok(Box::new(App::new(cc)))))
 }
 

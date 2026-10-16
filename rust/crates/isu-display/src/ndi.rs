@@ -158,8 +158,9 @@ impl Receiver {
                 Err(e) => return st(Status { state: "error".into(), error: e, source: wanted, fps: 0 }),
             };
             let live = || ep.load(Ordering::Acquire) == epoch;
-            let name = CString::new("ISU Display Client").unwrap();
-            let extra = CString::new(hosts).unwrap();
+            let name = c"ISU Display Client".to_owned();
+            // a stray NUL in the settings must not crash the receiver thread
+            let extra = CString::new(hosts.replace('\0', "")).unwrap_or_default();
             while live() {
                 st(Status { state: "searching".into(), error: String::new(), source: wanted.clone(), fps: 0 });
                 let fc = FindCreate { show_local_sources: true, p_groups: std::ptr::null(), p_extra_ips: if extra.as_bytes().is_empty() { std::ptr::null() } else { extra.as_ptr() } };

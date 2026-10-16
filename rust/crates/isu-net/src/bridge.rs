@@ -364,8 +364,8 @@ impl GameBridge {
                         m = wrx.next() => match m {
                             Some(Ok(Message::Text(t))) => {
                                 if let Ok(msg) = serde_json::from_str::<Value>(&t) {
-                                    if msg["type"] == "spectate-candidates" && msg["candidates"].is_array() {
-                                        if let Some(sp) = &me.spectator { sp.set_candidates(msg["candidates"].as_array().unwrap(), &msg["sides"]); }
+                                    if let (true, Some(list)) = (msg["type"] == "spectate-candidates", msg["candidates"].as_array()) {
+                                        if let Some(sp) = &me.spectator { sp.set_candidates(list, &msg["sides"]); }
                                     }
                                 }
                             }

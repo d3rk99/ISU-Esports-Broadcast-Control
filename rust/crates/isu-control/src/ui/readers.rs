@@ -170,7 +170,7 @@ pub fn valorant(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                             let tx = app.toast_tx.clone();
                             let core = std::sync::Arc::clone(&app.svc.core);
                             std::thread::spawn(move || match b.sweep() {
-                                Ok(_) => { core.valorant_board_snapshot(&b.snapshot()); let _ = tx.send("Read the VALORANT scoreboard once".into()); }
+                                Ok(_) => { if let Some(h) = core.valorant_board_snapshot(&b.snapshot()) { crate::services::send_known_names(&core, Some(&b), &h); } let _ = tx.send("Read the VALORANT scoreboard once".into()); }
                                 Err(e) => { let _ = tx.send(format!("Test read failed: {e}")); }
                             });
                         } else {

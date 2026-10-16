@@ -330,7 +330,11 @@ impl SpectateReceiver {
             };
             me.set_status("listening", &format!("Waiting for the spectator Game Bridge on port {}", s.port));
             loop {
-                let Ok((tcp, _)) = listener.accept().await else { continue };
+                let Ok((tcp, _)) = listener.accept().await else {
+                    // accept errors (fd limit, network down) would spin the loop: back off a little
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    continue;
+                };
                 let me2 = Arc::clone(&me);
                 let token = s.token.clone();
                 let port = s.port;

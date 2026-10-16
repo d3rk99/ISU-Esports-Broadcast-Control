@@ -125,6 +125,14 @@ pub fn js_string(v: Option<&Value>) -> String {
     }
 }
 
+/// String(value ?? ''): missing / null -> "", everything else like js_string.
+pub fn text(v: Option<&Value>) -> String {
+    match v {
+        None | Some(Value::Null) => String::new(),
+        x => js_string(x),
+    }
+}
+
 pub fn num_to_js(x: f64) -> String {
     if x.is_nan() {
         "NaN".into()

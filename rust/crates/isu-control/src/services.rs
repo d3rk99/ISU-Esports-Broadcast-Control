@@ -128,9 +128,19 @@ impl Services {
         let eng = isu_ocr::tess::unpack_gz_model(&root.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &cache, "eng")
             .ok()
             .or_else(|| root.join("tessdata/eng.traineddata").exists().then(|| root.join("tessdata")));
+        // The reader gets the roster gamertags as hints whenever they change (setValorantBoardKnownNames).
+        let board_slot: Arc<std::sync::OnceLock<std::sync::Weak<isu_ocr::service::BoardService>>> = Arc::default();
+        let slot2 = Arc::clone(&board_slot);
         let board = eng.clone().map(|eng_dir| isu_ocr::service::Models { eng_dir, val_dir: root.join("electron/ocr-models"), templates_dir: root.join("electron") }).map(|m| {
-            isu_ocr::service::BoardService::new(Arc::clone(&source), m, Box::new(move |snap| { c8.valorant_board_snapshot(&snap); }), Box::new(move |st| c9.valorant_board_status(&st)))
+            isu_ocr::service::BoardService::new(Arc::clone(&source), m, Box::new(move |snap| {
+                if let Some(hint) = c8.valorant_board_snapshot(&snap) {
+                    send_known_names(&c8, slot2.get().and_then(std::sync::Weak::upgrade).as_deref(), &hint);
+                }
+            }), Box::new(move |st| c9.valorant_board_status(&st)))
         });
+        if let Some(b) = &board {
+            let _ = board_slot.set(Arc::downgrade(b));
+        }
         let c10 = Arc::clone(&core);
         let c11 = Arc::clone(&core);
         let ow_models = eng.map(|eng| isu_ocr::ow_service::Models { eng_dir: eng, ow_dir: root.join("electron/ocr-models"), data_dir: root.join("electron") });
@@ -233,6 +243,21 @@ impl Services {
         self.displays.stop();
         self.companion.stop();
     }
+}
+
+/// setValorantBoardKnownNames(hint), only when the list changed (app.js valorantKnownNamesSent).
+pub fn send_known_names(core: &Core, board: Option<&isu_ocr::service::BoardService>, hint: &Value) {
+    let Some(b) = board else { return };
+    let key = hint.to_string();
+    {
+        let mut g = core.lock();
+        if g.known_names_sent == key {
+            return;
+        }
+        g.known_names_sent = key;
+    }
+    let list = |side: &str| -> Vec<String> { hint[side].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect() };
+    b.set_known_names(&list("home"), &list("away"));
 }
 
 /// dispatchCompanionStageAction(action).

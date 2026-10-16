@@ -482,7 +482,11 @@ impl RocketLeagueService {
             };
             me.emit("listening", &format!("Waiting for Game PC on port {}", s.bridge_port), json!({ "transport": "bridge" }));
             loop {
-                let Ok((tcp, _)) = listener.accept().await else { continue };
+                let Ok((tcp, _)) = listener.accept().await else {
+                    // accept errors (fd limit, network down) would spin the loop: back off a little
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    continue;
+                };
                 let me2 = Arc::clone(&me);
                 let token = s.bridge_token.clone();
                 let port = s.bridge_port;

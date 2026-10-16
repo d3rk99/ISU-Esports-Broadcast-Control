@@ -11,6 +11,11 @@ use isu_control::settings::Files;
 
 fn main() -> eframe::Result<()> {
     let files = Files::new(Files::default_dir());
+    // one controller at a time (ports 3174/3176/3178 can only be opened once)
+    let Some(_lock) = isu_ui::single_instance(&files.dir, "controller.lock") else {
+        rfd::MessageDialog::new().set_title("ISU Esports Broadcast Control").set_description("Broadcast Control is already running on this PC. Use the open window (check the taskbar).").set_level(rfd::MessageLevel::Info).show();
+        return Ok(());
+    };
     let core = Core::new(files, isu_server::Store::new());
     let svc = Services::start(Arc::clone(&core));
     // initialize(): open the Program outputs once at start unless turned off (ISU_NO_OUTPUTS=1 for tests)

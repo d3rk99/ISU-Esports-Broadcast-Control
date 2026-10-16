@@ -420,6 +420,10 @@ impl eframe::App for App {
 }
 
 fn main() -> eframe::Result<()> {
+    // one Game Bridge at a time (two would both send to the Graphics PC)
+    let Some(_lock) = isu_ui::single_instance(&user_data(), "bridge.lock") else {
+        return Ok(());
+    };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([920.0, 900.0]).with_min_inner_size([760.0, 700.0]).with_title("ISU Esports Game Bridge"),
         ..Default::default()

@@ -15,6 +15,9 @@ use crate::settings::Files;
 
 pub const HISTORY: usize = 30;
 
+/// Parts of the state that only live feeds write; Undo keeps their current value.
+const LIVE_PATHS: [&str; 4] = ["/games/rocketleague/rocketLeague/live", "/games/valorant/valorantBoard", "/games/valorant/valorantOcr/live/match", "/games/overwatch/overwatchOcr"];
+
 pub fn now_ms() -> f64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
 }
@@ -33,6 +36,8 @@ pub struct Inner {
     pub display_status: Value,
     pub spectate: Value,
     pub rl_advance_at: Option<Instant>,
+    /// roster gamertags for the VALORANT reader (app.js setValorantBoardKnownNames), last one sent
+    pub known_names_sent: String,
     pub dirty_ui: bool,
 }
 
@@ -105,7 +110,16 @@ impl Core {
 
     pub fn undo(&self) -> bool {
         let mut g = self.lock();
-        let Some(prev) = g.history.pop() else { return false };
+        let Some(mut prev) = g.history.pop() else { return false };
+        // Undo is for the operator's edits. Live readings (Rocket League feed, scoreboard readers)
+        // always stay at their newest value, so Undo mid-game never rolls back the live clock/board.
+        for p in LIVE_PATHS {
+            if let Some(now) = g.state.pointer(p).cloned() {
+                if let Some(slot) = prev.pointer_mut(p) {
+                    *slot = now;
+                }
+            }
+        }
         g.state = prev;
         g.save_status = "Undid last change".into();
         drop(g);
@@ -132,7 +146,7 @@ impl Core {
         if state.get("selectedGame").and_then(Value::as_str) == Some("rocketleague") {
             let sp = isu_ocr::spectate::rocket_league_spectated(state, now_ms());
             self.store.lock().spectated = isu_server::store::Spectated {
-                name: js_string(sp.get("name")).replace("null", ""),
+                name: isu_core::game_config::text(sp.get("name")),
                 station: sp.get("station").and_then(Value::as_f64),
                 side: sp.get("side").and_then(Value::as_str).unwrap_or("").into(),
                 team: sp.get("team").and_then(Value::as_str).unwrap_or("").into(),
@@ -303,7 +317,7 @@ impl Core {
                 let (mapped, decision) = isu_core::boards::map_board_to_teams(game, &live, prev_top.map(|t| json!({ "top": t })).as_ref());
                 g.valorant_board["decision"] = decision.clone();
                 g.state["games"]["valorant"]["valorantBoard"] = json!({ "live": mapped });
-                let tags = |r: &Value| -> Vec<String> { ["varsity", "jv"].iter().flat_map(|k| r.get(*k).and_then(Value::as_array).cloned().unwrap_or_default()).map(|p| js_string(p.get("handle")).replace("null", "").trim().to_string()).filter(|s| !s.is_empty()).collect() };
+                let tags = |r: &Value| -> Vec<String> { ["varsity", "jv"].iter().flat_map(|k| r.get(*k).and_then(Value::as_array).cloned().unwrap_or_default()).map(|p| isu_core::game_config::text(p.get("handle")).trim().to_string()).filter(|s| !s.is_empty()).collect() };
                 let game = &g.state["games"]["valorant"];
                 let top_home = decision["top"] == "home";
                 Some((tags(if top_home { &game["rosters"] } else { &game["awayRosters"] }), tags(if top_home { &game["awayRosters"] } else { &game["rosters"] })))

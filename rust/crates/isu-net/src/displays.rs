@@ -138,7 +138,11 @@ impl DisplayManager {
                 let me = Arc::clone(self);
                 let h = tokio::spawn(async move {
                     loop {
-                        let Ok((tcp, _)) = l.accept().await else { continue };
+                        let Ok((tcp, _)) = l.accept().await else {
+                    // accept errors (fd limit, network down) would spin the loop: back off a little
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    continue;
+                };
                         let me2 = Arc::clone(&me);
                         tokio::spawn(async move { me2.accept(tcp).await });
                     }

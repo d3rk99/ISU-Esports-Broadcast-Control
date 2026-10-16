@@ -102,3 +102,17 @@ fn rocket_league_simulator_through_core() {
     assert_eq!(c.state()["games"]["rocketleague"]["activeMap"], 1, "advanced after the win");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn undo_keeps_live_feed_data() {
+    let dir = std::env::temp_dir().join(format!("isu-undo-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let core = isu_control::core::Core::new(isu_control::settings::Files::new(dir.clone()), isu_server::Store::new());
+    core.commit("edit", |st| st["games"]["rocketleague"]["teams"][0]["name"] = serde_json::json!("EDITED"));
+    // a live packet lands after the edit
+    core.lock().state["games"]["rocketleague"]["rocketLeague"]["live"]["timeSeconds"] = serde_json::json!(123);
+    assert!(core.undo());
+    let st = core.state();
+    assert_ne!(st["games"]["rocketleague"]["teams"][0]["name"], "EDITED", "the edit is undone");
+    assert_eq!(st["games"]["rocketleague"]["rocketLeague"]["live"]["timeSeconds"], 123, "the live clock is not rolled back");
+}
