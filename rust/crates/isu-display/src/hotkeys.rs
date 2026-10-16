@@ -1,5 +1,6 @@
 //! Thread-owned Windows hotkeys, like Electron's globalShortcut registrations.
 #[derive(Clone, Copy)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum Action { Settings, CursorLock }
 
 pub struct Hotkeys {

@@ -245,3 +245,19 @@ impl Receiver {
         self.epoch.fetch_add(1, Ordering::AcqRel);
     }
 }
+
+#[cfg(test)]
+mod layout {
+    use super::*;
+    use std::mem::{offset_of, size_of};
+    /// x64 C layout of the NDI 6 SDK structs (Processing.NDI.Find.h / Recv.h / structs.h):
+    /// bool = 1 byte, enums = int, pointers 8.
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn struct_layouts_match_the_sdk() {
+        assert_eq!((size_of::<FindCreate>(), offset_of!(FindCreate, p_groups), offset_of!(FindCreate, p_extra_ips)), (24, 8, 16));
+        assert_eq!(size_of::<Source>(), 16);
+        assert_eq!((offset_of!(RecvCreateV3, color_format), offset_of!(RecvCreateV3, bandwidth), offset_of!(RecvCreateV3, allow_video_fields), offset_of!(RecvCreateV3, p_ndi_recv_name), size_of::<RecvCreateV3>()), (16, 20, 24, 32, 40));
+        assert_eq!((offset_of!(VideoFrameV2, fourcc), offset_of!(VideoFrameV2, frame_format_type), offset_of!(VideoFrameV2, timecode), offset_of!(VideoFrameV2, p_data), offset_of!(VideoFrameV2, line_stride_in_bytes), offset_of!(VideoFrameV2, p_metadata), offset_of!(VideoFrameV2, timestamp), size_of::<VideoFrameV2>()), (8, 24, 32, 40, 48, 56, 64, 72));
+    }
+}

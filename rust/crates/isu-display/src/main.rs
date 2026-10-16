@@ -7,6 +7,7 @@
 mod cursor;
 mod hotkeys;
 mod mirror;
+mod monitors;
 mod ndi;
 mod noise;
 
@@ -308,6 +309,7 @@ struct App {
     saved_at: Option<std::time::Instant>,
     devices: Vec<String>,
     hotkeys: hotkeys::Hotkeys,
+    placed: bool,
 }
 
 impl App {
@@ -350,7 +352,7 @@ impl App {
         sh.apply_mode("ndi", ""); // NDI by default, before the controller answers
         rt.spawn(link_loop(Arc::clone(&sh)));
         log_line("ready");
-        Self { sh, _rt: rt, tex: None, settings: false, form: cfg, saved_at: None, devices: noise::Noise::devices(), hotkeys: hotkeys::Hotkeys::new(cc.egui_ctx.clone()) }
+        Self { sh, _rt: rt, tex: None, settings: false, form: cfg, saved_at: None, devices: noise::Noise::devices(), hotkeys: hotkeys::Hotkeys::new(cc.egui_ctx.clone()), placed: false }
     }
 
     fn output(&mut self, ui: &mut egui::Ui) {
@@ -458,6 +460,8 @@ impl App {
                 f = cfg.clone();
                 self.sh.apply_cursor_lock();
                 self.sh.apply_noise_device();
+                if before["stageDisplay"] != cfg["stageDisplay"] { place_window(&ctx, &cfg); }
+                if before["playerDisplay"] != cfg["playerDisplay"] && self.sh.live.lock().unwrap().mode.0 == "mirror" { self.sh.apply_mode("mirror", ""); }
                 if ["controller", "port", "key", "station"].iter().any(|k| before[*k] != cfg[*k]) { self.sh.reconnect.notify_waiters(); }
                 else { let m = self.sh.live.lock().unwrap().mode.clone(); if m.0 == "ndi" { self.sh.apply_mode("ndi", &m.1); } }
                 self.saved_at = Some(std::time::Instant::now());
@@ -491,6 +495,11 @@ impl eframe::App for App {
             self.sh.live.lock().unwrap().cfg = cfg;
             self.sh.apply_cursor_lock();
         }
+        if !self.placed {
+            self.placed = true;
+            let cfg = self.sh.live.lock().unwrap().cfg.clone();
+            place_window(&ctx, &cfg);
+        }
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| self.output(ui));
         if self.settings { self.settings_window(&ctx); }
         ctx.request_repaint_after(Duration::from_millis(16));
@@ -501,6 +510,19 @@ impl eframe::App for App {
         self.sh.ndi.stop();
         self.sh.mirror.stop();
     }
+}
+
+/// createWindow(): the audience window on displayAt(stageDisplay, more than one screen ? 1 : 0),
+/// full screen. egui works in points, so the physical rect is divided by the scale factor.
+fn place_window(ctx: &egui::Context, cfg: &Value) {
+    let list = monitors::all();
+    let Some(m) = monitors::at(&list, cfg["stageDisplay"].as_u64().unwrap_or(2) as usize, if list.len() > 1 { 1 } else { 0 }) else { return };
+    let ppp = ctx.pixels_per_point().max(0.1);
+    let [l, t, r, b] = m.rect;
+    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(false));
+    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(egui::pos2(l as f32 / ppp, t as f32 / ppp)));
+    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2((r - l) as f32 / ppp, (b - t) as f32 / ppp)));
+    ctx.send_viewport_cmd(egui::ViewportCommand::Fullscreen(true));
 }
 
 fn main() -> eframe::Result<()> {

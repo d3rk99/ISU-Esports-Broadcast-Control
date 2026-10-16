@@ -57,14 +57,12 @@ impl Drop for CursorLock {
 
 #[cfg(windows)]
 mod win {
-    use std::ffi::c_void;
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
     struct Rect { left: i32, top: i32, right: i32, bottom: i32 }
     #[link(name = "user32")]
     unsafe extern "system" {
         fn ClipCursor(r: *const Rect) -> i32;
-        fn EnumDisplayMonitors(hdc: *mut c_void, clip: *const Rect, cb: extern "system" fn(*mut c_void, *mut c_void, *mut Rect, isize) -> i32, data: isize) -> i32;
     }
     pub fn clip(r: Option<[i32; 4]>) {
         unsafe {
@@ -74,18 +72,9 @@ mod win {
             }
         }
     }
-    extern "system" fn cb(_m: *mut c_void, _dc: *mut c_void, r: *mut Rect, data: isize) -> i32 {
-        let v = unsafe { &mut *(data as *mut Vec<[i32; 4]>) };
-        let r = unsafe { *r };
-        v.push([r.left, r.top, r.right, r.bottom]);
-        1
-    }
-    /// Physical-pixel rect of monitor `index` (1-based), sorted by y then x, inset 2 px.
+    /// Physical-pixel rect of monitor `index` (1-based, displayAt(index, 0) order), inset 2 px.
     pub fn monitor_rect(index: usize) -> Option<[i32; 4]> {
-        let mut v: Vec<[i32; 4]> = Vec::new();
-        unsafe { EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), cb, &mut v as *mut _ as isize) };
-        v.sort_by_key(|r| (r[1], r[0]));
-        let r = v.get(index.saturating_sub(1)).or_else(|| v.first())?;
+        let r = crate::monitors::at(&crate::monitors::all(), index, 0)?.rect;
         Some([r[0] + 2, r[1] + 2, r[2] - 2, r[3] - 2])
     }
 }
