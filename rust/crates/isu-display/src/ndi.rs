@@ -4,7 +4,7 @@
 //! libndi.so), like the JS bundle: a missing runtime is a status, not a crash.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// matches(sourceName, wanted): exact, or "MACHINE (wanted)".
@@ -67,7 +67,15 @@ struct Lib {
 }
 
 /// Where the runtime is looked for: next to the exe, NDI_RUNTIME_DIR_V6/V5, then the system path.
-fn load() -> Result<Lib, String> {
+fn load() -> Result<Arc<Lib>, String> {
+    // NDI owns background threads beyond an individual finder/receiver. Unloading
+    // its DLL on a mode change can leave those threads executing unmapped code.
+    // Share one initialized runtime and retain it until the process exits.
+    static RUNTIME: OnceLock<Result<Arc<Lib>, String>> = OnceLock::new();
+    RUNTIME.get_or_init(|| load_library().map(Arc::new)).clone()
+}
+
+fn load_library() -> Result<Lib, String> {
     let name = if cfg!(windows) { "Processing.NDI.Lib.x64.dll" } else if cfg!(target_os = "macos") { "libndi.dylib" } else { "libndi.so.6" };
     let mut tries: Vec<std::path::PathBuf> = Vec::new();
     if let Some(d) = std::env::current_exe().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
