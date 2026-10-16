@@ -95,8 +95,14 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
         rocket_league_panel(app, ui, game);
         ui.add_space(10.0);
     }
+    if key == "valorant" {
+        super::readers::valorant(app, ui, st);
+        ui.add_space(10.0);
+    }
     if key == "overwatch" {
         overwatch_bans(app, ui, game, cfg);
+        ui.add_space(10.0);
+        super::readers::overwatch(app, ui, st);
         ui.add_space(10.0);
     }
 

@@ -62,6 +62,20 @@ fn controller_window_like_a_user() {
     h.get_by_label("↶ Undo").click(); settle(&mut h);
     assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 1, "undo");
 
+    // --- VALORANT reader panel: a board snapshot shows up in the table, round override
+    core.valorant_board_snapshot(&json!({ "teams": { "home": { "players": [{ "name": "Sn0wfal", "agent": "jett", "kills": 7, "credits": 4300, "shield": "heavy", "row": 0 }] }, "away": { "players": [{ "name": "santi", "agent": "sova", "row": 0 }] } }, "colors": { "home": "red" }, "match": { "homeScore": 0, "awayScore": 0, "timer": { "display": "1:23" } }, "status": { "state": "reading", "message": "board found" } }));
+    settle(&mut h);
+    assert!(h.query_all_by_label("4,300").next().is_some(), "credits with a thousands comma");
+    assert!(h.query_all_by_label_contains("ROUND SCORE 0 – 0 · TIMER 1:23").next().is_some(), "round score line");
+    assert!(h.query_all_by_label_contains("READING · board found").next().is_some(), "reader status");
+    // the top block goes to the team the mapping decided (isu_core::boards, parity-tested)
+    let top = core.lock().valorant_board["decision"]["top"].as_str().unwrap().to_string();
+    let other = if top == "home" { "away" } else { "home" };
+    let live = core.state()["games"]["valorant"]["valorantBoard"]["live"].clone();
+    assert_eq!(live["teams"][top.as_str()]["players"][0]["name"], "Sn0wfal", "top block published under the decided team");
+    assert_eq!(live["teams"][other]["players"][0]["name"], "santi");
+    assert!(h.query_all_by_label_contains("TEAMS ON THE BOARD: top = ").next().is_some(), "decision line shown");
+
     // --- Map Pool view + winner
     h.get_by_label("Map Pool").click(); settle(&mut h);
     assert_eq!(core.state()["activeView"], "maps");

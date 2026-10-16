@@ -3,6 +3,7 @@ pub mod control;
 pub mod displays;
 pub mod maps;
 pub mod outputs;
+pub mod readers;
 pub mod settings;
 pub mod roster;
 pub mod roster_manager;
