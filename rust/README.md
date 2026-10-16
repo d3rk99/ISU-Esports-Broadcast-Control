@@ -27,7 +27,10 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Controller UI (native egui, Derk chose option 2: everything in Rust) | `src/app.js` + panels | todo | |
 | VALORANT board reader: align, cells, credits, glyph count, parse, read ladder (native Tesseract, Derk OK'd 2026-10-15) | `electron/valorant-board-parse.cjs`, `valorant-ocr-engine.cjs` | `isu-ocr::board`, `tess` | real frames: 139/140 cells identical to JS; Windows 7900X: 2.0-2.8x faster, 6.5x less RAM (`bench/RESULTS.md`) |
 | VALORANT agents, guns, shields, block colours, consensus, player identity (rows re-sort) | `valorant-board-parse.cjs`, `valorant-board-identity.cjs` | `isu-ocr::icons`, `consensus`, `board::block_color` | real frames + scripted sweeps: identical to JS (`tests/parity_board.rs`) |
-| VALORANT board service (sweep loop), HUD reader, window capture; Overwatch reader | `valorant-board-service.cjs`, `valorant-hud-reader.cjs`, `valorant-*capture.cjs`, `overwatch-*.cjs` | todo | |
+| VALORANT top HUD (round score, timer, spike) | `valorant-hud-reader.cjs` | `isu-ocr::hud` | 154 real images identical to JS (`tests/parity_hud.rs`) |
+| Window capture: Windows Graphics Capture, size check, normalise to 1080p | `valorant-native-capture.cjs`, `valorant-capture.cjs` | `isu-ocr::capture` (windows-capture crate) | unit tests; live test on Windows: `--example live_board` |
+| VALORANT board service (sweep loop, HUD votes, workers, names, known names, colours) | `valorant-board-service.cjs` | `isu-ocr::service` | real board through 3 sweeps: agents, K/D/A, guns, shields, colours right (`tests/service.rs`) |
+| Overwatch reader | `overwatch-*.cjs` | todo | |
 | Game Bridge, spectate tracker | `electron/game-bridge.cjs`, `spectate-*` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
