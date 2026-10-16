@@ -113,8 +113,9 @@ impl Services {
                 });
                 c6.lock().spectate["spectated"] = r;
                 c6.lock().dirty_ui = true;
+                c6.repaint();
             }),
-            Arc::new(move |st| { c7.lock().spectate["status"] = st; c7.lock().dirty_ui = true; }),
+            Arc::new(move |st| { c7.lock().spectate["status"] = st; c7.lock().dirty_ui = true; c7.repaint(); }),
         );
 
         // Scoreboard readers (Tesseract + window capture); missing models = reader off, app runs.

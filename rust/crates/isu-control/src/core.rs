@@ -78,7 +78,7 @@ impl Core {
         self.lock().state.clone()
     }
 
-    fn repaint(&self) {
+    pub(crate) fn repaint(&self) {
         // egui may already be rendering while a service requests a repaint. Never hold
         // our callback lock while entering egui: the UI also requests repaints on edits.
         let repaint = self.repaint.lock().unwrap().clone();
