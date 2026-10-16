@@ -36,7 +36,9 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Rocket League Stats API: local WebSocket 49124 / TCP 49123 fallback, bridge receiver, watchdog, throttle, simulator | `rocket-league-service.cjs` | `isu-net::rocket_league` | settings / stream parser / envelopes / full simulator run identical to JS; real sockets: bridge + split TCP stream |
 | Game Bridge logic (settings, link to the Graphics PC, RL forwarding, portrait + name spectate loops) | `game-bridge.cjs` | `isu-net::bridge` | settings parity; real sockets: Rust bridge -> Rust Graphics PC receives the RL simulator; wrong key = waiting |
 | Game Bridge app (window, config file + legacy fallback) | `bridge-main.cjs`, `bridge/index.html` | `isu-bridge` (egui) -> `isu-game-bridge` | form tests; renders on a virtual screen (RL + VALORANT modes checked by OCR of the screenshot) |
-| Display Client + Display Manager | `electron/displays/` | todo | |
+| Display Manager (3178 /display: hello/status/welcome/mode/noise, key 4003, station in use 4009, groups, pink-noise toggle by majority) | `displays/display-manager.cjs` | `isu-net::displays` | test/display-manager.test.cjs ported 1:1 (real sockets): all pass; plain HTTP 426 |
+| Display Client app (config + CLI args, link with backoff, NDI receiver via the NDI runtime DLL, game mirror, pink noise, cursor lock, start with Windows, settings, crash log) | `displays/display-client-main.cjs`, `ndi-receiver.cjs`, `cursor-lock.cjs`, `client/*` | `isu-display` -> `isu-display-client` | pink noise sample-for-sample = noise.js; normalize = JS; real client <-> real manager on a virtual screen (mode / noise / status round trip, STATION 03 screen) |
+| OBS setup for the stage displays (obs-websocket) | `displays/obs-displays.cjs` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
 | Restream | already Rust (`../restream`) | — | |
 
@@ -53,8 +55,13 @@ which can't be reproduced bit for bit outside Electron. Both are validated on De
 ## Running the apps
 ```
 cargo run --release -p isu-bridge          # ISU Esports Game Bridge (Game PC)
+cargo run --release -p isu-display -- --station=3 --controller=192.168.1.20   # ISU Display Client (station PC)
 ```
 Linux virtual screen for testing: `Xvfb :97 -extension GLX` (Xvfb with GLX crashes in the sandbox).
+
+## NDI runtime
+The Display Client loads the NDI runtime at start like the Electron build: `Processing.NDI.Lib.x64.dll`
+next to the exe (or NDI_RUNTIME_DIR_V6 / V5, or the NDI Runtime installer). Missing = the screen says so.
 
 ## Commands
 ```
