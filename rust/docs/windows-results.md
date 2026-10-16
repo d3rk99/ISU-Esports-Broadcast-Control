@@ -2,6 +2,57 @@
 
 Branch: `rust-rewrite`. Windows PC: Ryzen 9 7900X, Rust 1.99.1 MSVC, Node 22.12.0, vcpkg Tesseract 5.5.3 (`tesseract55.lib`).
 
+## Installer validation — `5e18805` plus Windows fixes
+
+Pulled and merged `5e18805`, retaining the earlier local live-verification fixes. Installed Inno Setup 6.7.3 through winget because it was missing. Ran `powershell -ExecutionPolicy Bypass -File packaging\package.ps1` from `rust/`, with `TESSERACT_LIB_DIR=C:\vcpkg\installed\x64-windows\lib`. The final packaging run passed and produced all three portable ZIPs and all three version 0.6.2 installers in `rust/release/`.
+
+| Packaging issue | Fix |
+| --- | --- |
+| Original script's `Compress-Archive` failed on the 8,306,245,499-byte optional RL asset ZIP | Use Windows tar's ZIP64 writer. Store the controller portable ZIP without recompressing its already-compressed asset pack. Enable Inno disk spanning and store that pack without compression. Keep the controller's approximately 8 GB `Setup-0.6.2-x64-1.bin` beside its Setup executable. |
+| Inno installed per user was not found | Search `%LOCALAPPDATA%\Programs\Inno Setup 6` as well as Program Files. |
+| Packages omitted MSVC runtime imports, which this developer PC supplies globally | Copy x64 CRT redistributable DLLs from Visual Studio's Redist directory to each app. Discover dumpbin through Visual Studio and audit imports of all packaged EXEs/DLLs, failing for missing non-system DLLs. |
+| Installed controller TEST READ could not load the bundled English model through a canonical Windows path | Strip the Win32 verbatim prefix at the Tesseract C API boundary, including UNC handling. Added a regression that loads the real model from a canonical path. |
+
+Fix commits: `8110f0a`, `0d52560`, `2381db7`. The release build passed. Final `cargo test --workspace -- --test-threads=1` passed **67 tests, zero failures**, including the model-path regression, JS parity, real-socket services and GUI interactions. No tests were weakened or removed.
+
+Each final Setup.exe was installed on this PC in current-user mode, all exit codes 0, and each app was launched using its generated Start menu `.lnk`. Installed executable hashes matched their packaged counterparts. Tests used isolated settings under `%TEMP%\isu-installed-validation`, an unrelated working directory, `ISU_NO_DEV_ROOT=1`, no Tesseract build variable, and a PATH containing only Windows directories. Rust/vcpkg/Node were not on the launched apps' PATH. Module inspection confirmed Tesseract, Leptonica and MSVC CRT loaded from the installed controller/bridge folders; NDI loaded from the installed Display Client folder with the NDI runtime environment overrides removed.
+
+| Installed app check | Result |
+| --- | --- |
+| Controller shortcut / overlays | PASS: responsive native window; Scoreboard, Program, Roster and Map Pool pages returned HTTP 200 on 3174. |
+| Controller OCR TEST READ | PASS after path fix: bundled-model Overwatch fixture read 79/90 cells, with confirmed values including damage 215; repeated reads remained responsive. Restarted without the fixture override and read the live VALORANT recording at 94/100 cells, board alignment +6/+4 pixels. |
+| Game Bridge shortcut / capture / connection | PASS: native app launched, captured the live recording with name/portrait ROIs, and connected to the installed controller with ten candidates. Final live recognition result is recorded below. |
+| Display Client shortcut / NDI | PASS: installed client loaded its own NDI DLL, displayed the station 3 feed full screen at (2560,184), 1920×1080, and the controller reported `NDI 30 fps` for station 3 / `ISU Stage 03`. |
+| Display Client startup registration | PASS: starting with startup enabled created HKCU Run `ISU Display Client` pointing to the installed executable plus `--startup`. Uninstall cleanup is recorded below. |
+
+Final Game Bridge result: startup, native capture, bundled-model loading and transport passed; live player-name recognition remains **not verified in this installer run**. The supplied recording was paused on a Tab scoreboard. The bridge received ten controller candidates, attempted portrait matching (`PORTRAIT sova · ? box`), and then reported `Windows Graphics Capture timed out waiting for “VALORANT”`. No fresh moving player-POV segment was available before uninstall. Earlier native live verification above/below used a playing recording and recognized players by portrait; that evidence is not substituted for this installed-app check.
+
+| Uninstall check | Result |
+| --- | --- |
+| Display Client | PASS, uninstaller exit 0: installed directory and Start menu shortcut removed; HKCU Run `ISU Display Client` removed after confirming it existed. |
+| Game Bridge | PASS, uninstaller exit 0: installed directory and Start menu shortcut removed. |
+| Controller | PASS, uninstaller exit 0: installed directory and Start menu shortcut removed, including the installed large asset pack. |
+| Final system checks | No ISU app processes, no ISU uninstall registry entries, and no listeners on 3174, 3175 or 3178 remained. Isolated test settings/logs were retained under TEMP; installers and portable ZIPs remain in `rust/release/`. |
+
+A clean PC / fresh Windows user was not available for this run. Restricting PATH, disabling repository fallback and checking loaded module paths provide dependency-isolation evidence on this PC, but do not establish behavior without its existing Windows/WebView2 components.
+
+Logs on this PC: `%TEMP%\isu-package-verified.log`, `%TEMP%\isu-packaging-final-tests.log`, `%TEMP%\isu-final-install-ISU-*.log`, `%TEMP%\isu-uninstall-controller.log`, `%TEMP%\isu-uninstall-bridge.log`, `%TEMP%\isu-uninstall-display.log`.
+
+Exact installer-validation errors before fixes:
+
+```text
+Compress-Archive : Exception calling "Write" with "3" argument(s): "Stream was too long."
+Test read failed: Tesseract could not load 'eng' from \\?\C:\Users\13der\AppData\Local\Programs\ISU Esports Broadcast Control\tessdata
+```
+
+The recording also reproduced the existing paused-source diagnostic:
+
+```text
+Windows Graphics Capture timed out waiting for “VALORANT”
+```
+
+Static / paused recording frames can age out of the capture freshness window. The installed controller successfully read the live source when fresh frames were available.
+
 ## Build and automated checks
 
 - `cargo build --release --workspace`: passed, including all Windows-only capture, cursor, and output-window code. No Windows compile errors were found in the initial build.
@@ -60,6 +111,8 @@ Additional fixes from this follow-up:
 | `1e12378` | Pass raw spectate `receivedAt` to Companion freshness checks; the overlay projection intentionally omits it. Added fresh/expired real-HTTP assertions. |
 | `43ecdcc` | Request a controller repaint on spectate link/status/player changes. |
 | `a462695` | Stack each Overwatch debug cell's label, images and OCR result vertically instead of inheriting the wrapping row layout. |
+| `53ae5f0` | Wrap debug cards into explicit grid rows so all cells stay reachable vertically. |
+| `14c8ca0` | Enter the Tokio runtime when restoring an enabled spectate receiver at startup. Added an enabled saved-receiver startup test. |
 
 Outstanding live coverage: actual VALORANT process capture, name-only spectate recognition, shortcuts with a game focused, Windows login startup, and OBS browser-source rendering. These are coverage limits, not confirmed failures.
 
