@@ -7,4 +7,5 @@ pub mod overwatch;
 pub mod ow_service;
 pub mod icons;
 pub mod service;
+pub mod spectate;
 pub mod tess;

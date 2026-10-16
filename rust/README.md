@@ -31,7 +31,8 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Window capture: Windows Graphics Capture, size check, normalise to 1080p | `valorant-native-capture.cjs`, `valorant-capture.cjs` | `isu-ocr::capture` (windows-capture crate) | unit tests; live test on Windows: `--example live_board` |
 | VALORANT board service (sweep loop, HUD votes, workers, names, known names, colours) | `valorant-board-service.cjs` | `isu-ocr::service` | real board through 3 sweeps: agents, K/D/A, guns, shields, colours right (`tests/service.rs`) |
 | Overwatch reader: header bar, perks / player view, align, cells, ult ring + READY disc, heroes, consensus, service | `overwatch-ocr-parse.cjs`, `overwatch-hero-match.cjs`, `overwatch-ocr-service.cjs` | `isu-ocr::overwatch`, `ow_service` | 3 real boards: boxes + OCR images identical, 20/20 heroes, 79/80 stats (1 blank, traced); 108 vs 167 ms |
-| Game Bridge, spectate tracker | `electron/game-bridge.cjs`, `spectate-*` | todo | |
+| Spectate tracker: name-bar cleanups, fuzzy match, portrait (agent + red/teal), camera vote, RL Stats API target | `spectate-tracker.cjs`, `valorant-portrait-match.cjs` | `isu-ocr::spectate` | 62 real name bars (exact images), 12 POV / broadcast frames, vote + RL cases: identical (`tests/parity_spectate.rs`) |
+| Game Bridge app, bridge link, spectate receiver / state | `electron/game-bridge.cjs`, `bridge-*.cjs`, `spectate-receiver.cjs`, `spectate-state.cjs` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
 | Restream | already Rust (`../restream`) | — | |
