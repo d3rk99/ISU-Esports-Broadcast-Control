@@ -5,6 +5,7 @@
 
 pub mod actions;
 pub mod boards;
+pub mod controls;
 pub mod display_presets;
 pub mod game_config;
 pub mod rocket_league;

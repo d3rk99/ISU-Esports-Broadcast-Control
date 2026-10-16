@@ -1,0 +1,234 @@
+//! The controller window's own buttons (src/app.js click handler `actions` + syncFormat,
+//! clearSeriesMapResults, seriesLength/Target, visibleMapRows). Pure state changes, so the egui
+//! window and the parity test share them. Each takes the whole state like app.js does.
+use serde_json::{Value, json};
+
+use crate::game_config::{config, initial_state, jnum, num_or_zero, to_number};
+
+fn sel(state: &Value) -> String {
+    state.get("selectedGame").and_then(Value::as_str).unwrap_or("overwatch").to_string()
+}
+
+fn roster_key(state: &Value) -> String {
+    state.get("activeRoster").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("varsity").to_string()
+}
+
+/// seriesLength(game, config).
+pub fn series_length(game: &Value, game_key: &str) -> f64 {
+    let cfg = config(game_key).unwrap();
+    let allowed: Vec<f64> = cfg["formatOptions"].as_array().into_iter().flatten().filter_map(Value::as_f64).collect();
+    let fallback = cfg["defaultSeriesLength"].as_f64().filter(|x| *x != 0.0).unwrap_or(game["mapRows"].as_array().map_or(0, Vec::len) as f64);
+    let requested = to_number(game.get("seriesLength")).filter(|x| *x != 0.0 && !x.is_nan()).unwrap_or(fallback);
+    if allowed.is_empty() || allowed.contains(&requested) { requested } else { fallback }
+}
+
+pub fn series_target(game: &Value, game_key: &str) -> f64 {
+    (series_length(game, game_key) / 2.0).ceil()
+}
+
+pub fn visible_rows(game: &Value, game_key: &str) -> usize {
+    (game["mapRows"].as_array().map_or(0, Vec::len) as f64).min(series_length(game, game_key)).max(0.0) as usize
+}
+
+fn recount(game: &mut Value, game_key: &str) {
+    let vis = visible_rows(game, game_key);
+    let rows = game["mapRows"].as_array().cloned().unwrap_or_default();
+    for (ti, t) in game["teams"].as_array_mut().into_iter().flatten().enumerate() {
+        t["score"] = json!(rows.iter().take(vis).filter(|r| r.get("winner").and_then(Value::as_f64) == Some(ti as f64)).count());
+    }
+}
+
+/// clearSeriesMapResults(game, gameKey).
+pub fn clear_series_map_results(game: &mut Value, game_key: &str) {
+    for (i, row) in game["mapRows"].as_array_mut().into_iter().flatten().enumerate() {
+        row["score"] = json!(["", ""]);
+        row["winner"] = Value::Null;
+        row["overtime"] = json!(false);
+        row["overtimeSeconds"] = json!(0);
+        if game_key == "overwatch" {
+            row["map"] = json!("");
+            row["mode"] = json!("");
+        }
+        row["status"] = json!(if i == 0 { "ready" } else { "upcoming" });
+    }
+    if game_key == "valorant" {
+        for p in game.pointer_mut("/veto/picks").and_then(Value::as_array_mut).into_iter().flatten() {
+            p["score"] = json!(["", ""]);
+            p["winner"] = Value::Null;
+        }
+    }
+    game["activeMap"] = json!(0);
+}
+
+/// syncFormat(game, length) (the "Series format" select).
+pub fn sync_format(state: &mut Value, length: f64) {
+    let key = sel(state);
+    let game = &mut state["games"][key.as_str()];
+    game["seriesLength"] = jnum(length);
+    game["match"]["format"] = json!(format!("Best of {}", crate::game_config::num_to_js(length)));
+    let vis = visible_rows(game, &key) as f64;
+    game["activeMap"] = jnum(num_or_zero(game.get("activeMap")).min(vis - 1.0));
+    if key == "rocketleague" {
+        game["activeMap"] = json!(0);
+        for (i, row) in game["mapRows"].as_array_mut().into_iter().flatten().enumerate() {
+            row["winner"] = Value::Null;
+            row["score"] = json!(["", ""]);
+            row["overtime"] = json!(false);
+            row["overtimeSeconds"] = json!(0);
+            row["status"] = json!(if i == 0 { "ready" } else { "upcoming" });
+        }
+        for t in game["teams"].as_array_mut().into_iter().flatten() {
+            t["score"] = json!(0);
+        }
+        return;
+    }
+    let active = num_or_zero(game.get("activeMap"));
+    let n = length;
+    for (i, row) in game["mapRows"].as_array_mut().into_iter().flatten().enumerate() {
+        let st = if i as f64 >= n { "upcoming" } else if !row.get("winner").is_none_or(Value::is_null) { "complete" } else if i as f64 == active { "ready" } else { "upcoming" };
+        row["status"] = json!(st);
+    }
+    recount(game, &key);
+}
+
+/// One control button (app.js data-action) on the selected game. `index` = data-index,
+/// `winner` = data-winner. Returns the save message (commit's message), or None if unknown.
+pub fn apply(state: &mut Value, action: &str, index: usize, winner: Option<f64>, now_ms: f64) -> Option<String> {
+    let key = sel(state);
+    let rk = roster_key(state);
+    let target = series_target(&state["games"][key.as_str()], &key);
+    let msg = "Changes saved".to_string();
+    let game = &mut state["games"][key.as_str()];
+    match action {
+        "toggle-live" => {
+            let live = crate::game_config::truthy(game.pointer("/match/live"));
+            game["match"]["live"] = json!(!live);
+            Some(if live { "Overlay taken off air" } else { "Overlay is live" }.into())
+        }
+        "score-plus" => {
+            let t = &mut game["teams"][index];
+            t["score"] = jnum(target.min(num_or_zero(t.get("score")) + 1.0));
+            Some(msg)
+        }
+        "score-minus" => {
+            let t = &mut game["teams"][index];
+            t["score"] = jnum((num_or_zero(t.get("score")) - 1.0).max(0.0));
+            Some(msg)
+        }
+        "detail-plus" => {
+            let t = &mut game["teams"][index];
+            t["detailScore"] = jnum(num_or_zero(t.get("detailScore")) + 1.0);
+            Some(msg)
+        }
+        "detail-minus" => {
+            let t = &mut game["teams"][index];
+            t["detailScore"] = jnum((num_or_zero(t.get("detailScore")) - 1.0).max(0.0));
+            Some(msg)
+        }
+        "swap-teams" => {
+            if key == "valorant" {
+                crate::actions::swap_game_teams_preserving_side_scores(game);
+            } else {
+                crate::actions::swap_game_teams(game);
+            }
+            state["activeRosterSide"] = json!(if state["activeRosterSide"] == "away" { "home" } else { "away" });
+            Some("Team sides swapped".into())
+        }
+        "reset-scores" => {
+            for t in game["teams"].as_array_mut().into_iter().flatten() {
+                t["score"] = json!(0);
+                t["detailScore"] = json!(if key == "smash" { 12 } else { 0 });
+            }
+            if key == "valorant" || key == "rocketleague" {
+                clear_series_map_results(game, &key);
+            }
+            if key == "valorant" {
+                crate::boards::reset_round_history(game);
+            }
+            Some("Scores reset".into())
+        }
+        "next-match" => {
+            let vis = visible_rows(game, &key).max(1);
+            let next = (num_or_zero(game.get("activeMap")) as usize + 1) % vis;
+            crate::actions::advance_game_match(game, &key, &rk, now_ms);
+            if key == "valorant" {
+                crate::boards::reset_round_history(game);
+            }
+            Some(format!("Advanced to {} {}", if key == "rocketleague" || key == "smash" { "game" } else { "map" }, next + 1))
+        }
+        "activate-map" => {
+            game["activeMap"] = json!(index);
+            for (i, row) in game["mapRows"].as_array_mut().into_iter().flatten().enumerate() {
+                if row.get("winner") == Some(&Value::Null) {
+                    row["status"] = json!(if i == index { "ready" } else { "upcoming" });
+                }
+            }
+            Some(format!("Map {} active", index + 1))
+        }
+        "map-winner" => {
+            let w = winner.unwrap_or(f64::NAN);
+            let row = &mut game["mapRows"][index];
+            let cur = row.get("winner").and_then(Value::as_f64);
+            row["winner"] = if cur == Some(w) { Value::Null } else { jnum(w) };
+            row["status"] = json!(if row["winner"].is_null() { "ready" } else { "complete" });
+            recount(game, &key);
+            Some("Map result saved".into())
+        }
+        "clear-maps" => {
+            clear_series_map_results(game, &key);
+            for t in game["teams"].as_array_mut().into_iter().flatten() {
+                t["score"] = json!(0);
+            }
+            if key == "valorant" {
+                crate::boards::reset_round_history(game);
+            }
+            Some("Map results cleared".into())
+        }
+        "reset-veto" => {
+            for b in game.pointer_mut("/veto/bans").and_then(Value::as_array_mut).into_iter().flatten() {
+                *b = json!("");
+            }
+            for p in game.pointer_mut("/veto/picks").and_then(Value::as_array_mut).into_iter().flatten() {
+                p["map"] = json!("");
+                p["score"] = json!(["", ""]);
+                p["winner"] = Value::Null;
+            }
+            for (i, row) in game["mapRows"].as_array_mut().into_iter().flatten().enumerate() {
+                row["map"] = json!("");
+                row["score"] = json!(["", ""]);
+                row["overtime"] = json!(false);
+                row["overtimeSeconds"] = json!(0);
+                row["winner"] = Value::Null;
+                row["status"] = json!(if i == 0 { "ready" } else { "upcoming" });
+            }
+            game["activeMap"] = json!(0);
+            for t in game["teams"].as_array_mut().into_iter().flatten() {
+                t["score"] = json!(0);
+            }
+            // app.js resetValorantRoundHistory() always works on the VALORANT game
+            crate::boards::reset_round_history(&mut state["games"]["valorant"]);
+            Some("Veto map selections reset".into())
+        }
+        "add-player" => {
+            let coll = if state["activeRosterSide"] == "away" { "awayRosters" } else { "rosters" };
+            let cfg = config(&key).unwrap().clone();
+            let roster = &mut state["games"][key.as_str()][coll][rk.as_str()];
+            let n = roster.as_array().map_or(0, Vec::len);
+            roster.as_array_mut()?.push(crate::rocket_league::create_player(&cfg, n));
+            Some("Roster slot added".into())
+        }
+        "remove-player" => {
+            let coll = if state["activeRosterSide"] == "away" { "awayRosters" } else { "rosters" };
+            let roster = state["games"][key.as_str()][coll][rk.as_str()].as_array_mut()?;
+            if index < roster.len() {
+                roster.remove(index);
+            }
+            Some("Player removed".into())
+        }
+        "reset-game" => {
+            state["games"][key.as_str()] = initial_state()["games"][key.as_str()].clone();
+            Some("Active game reset".into())
+        }
+        _ => None,
+    }
+}
