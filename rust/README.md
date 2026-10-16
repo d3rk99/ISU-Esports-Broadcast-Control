@@ -32,7 +32,9 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | VALORANT board service (sweep loop, HUD votes, workers, names, known names, colours) | `valorant-board-service.cjs` | `isu-ocr::service` | real board through 3 sweeps: agents, K/D/A, guns, shields, colours right (`tests/service.rs`) |
 | Overwatch reader: header bar, perks / player view, align, cells, ult ring + READY disc, heroes, consensus, service | `overwatch-ocr-parse.cjs`, `overwatch-hero-match.cjs`, `overwatch-ocr-service.cjs` | `isu-ocr::overwatch`, `ow_service` | 3 real boards: boxes + OCR images identical, 20/20 heroes, 79/80 stats (1 blank, traced); 108 vs 167 ms |
 | Spectate tracker: name-bar cleanups, fuzzy match, portrait (agent + red/teal), camera vote, RL Stats API target | `spectate-tracker.cjs`, `valorant-portrait-match.cjs` | `isu-ocr::spectate` | 62 real name bars (exact images), 12 POV / broadcast frames, vote + RL cases: identical (`tests/parity_spectate.rs`) |
-| Game Bridge app, bridge link, spectate receiver / state | `electron/game-bridge.cjs`, `bridge-*.cjs`, `spectate-receiver.cjs`, `spectate-state.cjs` | todo | |
+| Bridge link (key check, keepalive), spectate receiver (3175), spectate candidates / sides / resolve | `bridge-link.cjs`, `spectate-receiver.cjs`, `spectate-state.cjs` | `isu-net::link`, `spectate` | JS parity on 7 states; real sockets: key 1008, candidates push, spectated packets, port freed |
+| Rocket League Stats API: local WebSocket 49124 / TCP 49123 fallback, bridge receiver, watchdog, throttle, simulator | `rocket-league-service.cjs` | `isu-net::rocket_league` | settings / stream parser / envelopes / full simulator run identical to JS; real sockets: bridge + split TCP stream |
+| Game Bridge app (Game PC: RL forwarder + spectate loops) | `game-bridge.cjs`, `bridge-main.cjs`, `bridge/index.html` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
 | Restream | already Rust (`../restream`) | — | |

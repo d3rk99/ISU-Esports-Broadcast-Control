@@ -1,0 +1,16 @@
+[package]
+name = "isu-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Game PC <-> Graphics PC links: Rocket League Stats API service (TCP/WebSocket/bridge/simulator), Game Bridge, spectate receiver. Port of electron/rocket-league-*.cjs, game-bridge.cjs, bridge-link.cjs, spectate-receiver.cjs, spectate-state.cjs."
+
+[dependencies]
+isu-core = { path = "../isu-core" }
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+futures-util.workspace = true
+anyhow.workspace = true
+subtle.workspace = true
+url.workspace = true
