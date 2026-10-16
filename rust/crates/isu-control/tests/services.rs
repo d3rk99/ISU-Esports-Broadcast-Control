@@ -26,10 +26,14 @@ fn services_start_and_serve() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("companion-api.json"), r#"{"enabled":true,"port":3176,"token":"test-token-0123456789"}"#).unwrap();
+    // An enabled persisted receiver must start on an ordinary GUI thread too.
+    std::fs::write(dir.join("spectate-receiver.json"), r#"{"enabled":true,"port":3175,"token":"test-bridge-token"}"#).unwrap();
     let core = Core::new(Files::new(dir.clone()), isu_server::Store::new());
     let svc = Services::start(Arc::clone(&core));
     assert_eq!(*svc.overlay_error.lock().unwrap(), "");
     std::thread::sleep(std::time::Duration::from_millis(300));
+    assert_eq!(svc.spectate.status()["state"], "listening");
+    assert!(std::net::TcpStream::connect(("127.0.0.1", 3175)).is_ok());
 
     let (c, st) = http(3174, "GET /api/state HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n");
     assert_eq!(c, 200);

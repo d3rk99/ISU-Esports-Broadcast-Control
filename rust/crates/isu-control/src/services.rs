@@ -168,7 +168,10 @@ impl Services {
             }
         });
         let spec = files.merged("spectate-receiver.json", |v| { let s = isu_net::spectate::normalize_settings(v); json!({ "enabled": s.enabled, "port": s.port, "token": s.token }) });
-        me.spectate.configure(&spec);
+        {
+            let _guard = me.rt.enter();
+            me.spectate.configure(&spec);
+        }
         if let Some(b) = &me.board {
             b.configure(&files.merged("valorant-board-settings.json", |v| isu_ocr::service::settings_json(&isu_ocr::service::normalize_settings(v))));
         }
