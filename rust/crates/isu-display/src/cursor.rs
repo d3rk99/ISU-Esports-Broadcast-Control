@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Default)]
 pub struct CursorLock {
-    run: std::sync::Mutex<Option<Arc<AtomicBool>>>,
+    run: std::sync::Mutex<Option<(Arc<AtomicBool>, std::thread::JoinHandle<()>)>>,
 }
 
 impl CursorLock {
@@ -25,9 +25,9 @@ impl CursorLock {
     pub fn lock(&self, rect: [i32; 4]) {
         self.unlock();
         let flag = Arc::new(AtomicBool::new(true));
-        *self.run.lock().unwrap() = Some(Arc::clone(&flag));
-        std::thread::spawn(move || {
-            while flag.load(Ordering::Acquire) {
+        let live = Arc::clone(&flag);
+        let worker = std::thread::spawn(move || {
+            while live.load(Ordering::Acquire) {
                 #[cfg(windows)]
                 win::clip(Some(rect));
                 #[cfg(not(windows))]
@@ -35,14 +35,23 @@ impl CursorLock {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
         });
+        *self.run.lock().unwrap() = Some((flag, worker));
     }
 
     pub fn unlock(&self) {
-        if let Some(f) = self.run.lock().unwrap().take() {
+        if let Some((f, worker)) = self.run.lock().unwrap().take() {
             f.store(false, Ordering::Release);
+            // Join before releasing ClipCursor: the worker may already be inside clip().
+            let _ = worker.join();
         }
         #[cfg(windows)]
         win::clip(None);
+    }
+}
+
+impl Drop for CursorLock {
+    fn drop(&mut self) {
+        self.unlock();
     }
 }
 
@@ -76,7 +85,7 @@ mod win {
         let mut v: Vec<[i32; 4]> = Vec::new();
         unsafe { EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), cb, &mut v as *mut _ as isize) };
         v.sort_by_key(|r| (r[1], r[0]));
-        let r = v.get(index - 1).or_else(|| v.first())?;
+        let r = v.get(index.saturating_sub(1)).or_else(|| v.first())?;
         Some([r[0] + 2, r[1] + 2, r[2] - 2, r[3] - 2])
     }
 }
