@@ -58,6 +58,7 @@ pub struct App {
     pub monitors_tx: std::sync::mpsc::Sender<Vec<Value>>,
     monitors_rx: std::sync::mpsc::Receiver<Vec<Value>>,
     pub companion_key: Option<String>,
+    pub ow_debug: std::sync::Arc<std::sync::Mutex<Option<(Value, Option<readers::DebugTex>)>>>,
 }
 
 const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
@@ -75,7 +76,7 @@ impl App {
         *svc.core.repaint.lock().unwrap() = Some(Box::new(move || ctx.request_repaint()));
         let (toast_tx, toast_rx) = std::sync::mpsc::channel();
         let (monitors_tx, monitors_rx) = std::sync::mpsc::channel();
-        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default(), toast_tx, toast_rx, monitors: None, monitors_tx, monitors_rx, companion_key: None }
+        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default(), toast_tx, toast_rx, monitors: None, monitors_tx, monitors_rx, companion_key: None, ow_debug: std::sync::Arc::default() }
     }
 
     pub fn state(&self) -> Value {

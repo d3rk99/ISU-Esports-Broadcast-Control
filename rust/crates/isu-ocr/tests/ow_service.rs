@@ -57,3 +57,28 @@ fn real_board_two_sweeps_fill_every_stat() {
     assert_eq!(Value::Array(names), json!(["DAMAGE 1", "DAMAGE 2", "SUPPORT 1", "SUPPORT 2", "TANK 1", "DAMAGE 3", "DAMAGE 4", "SUPPORT 3", "SUPPORT 4", "TANK 2"]));
     assert_eq!(svc.status()["state"], "reading");
 }
+
+/// debugCapture on the same real board: every cell is listed with its crop + OCR image, the accepted
+/// values agree with what the sweep reads, and the frame + align info come back like the JS one.
+#[test]
+fn debug_capture_on_the_real_board() {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let eng = isu_ocr::tess::unpack_gz_model(&repo.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &repo.join("rust/target/tessdata"), "eng").unwrap();
+    let models = Models { eng_dir: eng, ow_dir: repo.join("electron/ocr-models"), data_dir: repo.join("electron") };
+    let svc = OverwatchService::new(Arc::new(Fake(frame("test/fixtures/ow-board-table.png", 640, 190))), models, Box::new(|_| {}), Box::new(|_| {})).unwrap();
+    svc.configure(&json!({ "enabled": false, "workers": 1 }));
+    let d = svc.debug_capture().unwrap();
+    let cells = d["cells"].as_array().unwrap();
+    assert_eq!(cells.len(), 10 * 8, "10 players x (name + 7 stat columns)");
+    for k in ["rawDataUrl", "processedDataUrl"] {
+        assert!(cells.iter().all(|c| c[k].as_str().unwrap().starts_with("data:image/png;base64,")), "{k}");
+    }
+    assert!(d["frameDataUrl"].as_str().unwrap().len() > 10_000);
+    assert_eq!((d["width"].clone(), d["height"].clone()), (json!(1920), json!(1080)));
+    assert!(d["align"]["rows"]["home:0"].is_object(), "align per row");
+    // accepted values = the single-read values: damage of home 1 is 215, names come through
+    let get = |side: &str, row: u64, f: &str| cells.iter().find(|c| c["side"] == side && c["row"] == row && c["field"] == f).unwrap()["accepted"].clone();
+    assert_eq!(get("home", 0, "damage"), json!(215));
+    assert_eq!(get("away", 4, "name"), json!("TANK 2"));
+    assert!(cells.iter().filter(|c| c["field"] != "name").all(|c| c["glyphs"].is_number()), "digits seen for number cells");
+}

@@ -116,7 +116,8 @@ impl Services {
 
         // Scoreboard readers (Tesseract + window capture); missing models = reader off, app runs.
         let cache = files.dir.join("ocr-cache");
-        let source: Arc<dyn isu_ocr::capture::Source> = make_source();
+        // ISU_CAPTURE_FILE=<png>[@x,y]: tests / demos read this picture (grey, placed on a black 1080p frame)
+        let source: Arc<dyn isu_ocr::capture::Source> = std::env::var("ISU_CAPTURE_FILE").ok().and_then(|f| file_source(&f)).unwrap_or_else(make_source);
         let c8 = Arc::clone(&core);
         let c9 = Arc::clone(&core);
         let board = isu_ocr::service::dev_models(&root, &cache).ok().map(|m| {
@@ -246,6 +247,39 @@ pub fn stage_action(d: &isu_net::displays::DisplayManager, a: &Value) -> Result<
         }
         _ => Err((404, format!("Unknown display action: {id}"))),
     }
+}
+
+/// A still picture as the capture source (grey PNG at x,y on a black 1920x1080 frame).
+fn file_source(spec: &str) -> Option<Arc<dyn isu_ocr::capture::Source>> {
+    let (path, at) = spec.split_once('@').unwrap_or((spec, "0,0"));
+    let (ox, oy) = at.split_once(',').map(|(a, b)| (a.parse::<usize>().unwrap_or(0), b.parse::<usize>().unwrap_or(0))).unwrap_or((0, 0));
+    let mut d = png::Decoder::new(std::io::BufReader::new(std::fs::File::open(path).ok()?));
+    d.set_transformations(png::Transformations::EXPAND);
+    let mut r = d.read_info().ok()?;
+    let mut buf = vec![0; r.output_buffer_size()?];
+    let info = r.next_frame(&mut buf).ok()?;
+    let ch = info.color_type.samples();
+    let mut px = vec![0u8; 1920 * 1080 * 4];
+    for y in 0..info.height as usize {
+        for x in 0..info.width as usize {
+            let g = buf[(y * info.width as usize + x) * ch];
+            let (tx, ty) = (x + ox, y + oy);
+            if tx < 1920 && ty < 1080 {
+                let o = (ty * 1920 + tx) * 4;
+                px[o..o + 4].copy_from_slice(&[g, g, g, 255]);
+            }
+        }
+    }
+    let frame = isu_ocr::capture::Bgra { w: 1920, h: 1080, px: Arc::new(px), source_w: 1920, source_h: 1080, normalized: false, source_name: path.to_string(), captured_at: std::time::Instant::now(), seq: 1 };
+    struct Still(isu_ocr::capture::Bgra);
+    impl isu_ocr::capture::Source for Still {
+        fn capture(&self, _w: &str, _f: u32, _n: Option<u64>) -> Result<isu_ocr::capture::Bgra, String> {
+            let mut f = self.0.clone();
+            f.captured_at = std::time::Instant::now();
+            Ok(f)
+        }
+    }
+    Some(Arc::new(Still(frame)))
 }
 
 #[cfg(windows)]

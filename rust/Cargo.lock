@@ -2469,6 +2469,7 @@ name = "isu-control"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "dirs 6.0.0",
  "eframe",
  "egui",
@@ -2478,6 +2479,7 @@ dependencies = [
  "isu-net",
  "isu-ocr",
  "isu-server",
+ "png",
  "rfd",
  "serde_json",
  "tokio",
@@ -2532,6 +2534,7 @@ name = "isu-ocr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
  "flate2",
  "isu-core",
  "png",

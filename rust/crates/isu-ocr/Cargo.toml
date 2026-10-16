@@ -11,9 +11,10 @@ serde_json.workspace = true
 flate2.workspace = true
 anyhow.workspace = true
 isu-core = { path = "../isu-core" }
+png.workspace = true
+base64 = "0.22"
 
 [dev-dependencies]
-png.workspace = true
 sha2.workspace = true
 
 [target.'cfg(windows)'.dependencies]

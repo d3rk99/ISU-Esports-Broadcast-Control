@@ -253,6 +253,74 @@ impl OverwatchService {
         Ok(())
     }
 
+    /// debugCapture(): one frame, every cell with its crop, the OCR text, confidence, digits seen and
+    /// the accepted value, the align result and the hero matches (overwatch-ocr-service.cjs).
+    pub fn debug_capture(&self) -> Result<Value, String> {
+        let window = self.lock().settings.window_name.clone();
+        let frame: Bgra = self.source.capture(&window, 8, None)?;
+        let mut g = self.lock();
+        let p = g.profile.clone();
+        if frame.w as i32 != p.width || frame.h as i32 != p.height {
+            return Err(format!("Captured frame is {}x{} but the OCR boxes are for {}x{}; use a 16:9 window", frame.w, frame.h, p.width, p.height));
+        }
+        let mut align: Option<Align> = g.settings.auto_align.then(|| ow::align_board(&frame, &p, true));
+        if let Some(a) = align.as_mut() {
+            if g.settings.view != "auto" && a.view != g.settings.view {
+                ow::view_fallback(&p, a, g.settings.view);
+            }
+        }
+        let cells = ow::cell_rois(&p, align.as_ref(), Some(g.settings.box_scale as f64 / 100.0));
+        self.ensure_workers(&mut g)?;
+        let left = align.as_ref().map_or(0, |a| a.left_dx);
+        let mut out = Vec::new();
+        for cell in &cells {
+            let w = &mut g.workers[0];
+            let text = cell.field == "name";
+            let thr = match cell.column.threshold { Some(t) if t != 120 => 255 - t, _ => 120 };
+            let img = ow::cell_image(&frame, cell.roi, p.pre_scale, thr, cell.column.shear);
+            let tess = match (&cell.column.lang, w.ow.as_mut()) { (Some(l), Some(t)) if l == "ow" => t, _ => &mut w.eng };
+            let r = tess.recognize(&img, &cell.column.allowed, false);
+            let side = p.teams[cell.team].0.clone();
+            let cy = cell.roi.y + cell.roi.h / 2;
+            let ready = cell.field == "ultimate" && ow::is_ready_disc(&frame, p.ring_cx + f64::from(left), f64::from(cy) + p.ring_dy, p.ready_radius);
+            let accepted = if ready { Some(json!("READY")) } else { Self::read_cell(w, &frame, &p, cell) };
+            out.push(json!({
+                "side": side, "row": cell.row, "field": cell.field,
+                "roi": { "x": cell.roi.x, "y": cell.roi.y, "w": cell.roi.w, "h": cell.roi.h },
+                "rawDataUrl": crop_png(&frame, cell.roi), "processedDataUrl": gray_png(&img),
+                "text": r.text.trim(), "confidence": (r.confidence * 100.0).round(),
+                "glyphs": if text { Value::Null } else { json!(ow::glyph_count(&frame, cell.roi)) },
+                "accepted": accepted.unwrap_or(Value::Null)
+            }));
+        }
+        drop(g);
+        let mut heroes = Vec::new();
+        if let Some(hm) = &self.heroes {
+            for (ti, (side, centers)) in p.teams.iter().enumerate() {
+                for (row, &cy) in centers.iter().enumerate() {
+                    let dy = align.as_ref().map_or(0, |a| a.rows[ti][row].stat_dy);
+                    let m = hm.match_row(&frame, cy + if dy.abs() >= 3 { dy } else { 0 }, left);
+                    heroes.push(json!({ "side": side, "row": row, "hero": m.hero, "candidate": m.candidate, "score": m.score, "runnerUp": m.runner_up }));
+                }
+            }
+        }
+        let align_json = align.as_ref().map(|a| {
+            let mut rows = serde_json::Map::new();
+            for (ti, (side, _)) in p.teams.iter().enumerate() {
+                for (row, ra) in a.rows[ti].iter().enumerate() {
+                    rows.insert(format!("{side}:{row}"), json!({ "statDy": ra.stat_dy, "nameDy": ra.name_dy }));
+                }
+            }
+            let cols = a.cols.as_ref().map(|h| Value::Object(h.cols.iter().map(|(k, v)| (k.clone(), json!(v))).collect()));
+            json!({ "dx": a.dx, "leftDx": a.left_dx, "perks": a.perks, "view": a.view, "forced": a.forced, "cols": cols, "rows": rows })
+        });
+        Ok(json!({
+            "heroes": heroes, "align": align_json, "capturedAt": isu_core::game_config::jnum(now_ms()),
+            "sourceName": frame.source_name, "backend": "wgc", "width": frame.w, "height": frame.h,
+            "sourceWidth": frame.source_w, "sourceHeight": frame.source_h, "frameDataUrl": frame_png(&frame), "cells": out
+        }))
+    }
+
     /// readCell(frame, profile, cell).
     fn read_cell(w: &mut Worker, f: &dyn Frame, p: &Profile, cell: &Cell) -> Option<Value> {
         let text = cell.field == "name";
@@ -401,4 +469,43 @@ impl OverwatchService {
         }
         Ok(changed)
     }
+}
+
+fn png_data_url(w: u32, h: u32, color: png::ColorType, data: &[u8]) -> String {
+    let mut buf = Vec::new();
+    {
+        let mut e = png::Encoder::new(&mut buf, w, h);
+        e.set_color(color);
+        e.set_depth(png::BitDepth::Eight);
+        if let Ok(mut wr) = e.write_header() {
+            let _ = wr.write_image_data(data);
+        }
+    }
+    use base64::Engine;
+    format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(buf))
+}
+
+/// The whole captured frame (BGRA -> RGB PNG).
+fn frame_png(f: &Bgra) -> String {
+    let rgb: Vec<u8> = f.px.chunks(4).flat_map(|p| [p[2], p[1], p[0]]).collect();
+    png_data_url(f.w, f.h, png::ColorType::Rgb, &rgb)
+}
+
+/// One cell's raw crop.
+fn crop_png(f: &Bgra, r: crate::board::Roi) -> String {
+    let (x0, y0) = (r.x.max(0) as u32, r.y.max(0) as u32);
+    let (w, h) = ((r.w.max(1) as u32).min(f.w.saturating_sub(x0)), (r.h.max(1) as u32).min(f.h.saturating_sub(y0)));
+    let mut rgb = Vec::with_capacity((w * h * 3) as usize);
+    for y in y0..y0 + h {
+        for x in x0..x0 + w {
+            let i = ((y * f.w + x) * 4) as usize;
+            rgb.extend_from_slice(&[f.px[i + 2], f.px[i + 1], f.px[i]]);
+        }
+    }
+    png_data_url(w, h, png::ColorType::Rgb, &rgb)
+}
+
+/// The black/white image the OCR reads.
+fn gray_png(g: &crate::tess::Gray) -> String {
+    png_data_url(g.w as u32, g.h as u32, png::ColorType::Grayscale, &g.px)
 }

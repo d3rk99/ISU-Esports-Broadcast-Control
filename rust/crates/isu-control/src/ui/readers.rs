@@ -268,6 +268,22 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                     None => app.toast("Test read failed: the OCR models are not installed"),
                 }
             }
+            if ui.button("DEBUG CAPTURE").clicked() {
+                match app.svc.overwatch.clone() {
+                    Some(o) => {
+                        app.toast("Capturing the Overwatch window…");
+                        let (tx, slot) = (app.toast_tx.clone(), std::sync::Arc::clone(&app.ow_debug));
+                        std::thread::spawn(move || match o.debug_capture() {
+                            Ok(d) => { *slot.lock().unwrap() = Some((d, None)); let _ = tx.send("Debug capture ready".into()); }
+                            Err(e) => { let _ = tx.send(format!("Debug capture failed: {e}")); }
+                        });
+                    }
+                    None => app.toast("Debug capture failed: the OCR models are not installed"),
+                }
+            }
+            if app.ow_debug.lock().unwrap().is_some() && ui.button("HIDE DEBUG").clicked() {
+                *app.ow_debug.lock().unwrap() = None;
+            }
             if app.confirm_button(ui, "ow-clear", "CLEAR", "Clear?") {
                 if let Some(o) = &app.svc.overwatch {
                     o.clear();
@@ -324,5 +340,116 @@ pub fn overwatch(app: &mut App, ui: &mut egui::Ui, st: &Value) {
                 }
             });
         }
+        debug_view(app, ui);
     });
+}
+
+const FIELD_LABEL: [(&str, &str); 8] = [("name", "NAME"), ("ultimate", "ULT"), ("elims", "E"), ("assists", "A"), ("deaths", "D"), ("damage", "DMG"), ("healing", "HEAL"), ("mitigation", "MIT")];
+
+/// data:image/png;base64,... -> texture.
+fn data_url_texture(ctx: &egui::Context, name: &str, url: &str) -> Option<egui::TextureHandle> {
+    use base64::Engine;
+    let b = base64::engine::general_purpose::STANDARD.decode(url.strip_prefix("data:image/png;base64,")?).ok()?;
+    let mut d = png::Decoder::new(std::io::Cursor::new(b));
+    d.set_transformations(png::Transformations::EXPAND);
+    let mut r = d.read_info().ok()?;
+    let mut buf = vec![0; r.output_buffer_size()?];
+    let info = r.next_frame(&mut buf).ok()?;
+    let ch = info.color_type.samples();
+    let (w, h) = (info.width as usize, info.height as usize);
+    let rgba: Vec<u8> = buf[..w * h * ch].chunks(ch).flat_map(|p| match ch { 1 => [p[0], p[0], p[0], 255], 3 => [p[0], p[1], p[2], 255], _ => [p[0], p[1], p[2], p[3]] }).collect();
+    Some(ctx.load_texture(name, egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba), egui::TextureOptions::LINEAR))
+}
+
+/// renderOverwatchDebugCapture(debug) + alignSummary.
+fn debug_view(app: &mut App, ui: &mut egui::Ui) {
+    let mut slot = app.ow_debug.lock().unwrap();
+    let Some((d, tex)) = slot.as_mut() else { return };
+    if tex.is_none() {
+        let ctx = ui.ctx().clone();
+        let frame = data_url_texture(&ctx, "ow-dbg-frame", d["frameDataUrl"].as_str().unwrap_or(""));
+        let cells: Vec<(Option<egui::TextureHandle>, Option<egui::TextureHandle>)> = d["cells"].as_array().into_iter().flatten().enumerate().map(|(i, c)| (data_url_texture(&ctx, &format!("ow-raw{i}"), c["rawDataUrl"].as_str().unwrap_or("")), data_url_texture(&ctx, &format!("ow-proc{i}"), c["processedDataUrl"].as_str().unwrap_or("")))).collect();
+        *tex = Some(DebugTex { frame, cells });
+    }
+    let t = tex.as_ref().unwrap();
+    let age = ((crate::core::now_ms() - num_or_zero(d.get("capturedAt"))) / 1000.0).round().max(0.0);
+    ui.separator();
+    ui.label(RichText::new(format!("DEBUG CAPTURE · {age}s old · {} · {}×{} → {}×{} · {}", { let n = s(d.get("sourceName")); if n.is_empty() { "window".into() } else { n } }, s(d.get("sourceWidth")), s(d.get("sourceHeight")), s(d.get("width")), s(d.get("height")), s(d.get("backend")))).strong());
+    // alignSummary
+    let a = &d["align"];
+    if a.is_null() {
+        ui.label(RichText::new("AUTO-ALIGN off · boxes at the profile positions").small().color(c::MUTED));
+    } else {
+        let mut rows: Vec<String> = Vec::new();
+        for (k, r) in a["rows"].as_object().cloned().unwrap_or_default() {
+            let (side, row) = k.split_once(':').unwrap_or(("", "0"));
+            let mut bits = Vec::new();
+            let sd = num_or_zero(r.get("statDy"));
+            let nd = num_or_zero(r.get("nameDy"));
+            if sd != 0.0 { bits.push(format!("stats {}{sd}", if sd > 0.0 { "+" } else { "" })); }
+            if nd != 0.0 { bits.push(format!("name {}{nd}", if nd > 0.0 { "+" } else { "" })); }
+            if !bits.is_empty() { rows.push(format!("{} {}: {}", if side == "home" { "TOP" } else { "BOT" }, row.parse::<i64>().unwrap_or(0) + 1, bits.join(", "))); }
+        }
+        let view = match a["view"].as_str() { Some("player") => "PLAYER VIEW (own stat card)", Some("spectator") => "SPECTATOR VIEW", _ => "LAYOUT NOT FOUND" };
+        let ldx = num_or_zero(a.get("leftDx"));
+        let layout = format!("{view}{}{}{}", if truthy(a.get("forced")) { " (forced)" } else { "" }, if truthy(a.get("perks")) { " · PERKS" } else { "" }, if ldx != 0.0 { format!(" · board {}{ldx} px", if ldx > 0.0 { "+" } else { "" }) } else { String::new() });
+        let dx = num_or_zero(a.get("dx"));
+        let cols = if a["cols"].is_object() { format!("from labels E{}…MIT{}", s(a["cols"].get("elims")), s(a["cols"].get("mitigation"))) } else if dx != 0.0 { format!("{}{dx} px", if dx > 0.0 { "+" } else { "" }) } else { "in place".into() };
+        ui.label(RichText::new(format!("AUTO-ALIGN · {layout} · stat columns {cols}{}", if rows.is_empty() { " · every row in place".to_string() } else { format!(" · {}", rows.join(" · ")) })).small().color(c::MUTED));
+    }
+    // frame with every box (green accepted / red rejected)
+    if let Some(f) = &t.frame {
+        let w = ui.available_width().min(960.0);
+        let size = egui::vec2(w, w * 1080.0 / 1920.0);
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        ui.painter().image(f.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
+        for cdat in d["cells"].as_array().into_iter().flatten() {
+            let r = &cdat["roi"];
+            let k = size.x / 1920.0;
+            let bx = egui::Rect::from_min_size(rect.min + egui::vec2(num_or_zero(r.get("x")) as f32 * k, num_or_zero(r.get("y")) as f32 * k), egui::vec2(num_or_zero(r.get("w")) as f32 * k, num_or_zero(r.get("h")) as f32 * k));
+            let ok = !cdat["accepted"].is_null();
+            ui.painter().rect_stroke(bx, 0.0, egui::Stroke::new(1.0, if ok { Color32::from_rgb(80, 200, 120) } else { c::RED }), egui::StrokeKind::Outside);
+        }
+    }
+    if let Some(hs) = d["heroes"].as_array().filter(|h| !h.is_empty()) {
+        let txt: Vec<String> = hs.iter().map(|h| format!("{} {}: {}", if h["side"] == "home" { "TOP" } else { "BOT" }, num_or_zero(h.get("row")) + 1.0, if truthy(h.get("hero")) { s(h.get("hero")) } else { format!("? ({} {})", s(h.get("candidate")), s(h.get("score"))) })).collect();
+        ui.label(RichText::new(format!("HEROES · {}", txt.join(" · "))).small().color(c::MUTED));
+    }
+    let mut use_name: Option<(String, i64, String)> = None;
+    ui.horizontal_wrapped(|ui| {
+        for (i, cdat) in d["cells"].as_array().into_iter().flatten().enumerate() {
+            let ok = !cdat["accepted"].is_null();
+            egui::Frame::NONE.fill(c::PANEL_LIGHT).stroke(egui::Stroke::new(1.0, if ok { Color32::from_rgb(80, 200, 120) } else { c::RED })).corner_radius(4.0).inner_margin(6.0).show(ui, |ui| {
+                ui.set_width(170.0);
+                let f = cdat["field"].as_str().unwrap_or("");
+                ui.label(RichText::new(format!("{} {} · {}", if cdat["side"] == "home" { "TOP" } else { "BOT" }, num_or_zero(cdat.get("row")) + 1.0, FIELD_LABEL.iter().find(|x| x.0 == f).map_or(f, |x| x.1))).small().strong());
+                for tx in [t.cells.get(i).and_then(|c| c.0.as_ref()), t.cells.get(i).and_then(|c| c.1.as_ref())].into_iter().flatten() {
+                    let sz = tx.size_vec2();
+                    let k = (160.0 / sz.x).min(40.0 / sz.y).min(3.0);
+                    ui.image((tx.id(), sz * k));
+                }
+                let g = &cdat["glyphs"];
+                let digits = if g.is_null() { String::new() } else { let n = num_or_zero(Some(g)); format!(" · {n} digit{} seen", if n == 1.0 { "" } else { "s" }) };
+                ui.label(RichText::new(format!("read “{}” {}%{digits} → {}", s(cdat.get("text")), s(cdat.get("confidence")), if ok { s(cdat.get("accepted")) } else { "rejected".into() })).small());
+                let txt = s(cdat.get("text")).trim().to_uppercase();
+                if f == "name" && !ok && !txt.is_empty() && ui.button(format!("USE “{txt}”")).clicked() {
+                    use_name = Some((s(cdat.get("side")), num_or_zero(cdat.get("row")) as i64, txt.clone()));
+                }
+            });
+        }
+    });
+    drop(slot);
+    if let Some((side, row, name)) = use_name {
+        if let Some(o) = &app.svc.overwatch {
+            if o.set_player_name(&side, row as f64, &name).is_ok() {
+                app.svc.core.overwatch_snapshot(&o.snapshot());
+                app.toast(&format!("Name set to {name} (stays until cleared)"));
+            }
+        }
+    }
+}
+
+pub struct DebugTex {
+    frame: Option<egui::TextureHandle>,
+    cells: Vec<(Option<egui::TextureHandle>, Option<egui::TextureHandle>)>,
 }

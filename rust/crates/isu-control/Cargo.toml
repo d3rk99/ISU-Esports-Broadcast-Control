@@ -24,6 +24,8 @@ eframe.workspace = true
 egui.workspace = true
 dirs.workspace = true
 rfd = "0.17"
+png.workspace = true
+base64 = "0.22"
 
 [dev-dependencies]
 egui_kittest = { version = "=0.36.2", features = ["eframe"] }

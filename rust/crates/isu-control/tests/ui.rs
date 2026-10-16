@@ -36,6 +36,8 @@ fn controller_window_like_a_user() {
     let obs_port: u16 = line.trim().strip_prefix("PORT ").unwrap().parse().unwrap();
     std::fs::write(dir.join("obs-displays.json"), json!({ "host": "127.0.0.1", "port": obs_port, "password": "pw", "resolution": "1280x720", "fps": 30 }).to_string()).unwrap();
 
+    // the readers capture Derk's real Overwatch board picture (same as crates/isu-ocr/tests/ow_service.rs)
+    unsafe { std::env::set_var("ISU_CAPTURE_FILE", format!("{}@640,190", repo.join("test/fixtures/ow-board-table.png").display())); }
     let core = Core::new(Files::new(dir.clone()), isu_server::Store::new());
     let svc = Services::start(Arc::clone(&core));
     let svc2 = Arc::clone(&svc);
@@ -143,9 +145,33 @@ fn controller_window_like_a_user() {
     h.get_by_label("Click again: wipes this game").click(); settle(&mut h);
     assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 0);
 
+    // --- Overwatch: DEBUG CAPTURE on the real board, then USE a name from it
+    {
+        let mut g = core.lock();
+        g.state["selectedGame"] = json!("overwatch");
+        g.state["activeView"] = json!("control");
+    }
+    settle(&mut h);
+    h.get_by_label("DEBUG CAPTURE").scroll_to_me(); settle(&mut h);
+    h.get_by_label("DEBUG CAPTURE").click();
+    for _ in 0..80 { settle(&mut h); if h.query_all_by_label_contains("DEBUG CAPTURE · ").next().is_some() { break; } }
+    assert!(h.query_all_by_label_contains("DEBUG CAPTURE · ").next().is_some(), "debug capture shown");
+    assert!(h.query_all_by_label_contains("AUTO-ALIGN · ").next().is_some(), "align summary");
+    assert!(h.query_all_by_label_contains("→ 215").next().is_some(), "home 1 damage cell read 215");
+    h.get_by_label("HIDE DEBUG").click(); settle(&mut h);
+    assert!(h.query_all_by_label_contains("DEBUG CAPTURE · ").next().is_none(), "hidden");
+    // TEST READ twice fills the table (two equal reads)
+    for _ in 0..2 {
+        h.get_by_label("TEST READ").click();
+        for _ in 0..60 { settle(&mut h); if !h.query_all_by_label("Read the scoreboard once").next().is_none() { break; } }
+        std::thread::sleep(Duration::from_millis(300));
+    }
+    for _ in 0..10 { settle(&mut h); }
+    assert_eq!(core.state()["games"]["overwatch"]["overwatchOcr"]["live"]["teams"]["home"]["players"][0]["damage"], 215, "board published to the overlay state");
+
     // --- game picker: Rocket League, no undo point (persistState)
     let undo_len = core.lock().history.len();
-    h.get_by_label("Match Control").click(); settle(&mut h);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Map Pool").click(); settle(&mut h);
     {
         let mut st = core.lock();
         st.state["selectedGame"] = json!("valorant");
