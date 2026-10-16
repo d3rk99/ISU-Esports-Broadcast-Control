@@ -416,7 +416,8 @@ fn debug_view(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(format!("HEROES · {}", txt.join(" · "))).small().color(c::MUTED));
     }
     let mut use_name: Option<(String, i64, String)> = None;
-    ui.horizontal_wrapped(|ui| {
+    let columns = (ui.available_width() / 190.0).floor().max(1.0) as usize;
+    egui::Grid::new("overwatch-debug-cells").num_columns(columns).show(ui, |ui| {
         for (i, cdat) in d["cells"].as_array().into_iter().flatten().enumerate() {
             let ok = !cdat["accepted"].is_null();
             egui::Frame::NONE.fill(c::PANEL_LIGHT).stroke(egui::Stroke::new(1.0, if ok { Color32::from_rgb(80, 200, 120) } else { c::RED })).corner_radius(4.0).inner_margin(6.0).show(ui, |ui| {
@@ -438,6 +439,9 @@ fn debug_view(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            if (i + 1) % columns == 0 {
+                ui.end_row();
+            }
         }
     });
     drop(slot);
