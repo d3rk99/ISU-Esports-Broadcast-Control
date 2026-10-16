@@ -10,6 +10,7 @@ build = "build.rs"
 serde_json.workspace = true
 flate2.workspace = true
 anyhow.workspace = true
+isu-core = { path = "../isu-core" }
 
 [dev-dependencies]
 png.workspace = true

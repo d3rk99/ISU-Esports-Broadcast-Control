@@ -476,3 +476,39 @@ pub fn read_cell(ocr: &mut dyn Ocr, f: &dyn Frame, mut cell: Cell) -> Option<Val
     }
     None
 }
+
+/// blockColor(rgb, profile, align, side): 'teal' (defenders) | 'red' (attackers) | '' (not sure).
+pub fn block_color(f: &dyn Frame, a: &Align, side: usize) -> &'static str {
+    let p = &PROFILE;
+    let (mut teal, mut red, mut n) = (0, 0, 0);
+    let name = READ_FIELDS[0].1;
+    for off in p.row_offsets[side] {
+        let cy = p.header_y + a.dy + off;
+        let mut x = AGENT.x + 40 + a.dx;
+        while x < name.x + name.w + a.dx {
+            for dy in [-6, 6] {
+                let [r, g, b] = f.rgb(x, cy + dy).map(i32::from);
+                if r + g + b < 120 {
+                    continue;
+                }
+                n += 1;
+                if g > r + 18 && b > r + 10 {
+                    teal += 1;
+                } else if r > g + 18 && r > b + 10 {
+                    red += 1;
+                }
+            }
+            x += 4;
+        }
+    }
+    let n = f64::from(n);
+    if n < 20.0 {
+        ""
+    } else if teal > red * 2 && f64::from(teal) >= n * 0.25 {
+        "teal"
+    } else if red > teal * 2 && f64::from(red) >= n * 0.25 {
+        "red"
+    } else {
+        ""
+    }
+}

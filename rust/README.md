@@ -26,7 +26,8 @@ pages stay HTML (OBS browser sources need web pages); the Rust server serves the
 | Companion API 3176 (health, variables, capabilities, state, SSE events, action) | `electron/companion-api-service.cjs` | `isu-server::companion` | socket tests (keys, errors, CORS, restart/free port) |
 | Controller UI (native egui, Derk chose option 2: everything in Rust) | `src/app.js` + panels | todo | |
 | VALORANT board reader: align, cells, credits, glyph count, parse, read ladder (native Tesseract, Derk OK'd 2026-10-15) | `electron/valorant-board-parse.cjs`, `valorant-ocr-engine.cjs` | `isu-ocr::board`, `tess` | real frames: 139/140 cells identical to JS; Windows 7900X: 2.0-2.8x faster, 6.5x less RAM (`bench/RESULTS.md`) |
-| VALORANT agents / guns / shields, consensus, identity, HUD, capture; Overwatch reader | `electron/valorant-*.cjs`, `overwatch-*.cjs` | todo | |
+| VALORANT agents, guns, shields, block colours, consensus, player identity (rows re-sort) | `valorant-board-parse.cjs`, `valorant-board-identity.cjs` | `isu-ocr::icons`, `consensus`, `board::block_color` | real frames + scripted sweeps: identical to JS (`tests/parity_board.rs`) |
+| VALORANT board service (sweep loop), HUD reader, window capture; Overwatch reader | `valorant-board-service.cjs`, `valorant-hud-reader.cjs`, `valorant-*capture.cjs`, `overwatch-*.cjs` | todo | |
 | Game Bridge, spectate tracker | `electron/game-bridge.cjs`, `spectate-*` | todo | |
 | Display Client + Display Manager | `electron/displays/` | todo | |
 | Rocket League Stats API | `electron/rocket-league-*.cjs` | todo | |
