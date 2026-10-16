@@ -15,7 +15,8 @@ use serde_json::{Value, json};
 
 /// %APPDATA%\ISU Esports Game Bridge (Electron app.setPath('userData', ...)).
 fn user_data() -> PathBuf {
-    dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("ISU Esports Game Bridge")
+    std::env::var_os("ISU_BRIDGE_USER_DATA").map(PathBuf::from).unwrap_or_else(||
+        dirs::config_dir().unwrap_or_else(|| PathBuf::from(".")).join("ISU Esports Game Bridge"))
 }
 fn config_path() -> PathBuf {
     user_data().join("bridge-config.json")
@@ -442,13 +443,21 @@ mod tests {
         let mut c = f.clone(); c.roi[0] = "120".into(); c.game = "overwatch".into(); c.render_mode(); assert_eq!(c.roi[0], "120");
     }
     #[test]
-    fn config_read_from_xdg() {
+    fn config_read_from_user_data() {
         let d = std::env::temp_dir().join(format!("isu-bridge-cfg-{}", std::process::id()));
         std::fs::create_dir_all(d.join("ISU Esports Game Bridge")).unwrap();
         std::fs::write(d.join("ISU Esports Game Bridge/bridge-config.json"), r#"{"game":"overwatch"}"#).unwrap();
         // SAFETY: test-only, single thread at this point
-        unsafe { std::env::set_var("XDG_CONFIG_HOME", &d); }
-        assert_eq!(dirs::config_dir().unwrap(), d);
+        let user_dir = d.join("ISU Esports Game Bridge");
+        let previous = std::env::var_os("ISU_BRIDGE_USER_DATA");
+        unsafe { std::env::set_var("ISU_BRIDGE_USER_DATA", &user_dir); }
+        assert_eq!(user_data(), user_dir);
         assert_eq!(read_config()["game"], "overwatch");
+        unsafe {
+            match previous {
+                Some(value) => std::env::set_var("ISU_BRIDGE_USER_DATA", value),
+                None => std::env::remove_var("ISU_BRIDGE_USER_DATA"),
+            }
+        }
     }
 }
