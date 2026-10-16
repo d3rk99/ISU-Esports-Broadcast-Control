@@ -5,6 +5,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod cursor;
+mod hotkeys;
 mod mirror;
 mod ndi;
 mod noise;
@@ -306,6 +307,7 @@ struct App {
     form: Value,
     saved_at: Option<std::time::Instant>,
     devices: Vec<String>,
+    hotkeys: hotkeys::Hotkeys,
 }
 
 impl App {
@@ -348,7 +350,7 @@ impl App {
         sh.apply_mode("ndi", ""); // NDI by default, before the controller answers
         rt.spawn(link_loop(Arc::clone(&sh)));
         log_line("ready");
-        Self { sh, _rt: rt, tex: None, settings: false, form: cfg, saved_at: None, devices: noise::Noise::devices() }
+        Self { sh, _rt: rt, tex: None, settings: false, form: cfg, saved_at: None, devices: noise::Noise::devices(), hotkeys: hotkeys::Hotkeys::new(cc.egui_ctx.clone()) }
     }
 
     fn output(&mut self, ui: &mut egui::Ui) {
@@ -469,9 +471,19 @@ impl App {
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = root.ctx().clone();
-        // shortcuts (only while this window has focus; the JS uses global shortcuts)
-        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.alt && i.key_pressed(egui::Key::S)) { self.settings = true; self.form = self.sh.live.lock().unwrap().cfg.clone(); self.devices = noise::Noise::devices(); }
-        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.alt && i.key_pressed(egui::Key::L)) {
+        let mut open_settings = false;
+        let mut toggle_cursor = false;
+        for action in self.hotkeys.events.try_iter() {
+            match action { hotkeys::Action::Settings => open_settings = true, hotkeys::Action::CursorLock => toggle_cursor = !toggle_cursor }
+        }
+        // Windows delivers global hotkeys through WM_HOTKEY, avoiding a second focused-window toggle.
+        #[cfg(not(windows))]
+        {
+            open_settings |= ctx.input(|i| i.modifiers.ctrl && i.modifiers.alt && i.key_pressed(egui::Key::S));
+            toggle_cursor ^= ctx.input(|i| i.modifiers.ctrl && i.modifiers.alt && i.key_pressed(egui::Key::L));
+        }
+        if open_settings { self.settings = true; self.form = self.sh.live.lock().unwrap().cfg.clone(); self.devices = noise::Noise::devices(); }
+        if toggle_cursor {
             let mut cfg = self.sh.live.lock().unwrap().cfg.clone();
             cfg["cursorLock"] = json!(cfg["cursorLock"] != true);
             let cfg = normalize(&cfg);
