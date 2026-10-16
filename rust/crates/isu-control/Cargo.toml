@@ -26,6 +26,9 @@ dirs.workspace = true
 rfd = "0.17"
 png.workspace = true
 base64 = "0.22"
+# team logos / portraits / hero art in the window (the overlay server serves them on 3174)
+egui_extras = { version = "0.36", default-features = false, features = ["http", "image", "webp"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
 [dev-dependencies]
 egui_kittest = { version = "=0.36.2", features = ["eframe"] }

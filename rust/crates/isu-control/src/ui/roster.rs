@@ -5,7 +5,7 @@ use isu_core::controls::{Field, set_field};
 use isu_core::game_config::{config, initial_state, js_string, num_or_zero, truthy};
 use serde_json::{Value, json};
 
-use super::widgets::{panel, text_field, title};
+use super::widgets::{asset_tile, chip, cols, heading, primary_button, select, tab, text_field, toggle};
 use super::{App, c, hex};
 
 fn s(v: Option<&Value>) -> String {
@@ -50,17 +50,16 @@ fn station_owners(game: &Value, self_side: &str, self_key: &str, self_idx: usize
 pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let key = st["selectedGame"].as_str().unwrap_or("overwatch").to_string();
     let cfg = config(&key).unwrap();
-    // Rosters / Roster Manager sub tabs (renderRosterSubTabs)
+    // .roster-subtabs (renderRosterSubTabs): manager first, then the match roster
     let sub = if st["rosterSubTab"] == "manager" { "manager" } else { "lineup" };
     ui.horizontal(|ui| {
-        for (k, l) in [("lineup", "MATCH LINEUP"), ("manager", "ROSTER MANAGER")] {
-            let on = sub == k;
-            if ui.add(egui::Button::new(RichText::new(l).strong().color(if on { Color32::BLACK } else { c::TEXT })).fill(if on { c::ORANGE } else { c::PANEL_LIGHT })).clicked() && !on {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        for (k, l, n) in [("manager", "ROSTER MANAGER", "Teams & players library · source of truth"), ("lineup", "MATCH ROSTER", "Who is loaded for this match")] {
+            if tab(ui, l, n, sub == k, 260.0, "bottom") && sub != k {
                 app.set_and_persist(|s| s["rosterSubTab"] = json!(k));
             }
         }
     });
-    ui.add_space(8.0);
     if sub == "manager" {
         super::roster_manager::view(app, ui, st);
         return;
@@ -75,178 +74,206 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let team = &game["teams"][if side == "away" { 1 } else { 0 }];
     let t = |i: usize, k: &str| s(game.pointer(&format!("/teams/{i}/{k}")));
 
-    ui.horizontal(|ui| {
-        title(ui, "01", &format!("{} rosters", s(cfg.get("name"))), "Home and away lineups are saved separately for every program");
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.add(egui::Button::new(RichText::new("+ ADD PLAYER").strong().color(Color32::BLACK)).fill(c::ORANGE)).clicked() {
-                app.control("add-player", 0, None);
-            }
-        });
+    heading(ui, "01", &format!("{} rosters", s(cfg.get("name"))), "Home and away lineups are saved separately for every program", |ui| {
+        if ui.add(primary_button("+ ADD PLAYER")).clicked() {
+            app.control("add-player", 0, None);
+        }
     });
-    panel(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            let show_away = truthy(game.get("showAwayRoster")) || first == "away";
-            for (sd, i) in [("home", 0), ("away", 1)] {
-                if sd == "away" && !show_away {
-                    continue;
+    // .roster-sidebar: side tabs | first team shown | include second roster
+    cols(ui, &[-1.0, 290.0, 300.0], 12.0, |j, ui| match j {
+        0 => {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 7.0;
+                let show_away = truthy(game.get("showAwayRoster")) || first == "away";
+                for (sd, i) in [("home", 0), ("away", 1)] {
+                    if sd == "away" && !show_away {
+                        continue;
+                    }
+                    if tab(ui, &t(i, "name"), &sd.to_uppercase(), side == sd, 210.0, "left") && side != sd {
+                        app.set_and_persist(|s| s["activeRosterSide"] = json!(sd));
+                    }
                 }
-                let on = side == sd;
-                if ui.add(egui::Button::new(RichText::new(format!("{}  {}", sd.to_uppercase(), t(i, "name"))).strong()).fill(if on { c::ORANGE.gamma_multiply(0.5) } else { c::PANEL_LIGHT })).clicked() && !on {
-                    app.set_and_persist(|s| s["activeRosterSide"] = json!(sd));
-                }
-            }
-            ui.add_space(20.0);
-            let mut pick = first.to_string();
-            egui::ComboBox::from_label("FIRST TEAM SHOWN").selected_text(format!("{} · {}", first.to_uppercase(), t(fi, "name"))).show_ui(ui, |ui| {
-                ui.selectable_value(&mut pick, "home".to_string(), format!("HOME · {}", t(0, "name")));
-                ui.selectable_value(&mut pick, "away".to_string(), format!("AWAY · {}", t(1, "name")));
             });
-            if pick != first {
+        }
+        1 => {
+            let options = vec![("home".to_string(), format!("HOME · {}", t(0, "name"))), ("away".to_string(), format!("AWAY · {}", t(1, "name")))];
+            if let Some(pick) = select(ui, "first-side", "First team shown", &first.to_string(), &options) {
                 let mut m = None;
                 app.commit("Changes saved", |st| m = set_field(st, Field::RosterFirstSide { value: &pick }));
                 if let Some(m) = m { app.svc.core.lock().save_status = m; }
             }
+            ui.label(RichText::new("Selection follows the team when sides are swapped.").size(9.5).color(c::DIM));
+        }
+        _ => {
+            ui.add_space(8.0);
             let mut away = truthy(game.get("showAwayRoster"));
             let hint = if away { format!("Overlay cycles {} → {}", t(fi, "shortName"), t(si, "shortName")) } else { format!("Overlay shows {} only", t(fi, "shortName")) };
-            if ui.checkbox(&mut away, format!("Include second-team roster ({hint})")).changed() {
+            if toggle(ui, &mut away, "Include second-team roster", &hint) {
                 let mut m = None;
                 app.commit("Changes saved", |st| m = set_field(st, Field::AwayRoster { on: away }));
                 if let Some(m) = m { app.svc.core.lock().save_status = m; }
             }
-        });
-        ui.horizontal(|ui| {
-            for (k, l) in [("varsity", "Varsity"), ("jv", "Junior Varsity")] {
-                let n = game[coll][k].as_array().map_or(0, |a| a.iter().filter(|p| truthy(p.get("handle")) || truthy(p.get("name"))).count());
-                let on = rk == k;
-                if ui.add(egui::Button::new(RichText::new(format!("{l}\n{n} players entered")).strong()).fill(if on { c::ORANGE.gamma_multiply(0.5) } else { c::PANEL_LIGHT }).min_size(egui::vec2(180.0, 40.0))).clicked() && !on {
-                    app.set_and_persist(|s| s["activeRoster"] = json!(k));
-                }
-            }
-        });
+        }
     });
-    ui.add_space(8.0);
-    let band = hex(&s(team.get("color")));
-    egui::Frame::NONE.fill(band.gamma_multiply(0.35)).corner_radius(6.0).inner_margin(10.0).show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{} LINEUP", side.to_uppercase())).small().color(c::TEXT));
-            ui.label(RichText::new(s(team.get("name"))).strong().size(18.0));
-            ui.label(RichText::new(if rk == "jv" { "JUNIOR VARSITY" } else { "VARSITY" }).small().color(c::MUTED));
-        });
+    // .roster-tabs: Varsity / JV
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        for (k, l) in [("varsity", "Varsity"), ("jv", "Junior Varsity")] {
+            let n = game[coll][k].as_array().map_or(0, |a| a.iter().filter(|p| truthy(p.get("handle")) || truthy(p.get("name"))).count());
+            if tab(ui, l, &format!("{n} players entered"), rk == k, 210.0, "bottom") && rk != k {
+                app.set_and_persist(|s| s["activeRoster"] = json!(k));
+            }
+        }
     });
     // reader links (VALORANT board / Overwatch OCR), already mapped by team
     let live = match key.as_str() { "valorant" => game.pointer("/valorantBoard/live"), "overwatch" => game.pointer("/overwatchOcr/live"), _ => None };
     let links: Vec<(usize, isu_core::roster_manager::Link)> = live.and_then(|l| l.pointer(&format!("/teams/{side}/players"))).and_then(Value::as_array).map(|rows| isu_core::roster_manager::live_links(&roster, rows, 0.9)).unwrap_or_default();
     let roster_size = num_or_zero(cfg.get("rosterSize")) as usize;
-    for (i, p) in roster.iter().enumerate() {
-        player_editor(app, ui, game, cfg, p, i, side, &rk, roster_size, links.iter().find(|l| l.0 == i).map(|l| &l.1), &key);
-        ui.add_space(6.0);
-    }
-    ui.label(RichText::new(format!("{} roster slots · Recommended starters for {}: {roster_size}", roster.len(), s(cfg.get("name")))).small().color(c::MUTED));
+    // .roster-panel: band, header, rows, footer
+    egui::Frame::NONE.fill(c::PANEL).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x2d, 0x2d, 0x31))).corner_radius(3.0).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 0.0;
+        let tc = hex(&s(team.get("color")));
+        let sec = if truthy(team.get("secondaryColorEnabled")) { hex(&s(team.get("secondaryColor"))) } else { tc };
+        let (band, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 42.0), egui::Sense::hover());
+        let p = ui.painter();
+        p.rect_filled(band, 0.0, Color32::from_rgb(0x19, 0x19, 0x1c));
+        p.rect_filled(egui::Rect::from_min_size(band.min, egui::vec2(4.0, 21.0)), 0.0, tc);
+        p.rect_filled(egui::Rect::from_min_size(egui::pos2(band.left(), band.top() + 21.0), egui::vec2(4.0, 21.0)), 0.0, sec);
+        p.hline(band.x_range(), band.bottom(), egui::Stroke::new(1.0, Color32::from_rgb(0x32, 0x32, 0x38)));
+        p.text(egui::pos2(band.left() + 17.0, band.center().y), egui::Align2::LEFT_CENTER, format!("{} LINEUP", side.to_uppercase()), egui::FontId::proportional(9.5), tc);
+        p.text(egui::pos2(band.left() + 126.0, band.center().y), egui::Align2::LEFT_CENTER, s(team.get("name")), egui::FontId::proportional(12.0), Color32::WHITE);
+        p.text(egui::pos2(band.right() - 17.0, band.center().y), egui::Align2::RIGHT_CENTER, if rk == "jv" { "JUNIOR VARSITY" } else { "VARSITY" }, egui::FontId::proportional(9.5), Color32::from_rgb(0x73, 0x73, 0x7b));
+        // .roster-header
+        egui::Frame::NONE.fill(c::INPUT).inner_margin(egui::Margin::symmetric(15, 11)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            cols(ui, ROW_COLS, 8.0, |j, ui| {
+                let l = ["#", "GAMERTAG / HANDLE", "PLAYER NAME", "ROLE", "STATION", "STATUS", ""][j];
+                ui.label(RichText::new(l).size(9.0).strong().extra_letter_spacing(0.9).color(Color32::from_rgb(0x5f, 0x5f, 0x66)));
+            });
+        });
+        for (i, p) in roster.iter().enumerate() {
+            player_editor(app, ui, game, cfg, p, i, side, &rk, roster_size, links.iter().find(|l| l.0 == i).map(|l| &l.1), &key);
+        }
+        egui::Frame::NONE.fill(Color32::from_rgb(0x11, 0x11, 0x13)).inner_margin(egui::Margin::symmetric(18, 13)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{} roster slots", roster.len())).size(10.5).color(Color32::from_rgb(0xa7, 0xa7, 0xad)));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(RichText::new(format!("Recommended starters for {}: {roster_size}", s(cfg.get("name")))).size(10.5).color(Color32::from_rgb(0x65, 0x65, 0x6c)));
+                });
+            });
+        });
+    });
 }
+
+/// .roster-header / .player-row columns: # 46 | handle 1.05fr | name 1fr | role 150 | station 86 | status 220 | x 38
+const ROW_COLS: &[f32] = &[46.0, -1.05, -1.0, 150.0, 110.0, 200.0, 38.0];
 
 #[allow(clippy::too_many_arguments)]
 fn player_editor(app: &mut App, ui: &mut egui::Ui, game: &Value, cfg: &Value, p: &Value, i: usize, side: &str, rk: &str, roster_size: usize, link: Option<&isu_core::roster_manager::Link>, key: &str) {
     let edit = |app: &App, prop: &str, v: &str| {
         app.commit("Changes saved", |st| { set_field(st, Field::Player { index: i, prop, value: v }); });
     };
-    panel(ui, |ui| {
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(format!("{:02}", i + 1)).strong().color(c::ORANGE));
-            if let Some(v) = text_field(ui, &format!("p{side}{rk}{i}h"), "GAMERTAG", &s(p.get("handle")), 24, 150.0) {
-                edit(app, "handle", &v);
+    let r = egui::Frame::NONE.inner_margin(egui::Margin { left: 15, right: 15, top: 12, bottom: 13 }).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 8.0;
+        cols(ui, ROW_COLS, 8.0, |j, ui| match j {
+            0 => {
+                ui.add_space(8.0);
+                ui.label(RichText::new(format!("{:02}", i + 1)).size(15.0).strong().color(if i < roster_size { c::ORANGE } else { Color32::from_rgb(0x6c, 0x6c, 0x74) }));
             }
-            if let Some(v) = text_field(ui, &format!("p{side}{rk}{i}n"), "PLAYER NAME", &s(p.get("name")), 40, 170.0) {
-                edit(app, "name", &v);
-            }
-            ui.vertical(|ui| {
-                ui.label(RichText::new("ROLE").small().color(c::MUTED));
-                let cur = s(p.get("role"));
-                let mut pick = cur.clone();
-                egui::ComboBox::from_id_salt(format!("role{side}{rk}{i}")).selected_text(cur.clone()).show_ui(ui, |ui| {
-                    for r in cfg["roles"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                        ui.selectable_value(&mut pick, r.to_string(), r);
-                    }
-                });
-                if pick != cur {
-                    edit(app, "role", &pick);
+            1 => {
+                if let Some(v) = text_field(ui, &format!("p{side}{rk}{i}h"), "", &s(p.get("handle")), 24, 0.0) {
+                    edit(app, "handle", &v);
                 }
-            });
-            ui.vertical(|ui| {
-                ui.label(RichText::new("STATION").small().color(c::MUTED));
+            }
+            2 => {
+                if let Some(v) = text_field(ui, &format!("p{side}{rk}{i}n"), "", &s(p.get("name")), 40, 0.0) {
+                    edit(app, "name", &v);
+                }
+            }
+            3 => {
+                let cur = s(p.get("role"));
+                let options: Vec<(String, String)> = cfg["roles"].as_array().into_iter().flatten().filter_map(Value::as_str).map(|r| (r.to_string(), r.to_string())).collect();
+                if let Some(v) = select(ui, &format!("role{side}{rk}{i}"), "", &cur, &options) {
+                    edit(app, "role", &v);
+                }
+            }
+            4 => {
                 let owners = station_owners(game, side, rk, i);
                 let cur = num_or_zero(p.get("stageStation")) as i64;
-                let label = |n: i64| if n == 0 { "Off".to_string() } else { format!("{n:02}{}", owners.get(&n).map(|o| format!(" · {o}")).unwrap_or_default()) };
-                let mut pick = cur;
-                egui::ComboBox::from_id_salt(format!("st{side}{rk}{i}")).selected_text(label(cur)).show_ui(ui, |ui| {
-                    for n in 0..=10 {
-                        ui.selectable_value(&mut pick, n, label(n));
-                    }
-                });
-                if pick != cur {
+                let options: Vec<(i64, String)> = (0..=10).map(|n| (n, if n == 0 { "Off".to_string() } else { format!("{n:02}{}", owners.get(&n).map(|o| format!(" · {o}")).unwrap_or_default()) })).collect();
+                if let Some(pick) = select(ui, &format!("st{side}{rk}{i}"), "", &cur, &options) {
                     edit(app, "stageStation", &if pick == 0 { String::new() } else { pick.to_string() });
                 }
-            });
-            let status = match p.get("libraryStatus").and_then(Value::as_str) { Some("sixth") => "6TH MAN", Some("sub") => "SUB", _ => if i < roster_size { "STARTER" } else { "RESERVE" } };
-            ui.label(RichText::new(status).small().strong().color(if i < roster_size { c::ORANGE } else { c::MUTED }));
-            if key == "valorant" || key == "overwatch" {
-                match link {
-                    None => ui.label(RichText::new("READER —").small().color(c::MUTED)).on_hover_text("Not seen on the scoreboard reader"),
-                    Some(l) => ui.label(RichText::new(format!("{} {} · {}%{}", if l.linked { "LINKED" } else { "MAYBE" }, l.name, (l.score * 100.0).round(), if l.agent.is_empty() { String::new() } else { format!(" · {}", l.agent.to_uppercase()) })).small().color(if l.linked { Color32::from_rgb(80, 200, 120) } else { c::ORANGE })),
-                };
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            5 => {
+                ui.add_space(6.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
+                    let starter = i < roster_size;
+                    let status = match p.get("libraryStatus").and_then(Value::as_str) { Some("sixth") => "6TH MAN", Some("sub") => "SUB", _ => if starter { "STARTER" } else { "RESERVE" } };
+                    if starter { chip(ui, status, c::ORANGE, c::ORANGE.gamma_multiply(0.08)); } else { chip(ui, status, Color32::from_rgb(0x69, 0x69, 0x71), Color32::from_rgb(0x1c, 0x1c, 0x1f)); }
+                    if key == "valorant" || key == "overwatch" {
+                        match link {
+                            None => { chip(ui, "READER —", Color32::from_rgb(0x55, 0x55, 0x5c), Color32::from_rgb(0x1c, 0x1c, 0x1f)).on_hover_text("Not seen on the scoreboard reader"); }
+                            Some(l) => {
+                                let txt = format!("{} {} · {}%{}", if l.linked { "LINKED" } else { "MAYBE" }, l.name, (l.score * 100.0).round(), if l.agent.is_empty() { String::new() } else { format!(" · {}", l.agent.to_uppercase()) });
+                                if l.linked { chip(ui, &txt, Color32::from_rgb(0x7b, 0xe0, 0x8f), Color32::from_rgb(0x1f, 0x3a, 0x26)); } else { chip(ui, &txt, Color32::from_rgb(0xe6, 0xc3, 0x5c), Color32::from_rgb(0x3a, 0x32, 0x1a)); }
+                            }
+                        }
+                    }
+                });
+            }
+            _ => {
+                ui.add_space(2.0);
                 if app.confirm_button(ui, &format!("rm{side}{rk}{i}"), "×", "Remove?") {
                     app.control("remove-player", i, None);
                 }
-            });
-        });
-        ui.horizontal_wrapped(|ui| {
-            image_tile(app, ui, "Player portrait", &s(p.get("playerImage")), &s(p.get("playerImageName")), "playerImage", i, "");
-            let label = s(cfg.get("characterLabel"));
-            ui.vertical(|ui| {
-                ui.label(RichText::new(label.to_uppercase()).small().color(c::MUTED));
-                let cur = s(p.get("character"));
-                let mut pick = cur.clone();
-                egui::ComboBox::from_id_salt(format!("ch{side}{rk}{i}")).selected_text(if cur.is_empty() { format!("Select {label}") } else { cur.clone() }).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut pick, String::new(), format!("Select {label}"));
-                    for h in cfg["characters"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-                        ui.selectable_value(&mut pick, h.to_string(), h);
-                    }
-                });
-                if pick != cur {
-                    edit(app, "character", &pick);
-                }
-                let note = if key == "overwatch" { "Hero art is assigned automatically from the selected hero.".to_string() } else if key == "rocketleague" { "Car PNG is unique to this player.".into() } else { format!("Artwork is shared across every {} roster.", s(cfg.get("name"))) };
-                ui.label(RichText::new(note).small().color(c::MUTED));
-            });
-            let ch = s(p.get("character"));
-            let art = game.pointer("/characterArt").and_then(|a| a.get(&ch)).cloned().unwrap_or(json!({}));
-            if key == "overwatch" {
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("Hero artwork").strong());
-                    ui.label(RichText::new(if ch.is_empty() { format!("Select a {} to preview art", label.to_lowercase()) } else if truthy(art.get("name")) { s(art.get("name")) } else { format!("No {ch} artwork assigned") }).small().color(c::MUTED));
-                    ui.label(RichText::new("Assigned automatically").small().italics().color(c::MUTED));
-                });
-            } else if key == "rocketleague" {
-                image_tile(app, ui, "Player car PNG", &s(p.get("characterImage")), &s(p.get("characterImageName")), "characterImage", i, &ch);
-            } else {
-                image_tile(app, ui, &format!("{label} artwork"), &s(art.get("url")), &s(art.get("name")), "characterArtwork", i, &ch);
             }
         });
-    });
+        // .player-media-row: portrait | character | art, indented under the number
+        let label = s(cfg.get("characterLabel"));
+        cols(ui, &[46.0, -1.0, -0.8, -1.0], 10.0, |j, ui| match j {
+            0 => {}
+            1 => image_tile(app, ui, "Player portrait", &s(p.get("playerImage")), &s(p.get("playerImageName")), "playerImage", i, "", "PLAYER"),
+            2 => {
+                let cur = s(p.get("character"));
+                let mut options: Vec<(String, String)> = vec![(String::new(), format!("Select {label}"))];
+                options.extend(cfg["characters"].as_array().into_iter().flatten().filter_map(Value::as_str).map(|h| (h.to_string(), h.to_string())));
+                if let Some(v) = select(ui, &format!("ch{side}{rk}{i}"), &label, &cur, &options) {
+                    edit(app, "character", &v);
+                }
+                let note = if key == "overwatch" { "Hero art is assigned automatically from the selected hero.".to_string() } else if key == "rocketleague" { "Car PNG is unique to this player.".into() } else { format!("Artwork is shared across every {} roster.", s(cfg.get("name"))) };
+                ui.add(egui::Label::new(RichText::new(note).size(9.5).color(Color32::from_rgb(0x57, 0x57, 0x5e))).wrap());
+            }
+            _ => {
+                let ch = s(p.get("character"));
+                let art = game.pointer("/characterArt").and_then(|a| a.get(&ch)).cloned().unwrap_or(json!({}));
+                if key == "overwatch" {
+                    let file = if ch.is_empty() { format!("Select a {} to preview art", label.to_lowercase()) } else if truthy(art.get("name")) { s(art.get("name")) } else { format!("No {ch} artwork assigned") };
+                    asset_tile(ui, "Hero artwork", &s(art.get("url")), &file, &label.to_uppercase(), "", false, false);
+                } else if key == "rocketleague" {
+                    image_tile(app, ui, "Player car PNG", &s(p.get("characterImage")), &s(p.get("characterImageName")), "characterImage", i, &ch, &label.to_uppercase());
+                } else {
+                    image_tile(app, ui, &format!("{label} artwork"), &s(art.get("url")), &s(art.get("name")), "characterArtwork", i, &ch, &label.to_uppercase());
+                }
+            }
+        });
+    }).response;
+    ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(1.0, Color32::from_rgb(0x24, 0x24, 0x28)));
 }
 
 /// imageTile + pick/clear-player-image handlers.
 #[allow(clippy::too_many_arguments)]
-fn image_tile(app: &mut App, ui: &mut egui::Ui, label: &str, value: &str, filename: &str, kind: &str, index: usize, character: &str) {
-    ui.vertical(|ui| {
-        ui.label(RichText::new(label).strong());
-        let shown = if !filename.is_empty() { filename.to_string() } else if !character.is_empty() { format!("No {character} artwork yet") } else { "No image selected".into() };
-        ui.label(RichText::new(shown).small().color(c::MUTED));
-        ui.horizontal(|ui| {
-            let disabled = kind == "characterArtwork" && character.is_empty();
-            if ui.add_enabled(!disabled, egui::Button::new(if value.is_empty() { "CHOOSE PNG" } else { "REPLACE" })).clicked() {
+fn image_tile(app: &mut App, ui: &mut egui::Ui, label: &str, value: &str, filename: &str, kind: &str, index: usize, character: &str, placeholder: &str) {
+    let shown = if !filename.is_empty() { filename.to_string() } else if !character.is_empty() { format!("No {character} artwork yet") } else { "No image selected".into() };
+    let disabled = kind == "characterArtwork" && character.is_empty();
+    let (choose, clear) = asset_tile(ui, label, value, &shown, placeholder, if value.is_empty() { "CHOOSE PNG" } else { "REPLACE" }, !disabled, !value.is_empty());
+    {
+        {
+            if choose {
                 let t = if kind == "playerImage" { "Choose player image" } else { "Choose character image" };
                 if let Some((name, url)) = pick_image(app, t) {
                     let (k, ch) = (kind.to_string(), character.to_string());
@@ -265,7 +292,7 @@ fn image_tile(app: &mut App, ui: &mut egui::Ui, label: &str, value: &str, filena
                     });
                 }
             }
-            if !value.is_empty() && ui.button("CLEAR").clicked() {
+            if clear {
                 let (k, ch) = (kind.to_string(), character.to_string());
                 let msg = if k == "characterArtwork" { format!("{ch} artwork cleared") } else { "Roster image cleared".into() };
                 app.commit(&msg, |st| {
@@ -288,6 +315,6 @@ fn image_tile(app: &mut App, ui: &mut egui::Ui, label: &str, value: &str, filena
                     }
                 });
             }
-        });
-    });
+        }
+    }
 }

@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32, RichText};
 use isu_core::game_config::{js_string, num_or_zero, truthy};
 use serde_json::{Value, json};
 
-use super::widgets::{panel, title};
+use super::widgets::{cols, field_label, heading, panel, secondary_button, select, title};
 use super::{App, c};
 
 /// DISPLAY_PRESETS (id, label, description), src/display-presets.js.
@@ -102,94 +102,99 @@ pub fn view(app: &mut App, ui: &mut egui::Ui, st: &Value) {
     let row = |n: usize| stations.iter().find(|x| x["station"].as_u64() == Some(n as u64)).cloned().unwrap_or(json!({ "station": n, "online": false, "mode": "ndi", "source": format!("ISU Stage {n:02}") }));
     let preset_of = |n: usize| st.pointer(&format!("/displays/stations/{n}/preset")).and_then(Value::as_str).unwrap_or("idle").to_string();
     let header = format!("{} of 10 display clients online · port {}{}", num_or_zero(ds.get("onlineCount")), { let p = num_or_zero(ds.get("port")); if p == 0.0 { 3178.0 } else { p } }, if truthy(ds.get("error")) { format!(" · {}", s(ds.get("error"))) } else { String::new() });
-    ui.horizontal(|ui| {
-        title(ui, "01", "Stations", &header);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.button("ALL: NDI").clicked() {
-                mode(app, "all", "ndi");
-            }
-            if ui.button("ALL: GAME MIRROR").clicked() {
-                mode(app, "all", "mirror");
-            }
-        });
+    heading(ui, "01", "Stations", &header, |ui| {
+        if ui.add(secondary_button("ALL: NDI")).clicked() {
+            mode(app, "all", "ndi");
+        }
+        if ui.add(secondary_button("ALL: GAME MIRROR")).clicked() {
+            mode(app, "all", "mirror");
+        }
     });
     for (key, list) in [("1-5", [1usize, 2, 3, 4, 5]), ("6-10", [6, 7, 8, 9, 10])] {
         panel(ui, |ui| {
-            ui.horizontal(|ui| {
-                title(ui, "", &format!("Stations {key}"), "Game mirror or NDI preset for these five only");
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let all_noise = |v: bool| list.iter().all(|n| truthy(row(*n).get("noise")) == v);
-                    if sel_button(ui, "OFF", all_noise(false)).clicked() { noise(app, key, false); }
-                    if sel_button(ui, "ON", all_noise(true)).clicked() { noise(app, key, true); }
-                    ui.label(RichText::new("PINK NOISE").small().color(c::MUTED));
-                    let all_mode = |m: &str| list.iter().all(|n| row(*n)["mode"] == m);
-                    if sel_button(ui, &format!("{key}: NDI"), all_mode("ndi")).clicked() { mode(app, key, "ndi"); }
-                    if sel_button(ui, &format!("{key}: GAME MIRROR"), all_mode("mirror")).clicked() { mode(app, key, "mirror"); }
-                });
+            let all_noise = |v: bool| list.iter().all(|n| truthy(row(*n).get("noise")) == v);
+            let all_mode = |m: &str| list.iter().all(|n| row(*n)["mode"] == m);
+            heading(ui, "", &format!("Stations {key}"), "Game mirror or NDI preset for these five only", |ui| {
+                if pill(ui, "OFF", all_noise(false), BLUE).clicked() { noise(app, key, false); }
+                if pill(ui, "ON", all_noise(true), PINK).clicked() { noise(app, key, true); }
+                ui.label(RichText::new("PINK NOISE").size(9.5).strong().extra_letter_spacing(1.3).color(PINK));
+                ui.add_space(12.0);
+                if pill(ui, &format!("{key}: NDI"), all_mode("ndi"), BLUE).clicked() { mode(app, key, "ndi"); }
+                if pill(ui, &format!("{key}: GAME MIRROR"), all_mode("mirror"), BLUE).clicked() { mode(app, key, "mirror"); }
             });
-            ui.horizontal_wrapped(|ui| {
-                for n in list {
-                    station_card(app, ui, &row(n), &preset_of(n), n);
-                }
-            });
-            preset_buttons(app, ui, key, &list.iter().map(|n| preset_of(*n)).collect::<Vec<_>>());
+            // .disp-grid: 5 equal cards
+            cols(ui, &[-1.0; 5], 10.0, |j, ui| station_card(app, ui, &row(list[j]), &preset_of(list[j]), list[j]));
+            ui.add_space(4.0);
+            preset_buttons(app, ui, key, &list.iter().map(|n| preset_of(*n)).collect::<Vec<_>>(), false);
         });
-        ui.add_space(8.0);
     }
     // 02 pink noise all
     panel(ui, |ui| {
         title(ui, "02", "Pink noise (player headsets)", "Players hear game + comms in their IEMs; the headset on top plays pink noise so they can't hear the room. Each display client plays it on the headset output picked in its settings (Ctrl+Alt+S), capped by that PC's max volume.");
         ui.horizontal(|ui| {
             let all_noise = |v: bool| (1..=10).all(|n| truthy(row(n).get("noise")) == v);
-            ui.label(RichText::new("PINK NOISE · ALL 10").small().color(c::MUTED));
-            if sel_button(ui, "ON", all_noise(true)).clicked() { noise(app, "all", true); }
-            if sel_button(ui, "OFF", all_noise(false)).clicked() { noise(app, "all", false); }
+            ui.label(RichText::new("PINK NOISE · ALL 10").size(9.5).strong().extra_letter_spacing(1.3).color(PINK));
+            if pill(ui, "ON", all_noise(true), PINK).clicked() { noise(app, "all", true); }
+            if pill(ui, "OFF", all_noise(false), BLUE).clicked() { noise(app, "all", false); }
+            ui.add_space(18.0);
+            field_label(ui, "Volume (%)");
             let mut vol = stations.first().and_then(|x| x.get("noiseVolume")).and_then(Value::as_f64).unwrap_or(30.0).round() as i64;
-            let r = ui.add(egui::Slider::new(&mut vol, 0..=100).step_by(5.0).text("VOLUME (%)"));
+            ui.spacing_mut().slider_width = 260.0;
+            let r = ui.add(egui::Slider::new(&mut vol, 0..=100).step_by(5.0).suffix("%"));
             if r.drag_stopped() || (r.changed() && !r.dragged()) {
                 // volume only: every station keeps its own on/off
                 app.svc.displays.set_noise("all", &json!("keep"), Some(&json!(vol)));
                 app.toast(&format!("Pink noise volume {vol}%"));
             }
             let playing = stations.iter().filter(|x| x["online"] == true && x["noise"] == true && x["noiseState"] == "playing").count();
-            ui.label(RichText::new(format!("{playing} of 10 playing")).small().color(c::MUTED));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(RichText::new(format!("{playing} of 10 playing")).size(11.0).color(c::DIM)));
         });
     });
-    ui.add_space(8.0);
     // 03 presets all
     panel(ui, |ui| {
         title(ui, "03", "NDI presets (all 10 stations)", "What OBS draws on every ISU Stage NN feed. Changes are instant: the pages update live, OBS never reloads.");
-        preset_buttons(app, ui, "all", &(1..=10).map(preset_of).collect::<Vec<_>>());
+        preset_buttons(app, ui, "all", &(1..=10).map(preset_of).collect::<Vec<_>>(), true);
+        ui.add_space(6.0);
         ui.horizontal(|ui| {
-            ui.label("Team banners:");
+            ui.label(RichText::new("Team banners:").size(11.0).color(GREY));
             for (t, l) in [("", "AUTO (1-5 home · 6-10 away)"), ("home", "ALL HOME"), ("away", "ALL AWAY")] {
-                if ui.button(l).clicked() {
+                if pill(ui, l, false, BLUE).clicked() {
                     preset(app, "all", "banner", t);
                 }
             }
         });
     });
-    ui.add_space(8.0);
     obs_panel(app, ui);
-    ui.add_space(8.0);
     panel(ui, |ui| {
         title(ui, "", "Display key", "Optional. If set, every display client must enter the same key in its settings (Ctrl+Alt+S on the station).");
-        ui.horizontal(|ui| {
-            let hint = if ds["keyRequired"] == true { "key set · type a new one or leave blank to clear" } else { "no key (open)" };
-            ui.add(egui::TextEdit::singleline(&mut app.obs.key).password(true).hint_text(hint).desired_width(320.0));
-            if ui.button("SAVE KEY").clicked() {
-                let k = app.obs.key.clone();
-                app.svc.core.files.save_display_key(&k);
-                app.svc.displays.set_key(&k);
-                app.obs.key.clear();
-                app.toast(if k.is_empty() { "Display key cleared" } else { "Display key saved: clients must use it" });
+        cols(ui, &[360.0, 120.0, -1.0], 8.0, |j, ui| match j {
+            0 => {
+                let hint = if ds["keyRequired"] == true { "key set · type a new one or leave blank to clear" } else { "no key (open)" };
+                ui.add(egui::TextEdit::singleline(&mut app.obs.key).password(true).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)));
             }
+            1 => {
+                if ui.add(secondary_button("SAVE KEY").min_size(egui::vec2(ui.available_width(), 35.0))).clicked() {
+                    let k = app.obs.key.clone();
+                    app.svc.core.files.save_display_key(&k);
+                    app.svc.displays.set_key(&k);
+                    app.obs.key.clear();
+                    app.toast(if k.is_empty() { "Display key cleared" } else { "Display key saved: clients must use it" });
+                }
+            }
+            _ => {}
         });
     });
 }
 
-fn sel_button(ui: &mut egui::Ui, label: &str, on: bool) -> egui::Response {
-    ui.add(egui::Button::new(RichText::new(label).strong().color(if on { Color32::BLACK } else { c::TEXT })).fill(if on { c::ORANGE } else { c::PANEL_LIGHT }))
+/// displays-view colours (its own blue/pink accent set in styles.css).
+const BLUE: Color32 = Color32::from_rgb(0x2d, 0x8c, 0xff);
+const PINK: Color32 = Color32::from_rgb(0xe0, 0x5a, 0xa8);
+const GREY: Color32 = Color32::from_rgb(0x8a, 0x94, 0xa3);
+
+/// .disp-modes button / .disp-noise-row button: 6 px radius, active = blue (or pink for noise).
+fn pill(ui: &mut egui::Ui, label: &str, on: bool, accent: Color32) -> egui::Response {
+    let (bg, bd, fg) = if on { (accent.gamma_multiply(0.3), accent, Color32::WHITE) } else { (Color32::from_rgb(0x18, 0x1b, 0x21), Color32::from_rgb(0x2c, 0x32, 0x3b), Color32::from_rgb(0xcf, 0xd6, 0xdf)) };
+    ui.add(egui::Button::new(RichText::new(label).size(11.0).strong().color(fg)).fill(bg).stroke(egui::Stroke::new(1.0, bd)).corner_radius(6.0).min_size(egui::vec2(0.0, 30.0)))
 }
 
 fn mode(app: &mut App, station: &str, m: &str) {
@@ -214,13 +219,27 @@ fn preset(app: &mut App, station: &str, p: &str, team: &str) {
     app.commit(&format!("Displays {label}: {p}"), |st| { let _ = isu_core::display_presets::apply_display_preset(st, &st2, &p2, &t2); });
 }
 
-fn preset_buttons(app: &mut App, ui: &mut egui::Ui, group: &str, current: &[String]) {
-    ui.horizontal_wrapped(|ui| {
-        for (id, label, desc) in PRESETS {
-            let on = current.iter().all(|p| p == id);
-            if sel_button(ui, label, on).on_hover_text(desc).clicked() {
-                preset(app, group, id, "");
-            }
+/// .disp-preset-grid: 6 equal preset cards (label + description on the big grid, label only per group).
+fn preset_buttons(app: &mut App, ui: &mut egui::Ui, group: &str, current: &[String], with_desc: bool) {
+    cols(ui, &[-1.0; 6], 8.0, |j, ui| {
+        let (id, label, desc) = PRESETS[j];
+        let on = current.iter().all(|p| p == id);
+        let h = if with_desc { 64.0 } else { 38.0 };
+        let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::click());
+        let p = ui.painter();
+        let (bg, bd) = if on { (Color32::from_rgb(0x2a, 0x17, 0x08), c::ORANGE) } else if resp.hovered() { (Color32::from_rgb(0x1b, 0x1f, 0x25), Color32::from_rgb(0x3b, 0x42, 0x4d)) } else { (Color32::from_rgb(0x15, 0x18, 0x1d), Color32::from_rgb(0x2c, 0x32, 0x3b)) };
+        p.rect(r, 8.0, bg, egui::Stroke::new(1.0, bd), egui::StrokeKind::Inside);
+        if with_desc {
+            p.text(egui::pos2(r.left() + 12.0, r.top() + 17.0), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(13.0), Color32::from_rgb(0xe9, 0xee, 0xf4));
+            let g = p.layout(desc.to_string(), egui::FontId::proportional(10.0), GREY, r.width() - 24.0);
+            p.galley(egui::pos2(r.left() + 12.0, r.top() + 29.0), g, GREY);
+        } else {
+            p.text(r.center(), egui::Align2::CENTER_CENTER, label, egui::FontId::proportional(12.0), Color32::from_rgb(0xe9, 0xee, 0xf4));
+        }
+        let resp = resp.on_hover_text(desc);
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+        if resp.clicked() {
+            preset(app, group, id, "");
         }
     });
 }
@@ -229,32 +248,35 @@ fn station_card(app: &mut App, ui: &mut egui::Ui, row: &Value, preset_now: &str,
     let online = row["online"] == true;
     let m = s(row.get("mode"));
     let health = if !online { "offline".to_string() } else if truthy(row.get("error")) { s(row.get("error")) } else if m == "mirror" { "mirroring".into() } else if row["state"] == "receiving" { format!("NDI {} fps", s(row.get("fps"))).trim().to_string() } else { let x = s(row.get("state")); if x.is_empty() { "connecting".into() } else { x } };
-    let col = if !online { c::MUTED } else if truthy(row.get("error")) { c::RED } else if m == "mirror" || row["state"] == "receiving" { Color32::from_rgb(80, 200, 120) } else { c::ORANGE };
-    egui::Frame::NONE.fill(c::PANEL_LIGHT).corner_radius(6.0).inner_margin(8.0).show(ui, |ui| {
-        ui.set_width(200.0);
+    let (dot, txt) = if !online { (Color32::from_rgb(0x44, 0x44, 0x44), GREY) } else if truthy(row.get("error")) { (Color32::from_rgb(0xff, 0x5a, 0x5a), Color32::from_rgb(0xff, 0x8a, 0x8a)) } else if m == "mirror" || row["state"] == "receiving" { (Color32::from_rgb(0x2f, 0xd2, 0x7a), Color32::from_rgb(0x6e, 0xe7, 0xa8)) } else { (Color32::from_rgb(0xff, 0xce, 0x47), Color32::from_rgb(0xff, 0xdf, 0x7a)) };
+    egui::Frame::NONE.fill(Color32::from_rgb(0x11, 0x13, 0x17)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x26, 0x2a, 0x31))).corner_radius(8.0).inner_margin(12.0).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 7.0;
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{n:02}")).strong().size(18.0));
-            ui.label(RichText::new({ let h = s(row.get("hostname")); if h.is_empty() { "no client".into() } else { h } }).small().color(c::MUTED));
-            ui.label(RichText::new("●").color(col)).on_hover_text(&health);
+            ui.label(RichText::new(format!("{n:02}")).strong().italics().size(20.0).color(c::TEXT));
+            ui.add(egui::Label::new(RichText::new({ let h = s(row.get("hostname")); if h.is_empty() { "no client".into() } else { h } }).size(11.0).color(GREY)).truncate());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (r, resp) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                ui.painter().circle_filled(r.center(), 5.0, dot);
+                resp.on_hover_text(&health);
+            });
         });
-        ui.label(RichText::new(&health).small().color(col));
-        ui.horizontal(|ui| {
-            if sel_button(ui, "GAME MIRROR", m == "mirror").clicked() { mode(app, &n.to_string(), "mirror"); }
-            if sel_button(ui, "NDI", m == "ndi").clicked() { mode(app, &n.to_string(), "ndi"); }
+        ui.add(egui::Label::new(RichText::new(&health).size(11.0).color(txt)).truncate());
+        cols(ui, &[-1.0, -1.0], 6.0, |j, ui| {
+            let (lbl, md) = if j == 0 { ("GAME MIRROR", "mirror") } else { ("NDI", "ndi") };
+            if ui.add(pill_btn(lbl, m == md, BLUE).min_size(egui::vec2(ui.available_width(), 30.0))).clicked() {
+                mode(app, &n.to_string(), md);
+            }
         });
         let on = truthy(row.get("noise"));
         let warn = on && online && row["noiseState"] != "playing";
         let title_txt = if !online { "Station offline: it starts as soon as the client connects".to_string() } else if truthy(row.get("noiseError")) { s(row.get("noiseError")) } else { format!("{}{} · {}%", { let x = s(row.get("noiseState")); if x.is_empty() { "off".into() } else { x } }, if truthy(row.get("noiseDevice")) { format!(" · {}", s(row.get("noiseDevice"))) } else { String::new() }, row.get("noiseVolume").and_then(Value::as_f64).unwrap_or(30.0)) };
-        if sel_button(ui, &format!("{}{}", if on { "PINK NOISE ON" } else { "PINK NOISE OFF" }, if warn { " · !" } else { "" }), on).on_hover_text(title_txt).clicked() {
+        let lbl = format!("{}{}", if on { "PINK NOISE ON" } else { "PINK NOISE OFF" }, if warn { " · !" } else { "" });
+        if ui.add(pill_btn(&lbl, on, PINK).min_size(egui::vec2(ui.available_width(), 28.0))).on_hover_text(title_txt).clicked() {
             noise(app, &n.to_string(), !on);
         }
-        let mut pick = preset_now.to_string();
-        egui::ComboBox::from_id_salt(format!("dp{n}")).selected_text(PRESETS.iter().find(|p| p.0 == preset_now).map_or("Idle", |p| p.1)).show_ui(ui, |ui| {
-            for (id, label, _) in PRESETS {
-                ui.selectable_value(&mut pick, id.to_string(), label);
-            }
-        });
-        if pick != preset_now {
+        let options: Vec<(String, String)> = PRESETS.iter().map(|p| (p.0.to_string(), p.1.to_string())).collect();
+        if let Some(pick) = select(ui, &format!("dp{n}"), "NDI preset", &preset_now.to_string(), &options) {
             // data-display-preset change: keeps the station's team
             let p2 = pick.clone();
             app.commit(&format!("Display {n:02}: {pick}"), |st| {
@@ -264,43 +286,55 @@ fn station_card(app: &mut App, ui: &mut egui::Ui, row: &Value, preset_now: &str,
         }
         let feed = app.obs.status.as_ref().and_then(|o| o["stations"].as_array().and_then(|a| a.iter().find(|x| x["station"].as_u64() == Some(n as u64)).cloned()));
         let src = { let x = s(row.get("source")); if x.is_empty() { format!("ISU Stage {n:02}") } else { x } };
-        let tail = feed.as_ref().map_or(String::new(), |f| if f["active"] == true && f["ndiOn"] == true { " · OBS sending".into() } else { " · OBS not sending".into() });
-        ui.label(RichText::new(format!("{src}{tail}")).small().color(c::MUTED));
+        let (tail, col) = feed.as_ref().map_or((String::new(), Color32::from_rgb(0x6b, 0x76, 0x86)), |f| if f["active"] == true && f["ndiOn"] == true { (" · OBS sending".into(), Color32::from_rgb(0x6e, 0xe7, 0xa8)) } else { (" · OBS not sending".into(), Color32::from_rgb(0xff, 0x8a, 0x8a)) });
+        ui.add(egui::Label::new(RichText::new(format!("{src}{tail}")).size(10.0).color(col)).truncate());
     });
+}
+
+fn pill_btn(label: &str, on: bool, accent: Color32) -> egui::Button<'static> {
+    let (bg, bd, fg) = if on { (accent.gamma_multiply(0.3), accent, Color32::WHITE) } else { (Color32::from_rgb(0x18, 0x1b, 0x21), Color32::from_rgb(0x2c, 0x32, 0x3b), Color32::from_rgb(0xcf, 0xd6, 0xdf)) };
+    egui::Button::new(RichText::new(label.to_string()).size(10.5).strong().color(fg)).fill(bg).stroke(egui::Stroke::new(1.0, bd)).corner_radius(6.0)
 }
 
 fn obs_panel(app: &mut App, ui: &mut egui::Ui) {
     panel(ui, |ui| {
         title(ui, "04", "OBS (draws + sends the NDI feeds)", "Needs OBS 31.1+ with DistroAV and Tools → WebSocket Server on. SET UP OBS makes 10 scenes with a browser page each and a DistroAV NDI filter named ISU Stage 01-10. Run it again any time; it only adds what's missing.");
-        ui.horizontal_wrapped(|ui| {
-            for (l, v, w, pw) in [("OBS PC", &mut app.obs.host, 140.0, false), ("PORT", &mut app.obs.port, 60.0, false)] {
-                ui.vertical(|ui| { ui.label(RichText::new(l).small().color(c::MUTED)); ui.add(egui::TextEdit::singleline(v).desired_width(w).password(pw)); });
+        let edit = |ui: &mut egui::Ui, label: &str, v: &mut String, hint: &str, pw: bool| {
+            field_label(ui, label);
+            ui.add(egui::TextEdit::singleline(v).password(pw).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)));
+        };
+        cols(ui, &[-1.0, 90.0, -1.0, 170.0, -1.3], 10.0, |j, ui| match j {
+            0 => edit(ui, "OBS PC", &mut app.obs.host, "", false),
+            1 => edit(ui, "Port", &mut app.obs.port, "", false),
+            2 => {
+                let hint = if app.obs.has_password { "saved · blank keeps it" } else { "from OBS WebSocket settings" };
+                edit(ui, "Password", &mut app.obs.password, hint, true);
             }
-            let hint = if app.obs.has_password { "saved · blank keeps it" } else { "from OBS WebSocket settings" };
-            ui.vertical(|ui| { ui.label(RichText::new("PASSWORD").small().color(c::MUTED)); ui.add(egui::TextEdit::singleline(&mut app.obs.password).password(true).hint_text(hint).desired_width(170.0)); });
-            ui.vertical(|ui| {
-                ui.label(RichText::new("OUTPUT").small().color(c::MUTED));
-                let cur = app.obs.format.clone();
-                egui::ComboBox::from_id_salt("obs-format").selected_text(cur.replace('x', "×").replace('@', " @ ")).show_ui(ui, |ui| {
-                    for f in ["1280x720@30", "1280x720@60", "1920x1080@30", "1920x1080@60"] {
-                        ui.selectable_value(&mut app.obs.format, f.to_string(), f.replace('x', "×").replace('@', " @ "));
-                    }
-                });
-            });
-            ui.vertical(|ui| { ui.label(RichText::new("CONTROLLER URL FOR OBS").small().color(c::MUTED)); ui.add(egui::TextEdit::singleline(&mut app.obs.controller_url).hint_text("blank = this PC's LAN IP :3174").desired_width(230.0)); });
+            3 => {
+                let options: Vec<(String, String)> = ["1280x720@30", "1280x720@60", "1920x1080@30", "1920x1080@60"].iter().map(|f| (f.to_string(), f.replace('x', "×").replace('@', " @ "))).collect();
+                if let Some(v) = select(ui, "obs-format", "Output", &app.obs.format, &options) {
+                    app.obs.format = v;
+                }
+            }
+            _ => edit(ui, "Controller URL for OBS", &mut app.obs.controller_url, "blank = this PC's LAN IP :3174", false),
         });
+        ui.add_space(4.0);
         ui.horizontal(|ui| {
             let busy = app.obs.busy.is_some();
             for (action, label) in [("save", "SAVE"), ("setup", "SET UP OBS"), ("check", "CHECK OBS")] {
-                if ui.add_enabled(!busy, egui::Button::new(label)).clicked() {
+                let b = if action == "setup" { super::widgets::primary_button(label) } else { secondary_button(label) };
+                if ui.add_enabled(!busy, b).clicked() {
                     obs_action(app, action);
                 }
+            }
+            if busy {
+                ui.spinner();
             }
         });
         let obs = app.obs.status.clone();
         let summary = obs.as_ref().map_or("OBS not checked yet".to_string(), |o| format!("OBS {} · {}/{} fps · CPU {}% · render {} ms · skipped {}/{} · {}/10 feeds live", s(o.get("resolution")), s(o.get("fps")), s(o.get("targetFps")), s(o.get("cpu")), s(o.get("renderMs")), s(o.get("skippedRender")), s(o.get("skippedOutput")), o["stations"].as_array().map_or(0, |a| a.iter().filter(|x| x["active"] == true && x["ndiOn"] == true).count())));
         let (txt, bad) = if !app.obs.error.is_empty() { (app.obs.error.clone(), true) } else if !app.obs.message.is_empty() { (app.obs.message.clone(), false) } else { (summary, false) };
-        ui.label(RichText::new(txt).color(if bad { c::RED } else { c::MUTED }));
+        ui.add(egui::Label::new(RichText::new(txt).size(11.0).color(if bad { c::RED } else { c::DIM })).wrap());
     });
 }
 

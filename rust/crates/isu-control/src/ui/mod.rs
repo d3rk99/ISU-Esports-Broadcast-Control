@@ -28,6 +28,67 @@ pub mod c {
     pub const MUTED: Color32 = Color32::from_rgb(0x8d, 0x8d, 0x96);
     pub const TEXT: Color32 = Color32::from_rgb(0xf7, 0xf7, 0xf8);
     pub const RED: Color32 = Color32::from_rgb(0xe5, 0x48, 0x4d);
+    pub const INPUT: Color32 = Color32::from_rgb(0x10, 0x10, 0x12);
+    pub const BORDER: Color32 = Color32::from_rgb(0x3a, 0x3a, 0x40);
+    pub const BUTTON: Color32 = Color32::from_rgb(0x1b, 0x1b, 0x1e);
+    pub const BUTTON_HOVER: Color32 = Color32::from_rgb(0x24, 0x24, 0x28);
+    pub const LABEL: Color32 = Color32::from_rgb(0x8a, 0x8a, 0x93);
+    pub const DIM: Color32 = Color32::from_rgb(0x6f, 0x6f, 0x77);
+}
+
+/// styles.css base look on every egui widget: inputs/selects (#101012, 1px #35353a, 2 px radius,
+/// 35 px tall, orange focus), buttons (#1b1b1e, #3a3a40, 37 px), 11 px text, 10 px gaps.
+pub fn apply_theme(ctx: &egui::Context) {
+    use egui::{CornerRadius, FontFamily, FontId, Stroke, TextStyle};
+    ctx.all_styles_mut(|st| {
+        st.visuals = egui::Visuals::dark();
+        let v = &mut st.visuals;
+        v.panel_fill = c::BLACK;
+        v.window_fill = c::PANEL;
+        v.window_stroke = Stroke::new(1.0, c::LINE);
+        v.extreme_bg_color = c::INPUT;
+        v.faint_bg_color = c::PANEL_LIGHT;
+        v.selection.bg_fill = c::ORANGE.gamma_multiply(0.45);
+        v.selection.stroke = Stroke::new(1.0, c::ORANGE);
+        v.hyperlink_color = c::ORANGE;
+        let r = CornerRadius::same(2);
+        let w = &mut v.widgets;
+        w.noninteractive.bg_stroke = Stroke::new(1.0, c::LINE);
+        w.noninteractive.fg_stroke = Stroke::new(1.0, c::TEXT);
+        w.noninteractive.corner_radius = r;
+        w.inactive.bg_fill = c::BUTTON;
+        w.inactive.weak_bg_fill = c::BUTTON;
+        w.inactive.bg_stroke = Stroke::new(1.0, c::BORDER);
+        w.inactive.fg_stroke = Stroke::new(1.0, Color32::from_rgb(0xe8, 0xe8, 0xeb));
+        w.inactive.corner_radius = r;
+        w.hovered.bg_fill = c::BUTTON_HOVER;
+        w.hovered.weak_bg_fill = c::BUTTON_HOVER;
+        w.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0x55, 0x55, 0x5d));
+        w.hovered.fg_stroke = Stroke::new(1.0, Color32::WHITE);
+        w.hovered.corner_radius = r;
+        w.hovered.expansion = 0.0;
+        w.active.bg_fill = c::BUTTON_HOVER;
+        w.active.weak_bg_fill = c::BUTTON_HOVER;
+        w.active.bg_stroke = Stroke::new(1.0, c::ORANGE);
+        w.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
+        w.active.corner_radius = r;
+        w.active.expansion = 0.0;
+        w.open = w.active;
+        let sp = &mut st.spacing;
+        sp.item_spacing = egui::vec2(10.0, 8.0);
+        sp.button_padding = egui::vec2(14.0, 6.0);
+        sp.interact_size = egui::vec2(36.0, 32.0);
+        sp.combo_width = 180.0;
+        sp.text_edit_width = 180.0;
+        sp.indent = 14.0;
+        st.text_styles = [
+            (TextStyle::Small, FontId::new(10.0, FontFamily::Proportional)),
+            (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
+            (TextStyle::Button, FontId::new(12.0, FontFamily::Proportional)),
+            (TextStyle::Monospace, FontId::new(12.0, FontFamily::Monospace)),
+            (TextStyle::Heading, FontId::new(22.0, FontFamily::Proportional)),
+        ].into();
+    });
 }
 
 pub fn hex(s: &str) -> Color32 {
@@ -65,13 +126,8 @@ const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool
 
 impl App {
     pub fn new(ctx: &egui::Context, svc: Arc<Services>) -> Self {
-        let mut v = egui::Visuals::dark();
-        v.panel_fill = c::BLACK;
-        v.window_fill = c::PANEL;
-        v.extreme_bg_color = c::BLACK;
-        v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, c::LINE);
-        v.selection.bg_fill = c::ORANGE.gamma_multiply(0.6);
-        ctx.set_visuals(v);
+        apply_theme(ctx);
+        egui_extras::install_image_loaders(ctx);
         let ctx = ctx.clone();
         *svc.core.repaint.lock().unwrap() = Some(Arc::new(move || ctx.request_repaint()));
         let (toast_tx, toast_rx) = std::sync::mpsc::channel();
@@ -125,49 +181,91 @@ impl App {
     fn sidebar(&mut self, ui: &mut egui::Ui, st: &Value) {
         let game = st["selectedGame"].as_str().unwrap_or("overwatch").to_string();
         let cfg = config(&game).unwrap();
-        ui.add_space(14.0);
+        let acc = accent(&game);
+        ui.add_space(12.0);
+        // .brand-lockup
         ui.horizontal(|ui| {
-            let (r, _) = ui.allocate_exact_size(egui::vec2(36.0, 36.0), egui::Sense::hover());
-            ui.painter().rect_filled(r, 6.0, c::ORANGE);
-            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, "IS", egui::FontId::proportional(16.0), Color32::BLACK);
+            let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 42.0), egui::Sense::hover());
+            let p = ui.painter();
+            p.rect_filled(r, 0.0, Color32::from_rgb(0x17, 0x17, 0x19));
+            p.add(egui::Shape::convex_polygon(vec![r.left_top(), egui::pos2(r.left() + r.width() * 0.62, r.top()), egui::pos2(r.left(), r.bottom() - r.height() * 0.1)], c::ORANGE, egui::Stroke::NONE));
+            p.rect_stroke(r, 0.0, egui::Stroke::new(1.0, c::ORANGE.gamma_multiply(0.45)), egui::StrokeKind::Inside);
+            p.text(r.center(), egui::Align2::CENTER_CENTER, "IS", egui::FontId::proportional(19.0), Color32::WHITE);
+            ui.add_space(4.0);
             ui.vertical(|ui| {
-                ui.label(RichText::new("ISU ESPORTS").strong().color(c::TEXT));
-                ui.label(RichText::new("Broadcast Control").small().color(c::MUTED));
+                ui.spacing_mut().item_spacing.y = 3.0;
+                ui.add_space(6.0);
+                ui.label(RichText::new("ISU ESPORTS").strong().size(15.0).extra_letter_spacing(1.3).color(c::TEXT));
+                ui.label(RichText::new("BROADCAST CONTROL").size(9.5).strong().extra_letter_spacing(1.1).color(Color32::from_rgb(0x79, 0x79, 0x80)));
             });
         });
-        ui.add_space(18.0);
-        ui.label(RichText::new("ACTIVE TITLE").small().color(c::MUTED));
-        let mut pick = game.clone();
-        egui::ComboBox::from_id_salt("game-select").width(ui.available_width()).selected_text(format!("{}  {}", js_string(cfg.get("shortName")), js_string(cfg.get("name")))).show_ui(ui, |ui| {
-            for k in game_order() {
-                ui.selectable_value(&mut pick, k.to_string(), js_string(config(k).unwrap().get("name")));
-            }
+        ui.add_space(26.0);
+        nav_label(ui, "ACTIVE TITLE");
+        // .game-picker: chip + select
+        egui::Frame::NONE.fill(Color32::from_rgb(0x1c, 0x1c, 0x20)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x46, 0x46, 0x4d))).corner_radius(4.0).inner_margin(egui::Margin::symmetric(9, 11)).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let chip = js_string(cfg.get("shortName"));
+                let (r, _) = ui.allocate_exact_size(egui::vec2(40.0, 32.0), egui::Sense::hover());
+                ui.painter().rect(r, 0.0, acc.gamma_multiply(0.32), egui::Stroke::new(1.0, acc.gamma_multiply(0.72)), egui::StrokeKind::Inside);
+                ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, chip, egui::FontId::proportional(10.5), Color32::WHITE);
+                let mut pick = game.clone();
+                egui::ComboBox::from_id_salt("game-select").width(ui.available_width()).selected_text(RichText::new(js_string(cfg.get("name"))).strong()).show_ui(ui, |ui| {
+                    for k in game_order() {
+                        ui.selectable_value(&mut pick, k.to_string(), js_string(config(k).unwrap().get("name")));
+                    }
+                });
+                if pick != game {
+                    // game-select change: state.selectedGame + persistState() (no undo point) + RL connection
+                    self.set_and_persist(|s| s["selectedGame"] = json!(pick));
+                    self.svc.sync_rl();
+                }
+            });
         });
-        if pick != game {
-            // game-select change: selectedGame + RL connection follow
-            // game-select change: state.selectedGame + persistState() (no undo point) + RL connection
-            self.set_and_persist(|s| s["selectedGame"] = json!(pick));
-            self.svc.sync_rl();
-        }
-        ui.add_space(18.0);
-        ui.label(RichText::new("PRODUCTION").small().color(c::MUTED));
+        ui.add_space(26.0);
+        nav_label(ui, "PRODUCTION");
         let view = st["activeView"].as_str().unwrap_or("control").to_string();
-        for (key, label) in NAV.iter().chain([("settings", "Settings")].iter()) {
-            if *key == "settings" {
-                ui.add_space(24.0);
+        let nav_item = |ui: &mut egui::Ui, key: &str, label: &str| {
+            let active = view == key;
+            let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 44.0), egui::Sense::click());
+            let p = ui.painter();
+            if active {
+                p.rect_filled(r, 2.0, c::ORANGE.gamma_multiply(0.10));
+                p.rect_filled(egui::Rect::from_min_size(r.min, egui::vec2(2.0, r.height())), 0.0, c::ORANGE);
+                p.circle_filled(egui::pos2(r.right() - 13.0, r.center().y), 2.5, c::ORANGE);
+            } else if resp.hovered() {
+                p.rect_filled(r, 2.0, Color32::from_rgb(0x19, 0x19, 0x1c));
             }
-            let active = view == *key;
-            let b = egui::Button::new(RichText::new(*label).color(if active { c::TEXT } else { c::MUTED })).fill(if active { c::PANEL_LIGHT } else { Color32::TRANSPARENT }).min_size(egui::vec2(ui.available_width(), 30.0));
-            if ui.add(b).clicked() && !active {
+            let col = if active { Color32::WHITE } else if resp.hovered() { Color32::from_rgb(0xdc, 0xdc, 0xe0) } else { Color32::from_rgb(0x85, 0x85, 0x8d) };
+            p.text(egui::pos2(r.left() + 16.0, r.center().y), egui::Align2::LEFT_CENTER, label, egui::FontId::proportional(12.5), col);
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, label));
+            if resp.clicked() && !active {
                 let k = key.to_string();
                 self.set_and_persist(|s| s["activeView"] = json!(k));
             }
+        };
+        ui.spacing_mut().item_spacing.y = 3.0;
+        for (key, label) in NAV {
+            nav_item(ui, key, label);
         }
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-            ui.add_space(10.0);
-            ui.label(RichText::new("IDAHO STATE UNIVERSITY • POCATELLO").small().color(c::MUTED));
-            ui.label(RichText::new("LOCAL SYSTEM · Ready for production").small().color(c::MUTED));
+        // Settings + system state + footer: pinned to the bottom when there is room, otherwise
+        // right after the nav (never on top of it: the sidebar scrolls instead).
+        let footer_h = 44.0 + 3.0 + 8.0 + 46.0 + 8.0 + 30.0;
+        let gap = (ui.available_height() - footer_h).max(16.0);
+        ui.add_space(gap);
+        nav_item(ui, "settings", "Settings");
+        ui.add_space(4.0);
+        ui.separator();
+        ui.horizontal(|ui| {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(8.0, 28.0), egui::Sense::hover());
+            ui.painter().circle_filled(r.center(), 3.5, Color32::from_rgb(0x70, 0xcd, 0x6a));
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                ui.label(RichText::new("LOCAL SYSTEM").size(10.0).strong().extra_letter_spacing(1.2).color(Color32::from_rgb(0x94, 0x94, 0x9b)));
+                ui.label(RichText::new("Ready for production").size(11.0).color(Color32::from_rgb(0x5e, 0x5e, 0x65)));
+            });
         });
+        ui.separator();
+        ui.vertical_centered(|ui| ui.label(RichText::new("IDAHO STATE UNIVERSITY • POCATELLO").size(9.0).strong().extra_letter_spacing(1.0).color(Color32::from_rgb(0x45, 0x45, 0x4a))));
     }
 
     fn topbar(&mut self, ui: &mut egui::Ui, st: &Value) {
@@ -182,25 +280,37 @@ impl App {
             "settings" => ("Workspace Settings".into(), "Defaults, data, and application information".into()),
             _ => ("Match Control".into(), "Run the live score and match state".into()),
         };
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.label(RichText::new(format!("{} / CONTROL CENTER", js_string(cfg.get("shortName")))).small().color(accent(game)));
-                ui.heading(RichText::new(title).strong().color(c::TEXT));
-                ui.label(RichText::new(sub).color(c::MUTED));
-            });
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let live = st.pointer(&format!("/games/{game}/match/live")) == Some(&json!(true));
-                let pill = egui::Button::new(RichText::new(if live { "● LIVE" } else { "● OFF AIR" }).strong().color(if live { Color32::WHITE } else { c::MUTED })).fill(if live { c::RED } else { c::PANEL_LIGHT });
-                ui.add_enabled(false, pill);
-                let can_undo = !self.svc.core.lock().history.is_empty();
-                if ui.add_enabled(can_undo, egui::Button::new("↶ Undo")).on_hover_text("Undo last change (Ctrl+Z)").clicked() && self.svc.core.undo() {
-                    self.toast("Last change undone");
-                }
-                let status = self.svc.core.lock().save_status.clone();
-                ui.label(RichText::new(format!("● {status}")).small().color(c::MUTED));
+        egui::Frame::NONE.inner_margin(egui::Margin { left: 36, right: 36, top: 22, bottom: 18 }).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 4.0;
+                    ui.label(RichText::new(format!("{} / CONTROL CENTER", js_string(cfg.get("shortName")))).size(10.0).strong().extra_letter_spacing(1.4).color(accent(game)));
+                    ui.label(RichText::new(title).strong().size(24.0).color(c::TEXT));
+                    ui.label(RichText::new(sub).size(11.5).color(c::DIM));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let live = st.pointer(&format!("/games/{game}/match/live")) == Some(&json!(true));
+                    let (fg, bd, bg) = if live { (Color32::from_rgb(0xff, 0x6b, 0x63), Color32::from_rgb(0xd9, 0x47, 0x3e), Color32::from_rgb(0x2a, 0x13, 0x12)) } else { (c::MUTED, c::BORDER, c::BUTTON) };
+                    egui::Frame::NONE.fill(bg).stroke(egui::Stroke::new(1.0, bd)).corner_radius(2.0).inner_margin(egui::Margin::symmetric(14, 9)).show(ui, |ui| {
+                        ui.label(RichText::new(if live { "● LIVE" } else { "● OFF AIR" }).strong().size(11.0).extra_letter_spacing(1.0).color(fg));
+                    });
+                    let can_undo = !self.svc.core.lock().history.is_empty();
+                    if ui.add_enabled(can_undo, egui::Button::new("↶ Undo").min_size(egui::vec2(0.0, 37.0))).on_hover_text("Undo last change (Ctrl+Z)").clicked() && self.svc.core.undo() {
+                        self.toast("Last change undone");
+                    }
+                    let status = self.svc.core.lock().save_status.clone();
+                    ui.label(RichText::new(format!("●  {status}")).size(11.0).color(c::DIM));
+                });
             });
         });
+        let r = ui.max_rect();
+        ui.painter().hline(r.x_range(), ui.cursor().top(), egui::Stroke::new(1.0, Color32::from_rgb(0x22, 0x22, 0x25)));
     }
+}
+
+fn nav_label(ui: &mut egui::Ui, t: &str) {
+    ui.label(RichText::new(t).size(10.5).strong().extra_letter_spacing(2.0).color(Color32::from_rgb(0x69, 0x69, 0x70)));
+    ui.add_space(2.0);
 }
 
 impl eframe::App for App {
@@ -217,14 +327,23 @@ impl eframe::App for App {
         }
         let st = self.state();
         let overlay_err = self.svc.overlay_error.lock().unwrap().clone();
-        egui::Panel::left("sidebar").exact_size(232.0).frame(egui::Frame::NONE.fill(c::PANEL).inner_margin(14.0)).show(root, |ui| self.sidebar(ui, &st));
-        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(c::BLACK).inner_margin(egui::Margin::symmetric(26, 16))).show(root, |ui| {
+        egui::Panel::left("sidebar").exact_size(256.0).frame(egui::Frame::NONE.fill(Color32::from_rgb(0x0f, 0x0f, 0x11)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x28, 0x28, 0x2b))).inner_margin(egui::Margin { left: 20, right: 20, top: 16, bottom: 18 })).show(root, |ui| { egui::ScrollArea::vertical().id_salt("sidebar").auto_shrink([false, false]).show(ui, |ui| self.sidebar(ui, &st)); });
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::from_rgb(0x0d, 0x0d, 0x0f))).show(root, |ui| {
             self.topbar(ui, &st);
             if !overlay_err.is_empty() {
                 ui.colored_label(c::RED, format!("Overlay server could not start: {overlay_err}"));
             }
-            ui.separator();
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| match st["activeView"].as_str().unwrap_or("control") {
+            egui::ScrollArea::vertical().id_salt(("view", st["activeView"].as_str().unwrap_or("control").to_string())).auto_shrink([false, false]).show(ui, |ui| {
+              // .view-stack: max 1440 px wide, centred, 28/36 px padding
+              let w = ui.available_width();
+              let inner = (w - 72.0).min(1440.0);
+              ui.add_space(20.0);
+              ui.horizontal_top(|ui| {
+              ui.add_space(((w - inner) / 2.0).max(0.0));
+              ui.vertical(|ui| {
+              ui.set_width(inner);
+              ui.spacing_mut().item_spacing.y = 12.0;
+              match st["activeView"].as_str().unwrap_or("control") {
                 "control" => control::view(self, ui, &st),
                 "maps" => maps::view(self, ui, &st),
                 "roster" => roster::view(self, ui, &st),
@@ -235,6 +354,10 @@ impl eframe::App for App {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));
                 }
+              }
+              ui.add_space(60.0);
+              });
+              });
             });
         });
         if let Some((m, t)) = &self.toast {
