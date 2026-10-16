@@ -19,6 +19,7 @@ pub struct Services {
     pub board: Option<Arc<isu_ocr::service::BoardService>>,
     pub overwatch: Option<Arc<isu_ocr::ow_service::OverwatchService>>,
     pub overlay_error: Mutex<String>,
+    pub outputs: Arc<crate::outputs::Outputs>,
     pub repo: PathBuf,
     pub exe_dir: PathBuf,
 }
@@ -126,7 +127,7 @@ impl Services {
         let ow_models = isu_ocr::tess::unpack_gz_model(&root.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &cache, "eng").ok().map(|eng| isu_ocr::ow_service::Models { eng_dir: eng, ow_dir: root.join("electron/ocr-models"), data_dir: root.join("electron") });
         let overwatch = ow_models.and_then(|m| isu_ocr::ow_service::OverwatchService::new(Arc::clone(&source), m, Box::new(move |snap| c10.overwatch_snapshot(&snap)), Box::new(move |st| c11.overwatch_status(&st))).ok());
 
-        let me = Arc::new(Self { core: Arc::clone(&core), rt, companion, displays, rl, spectate, board, overwatch, overlay_error: Mutex::new(String::new()), repo: root.clone(), exe_dir: exe_dir.clone() });
+        let me = Arc::new(Self { core: Arc::clone(&core), rt, companion, displays, rl, spectate, board, overwatch, outputs: crate::outputs::Outputs::new(files.clone()), overlay_error: Mutex::new(String::new()), repo: root.clone(), exe_dir: exe_dir.clone() });
 
         // publishBroadcastState: spectate candidates follow every publish
         let sp2 = Arc::clone(&me.spectate);
@@ -211,6 +212,7 @@ impl Services {
     }
 
     pub fn shutdown(&self) {
+        self.outputs.shutdown();
         self.rl.stop();
         self.spectate.stop();
         if let Some(b) = &self.board {

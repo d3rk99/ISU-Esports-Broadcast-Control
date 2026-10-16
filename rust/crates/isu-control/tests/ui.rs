@@ -106,6 +106,29 @@ fn controller_window_like_a_user() {
     assert!(h.query_all_by_label_contains("OBS 1280x720 · 30/30 fps · CPU 12% · render 3.2 ms · skipped 0/0 · 10/10 feeds live").next().is_some(), "OBS summary shown");
     rt.block_on(async { let _ = tx.close().await; });
 
+    // --- OBS Outputs: take Map Pool for the program output (no output windows in tests: helper not opened)
+    h.get_by_label("OBS Outputs").click(); settle(&mut h);
+    let undo_before = core.lock().history.len();
+    let mp: Vec<_> = h.get_all_by_role_and_label(egui::accesskit::Role::Button, "Map Pool").collect();
+    mp.last().unwrap().click(); settle(&mut h);
+    assert_eq!(core.state()["activeOutputOverlay"], "map-pool", "program output taken");
+    assert_eq!(core.lock().history.len(), undo_before, "take-program-output persists without undo (app.js)");
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(core.store.state()["activeOutputOverlay"], "map-pool", "overlay server has it");
+
+    // --- Settings: Companion on with a key, then the API answers
+    h.get_by_label("Settings").click(); settle(&mut h);
+    let cb: Vec<_> = h.get_all_by_label_contains("Enable LAN API").collect();
+    cb[0].click(); for _ in 0..10 { settle(&mut h); }
+    assert_eq!(svc.companion.status()["listening"], true, "Companion API listening after the checkbox");
+    let tok = svc.companion.settings().token;
+    let ok = std::process::Command::new("curl").args(["-s", "-o", "/dev/null", "-w", "%{http_code}", "-H", &format!("X-ISU-API-Key: {tok}"), "http://127.0.0.1:3176/api/companion/state"]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&ok.stdout), "200");
+    // RESET GAME needs two clicks
+    h.get_by_label("RESET GAME").click(); settle(&mut h);
+    h.get_by_label("Click again: wipes this game").click(); settle(&mut h);
+    assert_eq!(core.state()["games"]["valorant"]["teams"][0]["score"], 0);
+
     // --- game picker: Rocket League, no undo point (persistState)
     let undo_len = core.lock().history.len();
     h.get_by_label("Match Control").click(); settle(&mut h);

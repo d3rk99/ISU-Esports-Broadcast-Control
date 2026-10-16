@@ -2,6 +2,8 @@
 pub mod control;
 pub mod displays;
 pub mod maps;
+pub mod outputs;
+pub mod settings;
 pub mod roster;
 pub mod roster_manager;
 pub mod widgets;
@@ -49,6 +51,12 @@ pub struct App {
     pub addresses: Vec<String>,
     pub rm: roster_manager::Ui,
     pub obs: displays::Obs,
+    pub toast_tx: std::sync::mpsc::Sender<String>,
+    toast_rx: std::sync::mpsc::Receiver<String>,
+    pub monitors: Option<Vec<Value>>,
+    pub monitors_tx: std::sync::mpsc::Sender<Vec<Value>>,
+    monitors_rx: std::sync::mpsc::Receiver<Vec<Value>>,
+    pub companion_key: Option<String>,
 }
 
 const NAV: [(&str, &str); 5] = [("control", "Match Control"), ("maps", "Map Pool"), ("roster", "Rosters"), ("outputs", "OBS Outputs"), ("stage", "Displays")];
@@ -64,7 +72,9 @@ impl App {
         ctx.set_visuals(v);
         let ctx = ctx.clone();
         *svc.core.repaint.lock().unwrap() = Some(Box::new(move || ctx.request_repaint()));
-        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default() }
+        let (toast_tx, toast_rx) = std::sync::mpsc::channel();
+        let (monitors_tx, monitors_rx) = std::sync::mpsc::channel();
+        Self { svc, toast: None, armed: None, addresses: local_addresses(), rm: roster_manager::Ui::default(), obs: displays::Obs::default(), toast_tx, toast_rx, monitors: None, monitors_tx, monitors_rx, companion_key: None }
     }
 
     pub fn state(&self) -> Value {
@@ -197,6 +207,12 @@ impl eframe::App for App {
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z)) && !ctx.egui_wants_keyboard_input() && self.svc.core.undo() {
             self.toast("Last change undone");
         }
+        while let Ok(m) = self.toast_rx.try_recv() {
+            self.toast(&m);
+        }
+        if let Ok(m) = self.monitors_rx.try_recv() {
+            self.monitors = Some(m);
+        }
         let st = self.state();
         let overlay_err = self.svc.overlay_error.lock().unwrap().clone();
         egui::Panel::left("sidebar").exact_size(232.0).frame(egui::Frame::NONE.fill(c::PANEL).inner_margin(14.0)).show(root, |ui| self.sidebar(ui, &st));
@@ -211,6 +227,8 @@ impl eframe::App for App {
                 "maps" => maps::view(self, ui, &st),
                 "roster" => roster::view(self, ui, &st),
                 "stage" => displays::view(self, ui, &st),
+                "outputs" => outputs::view(self, ui, &st),
+                "settings" => settings::view(self, ui, &st),
                 other => {
                     ui.add_space(30.0);
                     ui.label(RichText::new(format!("The {other} view is next on the port list.")).color(c::MUTED));

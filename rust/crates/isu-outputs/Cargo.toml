@@ -1,0 +1,15 @@
+[package]
+name = "isu-outputs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Overlay output windows (fill / key / program / game alignment / preview) for the Rust controller: electron/main.cjs createOverlayOutputWindow + openProgramOutput, with a system webview (wry)."
+
+[[bin]]
+name = "isu-outputs"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+wry = "0.57"
+tao = "0.37"

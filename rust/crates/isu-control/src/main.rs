@@ -13,6 +13,12 @@ fn main() -> eframe::Result<()> {
     let files = Files::new(Files::default_dir());
     let core = Core::new(files, isu_server::Store::new());
     let svc = Services::start(Arc::clone(&core));
+    // initialize(): open the Program outputs once at start unless turned off (ISU_NO_OUTPUTS=1 for tests)
+    if svc.outputs.settings()["autoOpenProgramOutput"] != false && std::env::var_os("ISU_NO_OUTPUTS").is_none() {
+        let o = Arc::clone(&svc.outputs);
+        let name = core.state()["activeOutputOverlay"].as_str().filter(|n| isu_control::outputs::PROGRAM_OUTPUTS.contains(n)).unwrap_or("scoreboard").to_string();
+        std::thread::spawn(move || { o.open_program(&name); });
+    }
     let opts = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_title("ISU Esports Broadcast Control").with_inner_size([1480.0, 940.0]).with_min_inner_size([1100.0, 700.0]),
         ..Default::default()
