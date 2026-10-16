@@ -38,3 +38,28 @@ Severity: **BUG** = wrong behaviour, **RISK** = can break in some situation, **C
 - **FIXED (BUG)** No single-instance lock in any Rust app (Electron has one). A second controller started the window but
   could not open 3174/3176/3178; a second Display Client fought the first over the station ("Replaced" loop); two Game
   Bridges sent double data. Now: OS file lock per app (`isu_ui::single_instance`); the controller shows "already running".
+
+## User-friendliness (someone who is not Derk opens the controller)
+Problems a new operator hits:
+1. No "where do I start". The app opens on Match Control with 6 sidebar pages and no hint which ones matter on a show day.
+2. Jargon everywhere: OCR, NDI, Fill/Key, Companion API, DistroAV, ROI, IEMs, "Observer 3", "Stats API", "bridge key",
+   "Program". Labels describe the tech, not the job ("Spectated player receiver" = "Who is the camera on").
+3. Network setup is spread over 4 pages (RL bridge key on Match Control, spectate key on Settings, display key on
+   Displays, Companion key on Settings) with 4 different "keys".
+4. Expert-only controls sit next to everyday ones: auto-align, box size %, CPU cores, board view, update interval,
+   transport/TCP/WebSocket ports, debug capture.
+5. Things that do nothing (Take live) or half work (Auto roster & cars) look important.
+6. Status is text ("READING · Reading 77/80 cells") instead of a clear green/yellow/red "is it working".
+7. No help: no tooltips on most controls, no "what is this" for any page.
+
+Plan (needs Derk's OK, see chat):
+- A. Remove Take live (button, LIVE pill, Companion action + variable, overlay tag). Rename "Auto roster & cars" -> "Auto roster".
+- B. Hide expert settings behind an "Advanced" fold (closed by default) on every panel.
+- C. Plain-language labels + a one-line "what this does" under every section, tooltips on every control.
+- D. A status strip at the top: one dot per system (Overlays, Companion, Game feed, Readers, Stations, OBS) green/yellow/red,
+  click = jump to the page that fixes it.
+- E. A "Show setup" checklist page (first start + any time from the sidebar): pick the game, load teams, connect the
+  Game PC, set up OBS + stations, open the program output, each step with a check when done.
+- F. One "Network & keys" section in Settings that holds all 4 keys/ports.
+- G. Same for the Game Bridge (big "1-2-3" steps, advanced box positions folded) and the Display Client (only station +
+  controller up front, the rest under Advanced).
