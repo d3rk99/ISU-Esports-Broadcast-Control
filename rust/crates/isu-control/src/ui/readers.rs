@@ -420,21 +420,23 @@ fn debug_view(app: &mut App, ui: &mut egui::Ui) {
         for (i, cdat) in d["cells"].as_array().into_iter().flatten().enumerate() {
             let ok = !cdat["accepted"].is_null();
             egui::Frame::NONE.fill(c::PANEL_LIGHT).stroke(egui::Stroke::new(1.0, if ok { Color32::from_rgb(80, 200, 120) } else { c::RED })).corner_radius(4.0).inner_margin(6.0).show(ui, |ui| {
-                ui.set_width(170.0);
-                let f = cdat["field"].as_str().unwrap_or("");
-                ui.label(RichText::new(format!("{} {} · {}", if cdat["side"] == "home" { "TOP" } else { "BOT" }, num_or_zero(cdat.get("row")) + 1.0, FIELD_LABEL.iter().find(|x| x.0 == f).map_or(f, |x| x.1))).small().strong());
-                for tx in [t.cells.get(i).and_then(|c| c.0.as_ref()), t.cells.get(i).and_then(|c| c.1.as_ref())].into_iter().flatten() {
-                    let sz = tx.size_vec2();
-                    let k = (160.0 / sz.x).min(40.0 / sz.y).min(3.0);
-                    ui.image((tx.id(), sz * k));
-                }
-                let g = &cdat["glyphs"];
-                let digits = if g.is_null() { String::new() } else { let n = num_or_zero(Some(g)); format!(" · {n} digit{} seen", if n == 1.0 { "" } else { "s" }) };
-                ui.label(RichText::new(format!("read “{}” {}%{digits} → {}", s(cdat.get("text")), s(cdat.get("confidence")), if ok { s(cdat.get("accepted")) } else { "rejected".into() })).small());
-                let txt = s(cdat.get("text")).trim().to_uppercase();
-                if f == "name" && !ok && !txt.is_empty() && ui.button(format!("USE “{txt}”")).clicked() {
-                    use_name = Some((s(cdat.get("side")), num_or_zero(cdat.get("row")) as i64, txt.clone()));
-                }
+                ui.vertical(|ui| {
+                    ui.set_width(170.0);
+                    let f = cdat["field"].as_str().unwrap_or("");
+                    ui.label(RichText::new(format!("{} {} · {}", if cdat["side"] == "home" { "TOP" } else { "BOT" }, num_or_zero(cdat.get("row")) + 1.0, FIELD_LABEL.iter().find(|x| x.0 == f).map_or(f, |x| x.1))).small().strong());
+                    for tx in [t.cells.get(i).and_then(|c| c.0.as_ref()), t.cells.get(i).and_then(|c| c.1.as_ref())].into_iter().flatten() {
+                        let sz = tx.size_vec2();
+                        let k = (160.0 / sz.x).min(40.0 / sz.y).min(3.0);
+                        ui.image((tx.id(), sz * k));
+                    }
+                    let g = &cdat["glyphs"];
+                    let digits = if g.is_null() { String::new() } else { let n = num_or_zero(Some(g)); format!(" · {n} digit{} seen", if n == 1.0 { "" } else { "s" }) };
+                    ui.label(RichText::new(format!("read “{}” {}%{digits} → {}", s(cdat.get("text")), s(cdat.get("confidence")), if ok { s(cdat.get("accepted")) } else { "rejected".into() })).small());
+                    let txt = s(cdat.get("text")).trim().to_uppercase();
+                    if f == "name" && !ok && !txt.is_empty() && ui.button(format!("USE “{txt}”")).clicked() {
+                        use_name = Some((s(cdat.get("side")), num_or_zero(cdat.get("row")) as i64, txt.clone()));
+                    }
+                });
             });
         }
     });
