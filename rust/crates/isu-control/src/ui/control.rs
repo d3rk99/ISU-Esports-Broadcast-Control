@@ -211,6 +211,27 @@ fn team_control(app: &mut App, ui: &mut egui::Ui, game: &Value, i: usize, key: &
                 app.commit("Changes saved", |st| st["games"][k.as_str()]["teams"][i]["secondaryColorEnabled"] = json!(on));
             }
         });
+        ui.horizontal(|ui| {
+            let logo = s(team.get("logoImage"));
+            let name = s(team.get("logoImageName"));
+            ui.label(RichText::new(if !name.is_empty() { name } else if !logo.is_empty() { "Custom URL".into() } else { "No logo selected".into() }).small().color(c::MUTED));
+            if ui.button(if logo.is_empty() { "CHOOSE FILE" } else { "REPLACE FILE" }).clicked() {
+                if let Some((n, url)) = super::roster::pick_image(app, "Choose team logo image") {
+                    let k = key.to_string();
+                    app.commit("Team logo saved", |st| {
+                        st["games"][k.as_str()]["teams"][i]["logoImage"] = json!(url);
+                        st["games"][k.as_str()]["teams"][i]["logoImageName"] = json!(n);
+                    });
+                }
+            }
+            if !logo.is_empty() && ui.button("CLEAR").clicked() {
+                let k = key.to_string();
+                app.commit("Team logo cleared", |st| {
+                    st["games"][k.as_str()]["teams"][i]["logoImage"] = json!("");
+                    st["games"][k.as_str()]["teams"][i]["logoImageName"] = json!("");
+                });
+            }
+        });
         let k = key.to_string();
         if let Some(v) = text_field(ui, &format!("t{i}logo"), "LOGO URL", &s(team.get("logoImage")), 2000, ui.available_width() - 10.0) {
             app.commit("Changes saved", |st| {
@@ -339,6 +360,13 @@ fn rocket_league_panel(app: &mut App, ui: &mut egui::Ui, game: &Value) {
             }
         });
         ui.horizontal(|ui| {
+            if ui.button("COPY GAME CONFIG").clicked() {
+                // copy-rl-config: TAGame.MatchStatsExporter_TA block for the game's ini
+                let ms = num_or_zero(rl.get("updateIntervalMs"));
+                let rate = (1000.0 / (if ms == 0.0 { 33.0 } else { ms }).max(1.0)).round().clamp(1.0, 120.0);
+                ui.ctx().copy_text(format!("[TAGame.MatchStatsExporter_TA]\nPacketSendRate={rate}\nPort={}\nWebPort={}", s(rl.get("tcpPort")), s(rl.get("webPort"))));
+                app.toast("Rocket League configuration copied");
+            }
             let simulating = live.get("status").and_then(Value::as_str) == Some("simulating");
             if ui.button(if simulating { "STOP TEST FEED" } else { "RUN TEST FEED" }).clicked() {
                 let rl2 = std::sync::Arc::clone(&app.svc.rl);
