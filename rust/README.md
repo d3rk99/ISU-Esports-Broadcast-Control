@@ -85,3 +85,7 @@ Contents match the Electron builds: controller = exe + isu-outputs.exe + public\
 templates, ocr-models) + tessdata\eng.traineddata + Tesseract DLLs + assests\rocket-league-items.csv;
 Game Bridge = exe + the OCR data + DLLs; Display Client = exe + Processing.NDI.Lib.x64.dll + NDI license.
 Installed apps find their files next to the exe (checked on Linux with the repo hidden: `ISU_NO_DEV_ROOT=1`).
+Packaging also copies the MSVC redistributable CRT from Visual Studio's Redist directory and
+checks native imports. Inno Setup may be installed per user or system-wide. The optional large
+Rocket League pack uses ZIP64 in the portable bundle; the controller installer has accompanying
+`Setup-*.bin` data slices. Keep those slices beside its `Setup.exe` when installing or sharing it.

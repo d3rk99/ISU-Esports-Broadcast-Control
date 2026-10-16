@@ -106,7 +106,8 @@ foreach ($app in @($ctl, $br, $dc)) {
 foreach ($app in @($ctl, $br, $dc)) {
   $name = Split-Path $app -Leaf
   # Compress-Archive cannot handle the optional multi-GB RL asset pack.
-  & "$env:WINDIR\System32\tar.exe" --format=zip -cf "$out\$name-Portable-$Version-x64.zip" -C $app .
+  $zipOptions = if (Test-Path "$app\assests\rl-loadout-assets.zip") { 'zip:compression=store' } else { 'zip:compression=deflate' }
+  & "$env:WINDIR\System32\tar.exe" --format=zip --options $zipOptions -cf "$out\$name-Portable-$Version-x64.zip" -C $app .
   if ($LASTEXITCODE -ne 0) { throw "Portable ZIP failed for $name" }
 }
 
