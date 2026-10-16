@@ -8,6 +8,7 @@ pub mod boards;
 pub mod display_presets;
 pub mod game_config;
 pub mod rocket_league;
+pub mod roster_manager;
 pub mod tags;
 pub mod variables;
 
