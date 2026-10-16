@@ -17,6 +17,7 @@ tokio-tungstenite.workspace = true
 futures-util.workspace = true
 anyhow.workspace = true
 eframe.workspace = true
+isu-ui = { path = "../isu-ui" }
 egui.workspace = true
 dirs.workspace = true
 libloading.workspace = true

@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eframe::egui::{self, Color32, RichText};
+use isu_ui::c;
 use isu_net::bridge::GameBridge;
 use serde_json::{Value, json};
 
@@ -157,21 +158,32 @@ fn game_color(g: &str) -> Color32 {
 fn status_card(ui: &mut egui::Ui, label: &str, st: &Value) {
     let state = st["state"].as_str().unwrap_or("stopped");
     let color = match state {
-        "connected" | "reading" | "simulating" => Color32::from_rgb(0x3c, 0xc8, 0x6e),
-        "connecting" | "waiting" | "starting" | "searching-window" | "recovering" | "calibrating" | "listening" => Color32::from_rgb(0xe6, 0xb4, 0x2a),
-        "error" | "stale" | "degraded" => Color32::from_rgb(0xe0, 0x46, 0x46),
-        _ => Color32::GRAY,
+        "connected" | "reading" | "simulating" => Color32::from_rgb(0x70, 0xcd, 0x6a),
+        "connecting" | "waiting" | "starting" | "searching-window" | "recovering" | "calibrating" | "listening" => Color32::from_rgb(0xe8, 0xb3, 0x3c),
+        "error" | "stale" | "degraded" => Color32::from_rgb(0xe5, 0x48, 0x4d),
+        _ => c::DIM,
     };
-    egui::Frame::group(ui.style()).stroke(egui::Stroke::new(1.0, color)).show(ui, |ui| {
-        ui.set_min_width(330.0);
-        ui.label(RichText::new(format!("{label} · {}", state.to_uppercase())).strong().color(color));
-        ui.label(st["message"].as_str().unwrap_or("Stopped"));
-    });
+    let r = egui::Frame::NONE.fill(c::INPUT).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0x2f, 0x2f, 0x34))).corner_radius(2.0).inner_margin(egui::Margin { left: 14, right: 12, top: 10, bottom: 10 }).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.spacing_mut().item_spacing.y = 4.0;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(label).size(9.5).strong().extra_letter_spacing(1.2).color(c::LABEL));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(RichText::new(format!("●  {}", state.to_uppercase())).size(10.5).strong().color(color)));
+        });
+        ui.add(egui::Label::new(RichText::new(st["message"].as_str().unwrap_or("Stopped")).size(12.0).color(c::TEXT)).wrap());
+    }).response.rect;
+    ui.painter().rect_filled(egui::Rect::from_min_size(r.min, egui::vec2(3.0, r.height())), 0.0, color);
+}
+
+/// A plain text box with a label, full cell width (the bridge commits on focus loss itself).
+fn edit(ui: &mut egui::Ui, label: &str, v: &mut String, hint: &str) -> egui::Response {
+    isu_ui::field_label(ui, label);
+    ui.add(egui::TextEdit::singleline(v).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0)))
 }
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        isu_ui::apply_theme(&cc.egui_ctx);
         let rt = tokio::runtime::Builder::new_multi_thread().enable_all().worker_threads(4).build().expect("runtime");
         let root = data_root();
         let eng_dir = isu_ocr::tess::unpack_gz_model(&root.join("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz"), &user_data().join("tessdata"), "eng")
@@ -229,116 +241,105 @@ impl eframe::App for App {
         let ctx = &root.ctx().clone();
         let status = self.status.lock().unwrap().clone();
         let accent = game_color(&self.form.game);
-        egui::CentralPanel::default().show(root, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::NONE.fill(Color32::from_rgb(0x0d, 0x0d, 0x0f))).show(root, |ui| {
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                egui::Frame::NONE.inner_margin(egui::Margin { left: 28, right: 28, top: 20, bottom: 28 }).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.spacing_mut().item_spacing.y = 12.0;
+                // brand bar
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(" ISU ").strong().background_color(ORANGE).color(Color32::BLACK));
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(46.0, 42.0), egui::Sense::hover());
+                    let p = ui.painter();
+                    p.rect_filled(r, 0.0, Color32::from_rgb(0x17, 0x17, 0x19));
+                    p.add(egui::Shape::convex_polygon(vec![r.left_top(), egui::pos2(r.left() + r.width() * 0.62, r.top()), egui::pos2(r.left(), r.bottom() - r.height() * 0.1)], ORANGE, egui::Stroke::NONE));
+                    p.rect_stroke(r, 0.0, egui::Stroke::new(1.0, ORANGE.gamma_multiply(0.45)), egui::StrokeKind::Inside);
+                    p.text(r.center(), egui::Align2::CENTER_CENTER, "IS", egui::FontId::proportional(19.0), Color32::WHITE);
                     ui.vertical(|ui| {
-                        ui.label(RichText::new("GAME PC COMPANION").small().color(Color32::GRAY));
-                        ui.label(RichText::new("UNIVERSAL ESPORTS BRIDGE").strong());
+                        ui.spacing_mut().item_spacing.y = 3.0;
+                        ui.add_space(6.0);
+                        ui.label(RichText::new("UNIVERSAL ESPORTS BRIDGE").strong().size(15.0).extra_letter_spacing(1.3).color(c::TEXT));
+                        ui.label(RichText::new("GAME PC COMPANION").size(9.5).strong().extra_letter_spacing(1.1).color(Color32::from_rgb(0x79, 0x79, 0x80)));
                     });
                 });
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        ui.label(RichText::new("NETWORK TELEMETRY").small().color(accent));
-                        ui.heading("Send live game data to Broadcast Control");
-                        ui.label("One bridge for Rocket League, VALORANT and Overwatch.");
+                // hero + game picker
+                isu_ui::panel(ui, |ui| {
+                    isu_ui::cols(ui, &[-1.0, 230.0], 16.0, |j, ui| {
+                        if j == 0 {
+                            ui.spacing_mut().item_spacing.y = 4.0;
+                            ui.label(RichText::new("NETWORK TELEMETRY").size(9.5).strong().extra_letter_spacing(1.3).color(accent));
+                            ui.label(RichText::new("Send live game data to Broadcast Control").strong().size(19.0).color(c::TEXT));
+                            ui.label(RichText::new("One bridge for Rocket League, VALORANT and Overwatch.").size(11.5).color(c::DIM));
+                        } else {
+                            let before = self.form.game.clone();
+                            let opts = [("rocketleague".to_string(), "Rocket League".to_string()), ("valorant".to_string(), "VALORANT".to_string()), ("overwatch".to_string(), "Overwatch 2".to_string())];
+                            if let Some(g) = isu_ui::select(ui, "game", "Active game adapter", &self.form.game, &opts) {
+                                self.form.game = g;
+                            }
+                            if before != self.form.game {
+                                self.form.render_mode();
+                            }
+                        }
                     });
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                        let before = self.form.game.clone();
-                        egui::ComboBox::from_id_salt("game").selected_text(match self.form.game.as_str() { "valorant" => "VALORANT", "overwatch" => "Overwatch 2", _ => "Rocket League" }).show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.form.game, "rocketleague".into(), "Rocket League");
-                            ui.selectable_value(&mut self.form.game, "valorant".into(), "VALORANT");
-                            ui.selectable_value(&mut self.form.game, "overwatch".into(), "Overwatch 2");
-                        });
-                        ui.label(RichText::new("ACTIVE GAME ADAPTER").small());
-                        if before != self.form.game {
-                            self.form.render_mode();
+                    ui.add_space(4.0);
+                    // network: host | port | key
+                    isu_ui::cols(ui, &[-1.0, 110.0, -1.6], 10.0, |j, ui| {
+                        match j {
+                            0 => { edit(ui, "Graphics PC IP address", &mut self.form.host, "192.168.1.50"); }
+                            1 => { edit(ui, "Bridge port", &mut self.form.port, ""); }
+                            _ => { edit(ui, "Private bridge key", &mut self.form.token, "Paste the key from Broadcast Control"); }
                         }
                     });
                 });
-                egui::Grid::new("net").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                    ui.label("GRAPHICS PC IP ADDRESS");
-                    ui.add(egui::TextEdit::singleline(&mut self.form.host).hint_text("192.168.1.50"));
-                    ui.end_row();
-                    ui.label("BRIDGE PORT");
-                    ui.text_edit_singleline(&mut self.form.port);
-                    ui.end_row();
-                    ui.label("PRIVATE BRIDGE KEY");
-                    ui.add(egui::TextEdit::singleline(&mut self.form.token).hint_text("Paste the key from Broadcast Control").desired_width(380.0));
-                    ui.end_row();
-                });
-                ui.add_space(8.0);
                 let mut changed = false;
                 if self.form.game == "rocketleague" {
-                    ui.group(|ui| {
-                        ui.label(RichText::new("ROCKET LEAGUE ADAPTER · Local Stats API connection").strong().color(accent));
-                        egui::Grid::new("rl").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                            ui.label("TRANSPORT");
-                            egui::ComboBox::from_id_salt("transport").selected_text(match self.form.transport.as_str() { "websocket" => "WebSocket", "tcp" => "TCP", _ => "Automatic" }).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.form.transport, "auto".into(), "Automatic");
-                                ui.selectable_value(&mut self.form.transport, "websocket".into(), "WebSocket");
-                                ui.selectable_value(&mut self.form.transport, "tcp".into(), "TCP");
-                            });
-                            ui.end_row();
-                            ui.label("LOCAL GAME HOST");
-                            ui.text_edit_singleline(&mut self.form.rl_host);
-                            ui.end_row();
-                            ui.label("TCP PORT");
-                            ui.text_edit_singleline(&mut self.form.tcp);
-                            ui.end_row();
-                            ui.label("WEBSOCKET PORT");
-                            ui.text_edit_singleline(&mut self.form.web);
-                            ui.end_row();
-                        });
-                        let sim = status["source"]["state"] == "simulating";
-                        let b = egui::Button::new(if sim { "STOP TEST FEED" } else { "RUN TEST FEED" });
-                        if ui.add(if sim { b.fill(Color32::from_rgb(120, 30, 30)) } else { b }).clicked() {
-                            if sim {
-                                self.run(|br| br.stop_simulator());
-                            } else {
-                                let cfg = self.form.read();
-                                save_config(&cfg);
-                                self.run(|br| { br.start(&cfg); br.start_simulator(); });
-                            }
-                        }
-                    });
-                } else {
-                    ui.group(|ui| {
-                        ui.label(RichText::new("SPECTATED PLAYER · Player-POV spectator: who is being watched").strong().color(accent));
-                        ui.label(RichText::new("For a spectator PC that follows the players' views. The bridge reads the small player name on screen and matches it to the names the controller sends (rosters + scoreboard), so it only ever reports one of your players.").small());
-                        egui::Grid::new("sp").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                            ui.label("WINDOW TITLE CONTAINS");
-                            changed |= ui.text_edit_singleline(&mut self.form.window).lost_focus();
-                            ui.end_row();
-                            ui.label("READ EVERY (MS)");
-                            changed |= ui.text_edit_singleline(&mut self.form.interval).lost_focus();
-                            ui.end_row();
-                            ui.label("HOW TO FIND THE PLAYER");
-                            let m0 = self.form.method.clone();
-                            egui::ComboBox::from_id_salt("method").selected_text(if self.form.method == "icon" { "Agent icon only (experiment, no OCR)" } else { "Agent icon, then name (OCR)" }).show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.form.method, "both".into(), "Agent icon, then name (OCR)");
-                                ui.selectable_value(&mut self.form.method, "icon".into(), "Agent icon only (experiment, no OCR)");
-                            });
-                            changed |= m0 != self.form.method;
-                            ui.end_row();
-                            for (i, l) in ["NAME BOX X", "NAME BOX Y", "NAME BOX W", "NAME BOX H"].iter().enumerate() {
-                                ui.label(*l);
-                                changed |= ui.text_edit_singleline(&mut self.form.roi[i]).lost_focus();
-                                ui.end_row();
-                            }
-                            if self.form.game == "valorant" {
-                                for (i, l) in ["ICON BOX X", "ICON BOX Y", "ICON BOX SIZE"].iter().enumerate() {
-                                    ui.label(*l);
-                                    changed |= ui.text_edit_singleline(&mut self.form.portrait[i]).lost_focus();
-                                    ui.end_row();
+                    isu_ui::panel(ui, |ui| {
+                        isu_ui::heading(ui, "", "Rocket League adapter", "Local Stats API connection on this PC", |ui| {
+                            let sim = status["source"]["state"] == "simulating";
+                            let b = if sim { egui::Button::new(RichText::new("STOP TEST FEED").strong().color(Color32::from_rgb(0xff, 0x6b, 0x63))).fill(Color32::from_rgb(0x2a, 0x13, 0x12)).stroke(egui::Stroke::new(1.0, Color32::from_rgb(0xd9, 0x47, 0x3e))).min_size(egui::vec2(0.0, 37.0)) } else { isu_ui::secondary_button("RUN TEST FEED") };
+                            if ui.add(b).clicked() {
+                                if sim {
+                                    self.run(|br| br.stop_simulator());
+                                } else {
+                                    let cfg = self.form.read();
+                                    save_config(&cfg);
+                                    self.run(|br| { br.start(&cfg); br.start_simulator(); });
                                 }
                             }
                         });
-                        if ui.button("CAPTURE FRAME TO PLACE THE BOXES").clicked() {
-                            self.capture_frame(ctx);
-                        }
+                        isu_ui::cols(ui, &[-1.2, -1.2, -0.8, -0.8], 10.0, |j, ui| match j {
+                            0 => {
+                                let opts = [("auto".to_string(), "Automatic".to_string()), ("websocket".to_string(), "WebSocket".to_string()), ("tcp".to_string(), "TCP".to_string())];
+                                if let Some(t) = isu_ui::select(ui, "transport", "Transport", &self.form.transport, &opts) { self.form.transport = t; }
+                            }
+                            1 => { edit(ui, "Local game host", &mut self.form.rl_host, ""); }
+                            2 => { edit(ui, "TCP port", &mut self.form.tcp, ""); }
+                            _ => { edit(ui, "WebSocket port", &mut self.form.web, ""); }
+                        });
+                    });
+                } else {
+                    isu_ui::panel(ui, |ui| {
+                        isu_ui::title(ui, "", "Spectated player", "Player-POV spectator: who is being watched. The bridge reads the small player name on screen and matches it to the names the controller sends (rosters + scoreboard), so it only ever reports one of your players.");
+                        isu_ui::cols(ui, &[-1.2, -0.7, -1.4], 10.0, |j, ui| match j {
+                            0 => { changed |= edit(ui, "Window title contains", &mut self.form.window, "").lost_focus(); }
+                            1 => { changed |= edit(ui, "Read every (ms)", &mut self.form.interval, "").lost_focus(); }
+                            _ => {
+                                let opts = [("both".to_string(), "Agent icon, then name (OCR)".to_string()), ("icon".to_string(), "Agent icon only (experiment, no OCR)".to_string())];
+                                if let Some(m) = isu_ui::select(ui, "method", "How to find the player", &self.form.method, &opts) { self.form.method = m; changed = true; }
+                            }
+                        });
+                        // box positions: name x/y/w/h | icon x/y/size
+                        let n = if self.form.game == "valorant" { 7 } else { 4 };
+                        let widths = vec![-1.0; n];
+                        isu_ui::cols(ui, &widths, 8.0, |j, ui| {
+                            let labels = ["Name box X", "Name box Y", "Name box W", "Name box H", "Icon box X", "Icon box Y", "Icon size"];
+                            let r = if j < 4 { edit(ui, labels[j], &mut self.form.roi[j], "") } else { edit(ui, labels[j], &mut self.form.portrait[j - 4], "") };
+                            changed |= r.lost_focus();
+                        });
+                        ui.horizontal(|ui| {
+                            if ui.add(isu_ui::secondary_button("CAPTURE FRAME TO PLACE THE BOXES")).clicked() {
+                                self.capture_frame(ctx);
+                            }
+                        });
                         let sp = self.spectate.lock().unwrap().clone();
                         let name = sp["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("—");
                         let mut line = format!("SPECTATING {name}");
@@ -349,12 +350,15 @@ impl eframe::App for App {
                             line += &format!(" · BY {}", v.to_uppercase());
                         }
                         line += &format!(" · {} names from the controller", sp["candidates"].as_u64().unwrap_or(0));
-                        ui.label(RichText::new(line).strong());
-                        if let Some(p) = sp["last"]["portrait"].as_object() {
-                            ui.label(RichText::new(format!("PORTRAIT {} · {} box{}", p.get("agent").and_then(Value::as_str).or(p.get("candidate").and_then(Value::as_str)).unwrap_or("?"), p.get("color").and_then(Value::as_str).filter(|c| !c.is_empty()).unwrap_or("?"), p.get("player").and_then(|x| x["name"].as_str()).map(|n| format!(" → {n}")).unwrap_or_default())).small());
-                        }
+                        isu_ui::inset(ui, |ui| {
+                            ui.set_width(ui.available_width());
+                            ui.label(RichText::new(line).strong().size(13.0).color(c::TEXT));
+                            if let Some(p) = sp["last"]["portrait"].as_object() {
+                                ui.label(RichText::new(format!("PORTRAIT {} · {} box{}", p.get("agent").and_then(Value::as_str).or(p.get("candidate").and_then(Value::as_str)).unwrap_or("?"), p.get("color").and_then(Value::as_str).filter(|c| !c.is_empty()).unwrap_or("?"), p.get("player").and_then(|x| x["name"].as_str()).map(|n| format!(" → {n}")).unwrap_or_default())).size(10.5).color(c::DIM));
+                            }
+                        });
                         if let Some((tex, _)) = &self.shot {
-                            let w = ui.available_width().min(860.0);
+                            let w = ui.available_width();
                             let size = egui::vec2(w, w * 1080.0 / 1920.0);
                             let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
                             ui.painter().image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
@@ -379,32 +383,32 @@ impl eframe::App for App {
                     let st = self.run(|b| b.update_config(&cfg));
                     *self.status.lock().unwrap() = st;
                 }
-                ui.add_space(8.0);
+                // start / stop + status cards
                 ui.horizontal(|ui| {
-                    if ui.add(egui::Button::new(RichText::new("START BRIDGE").strong()).fill(ORANGE)).clicked() {
+                    if ui.add(isu_ui::primary_button("START BRIDGE").min_size(egui::vec2(160.0, 40.0))).clicked() {
                         let cfg = self.form.read();
                         save_config(&cfg);
                         let st = self.run(|b| b.start(&cfg));
                         *self.status.lock().unwrap() = st;
                     }
-                    if ui.button("STOP").clicked() {
+                    if ui.add(isu_ui::secondary_button("STOP").min_size(egui::vec2(90.0, 40.0))).clicked() {
                         self.run(|b| b.stop());
                         *self.status.lock().unwrap() = self.bridge.status();
                     }
                 });
-                ui.horizontal_wrapped(|ui| {
-                    if status["remote"].is_object() {
-                        status_card(ui, "GRAPHICS PC", &status["remote"]);
-                    }
-                    if status["source"].is_object() {
-                        status_card(ui, if self.form.game == "rocketleague" { "ROCKET LEAGUE" } else { "SPECTATED PLAYER" }, &status["source"]);
+                isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| {
+                    if j == 0 {
+                        status_card(ui, "GRAPHICS PC", if status["remote"].is_object() { &status["remote"] } else { &Value::Null });
+                    } else {
+                        status_card(ui, if self.form.game == "rocketleague" { "ROCKET LEAGUE" } else { "SPECTATED PLAYER" }, if status["source"].is_object() { &status["source"] } else { &Value::Null });
                     }
                 });
-                ui.label(RichText::new(if self.form.game != "rocketleague" {
+                ui.add(egui::Label::new(RichText::new(if self.form.game != "rocketleague" {
                     "SETUP: On the Graphics PC (Broadcast Control → Settings → Spectated player receiver), turn the receiver on, generate a bridge key, and use the same port and key here. Place the name box on the spectated player's name."
                 } else {
                     "SETUP: On the Graphics PC, choose Rocket League, set Data Source to Game PC Bridge, and use the same port and key. The spectated player comes from the Rocket League API; no name box needed."
-                }).small());
+                }).size(10.5).color(c::DIM)).wrap());
+                });
             });
         });
     }

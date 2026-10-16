@@ -1,0 +1,9 @@
+[package]
+name = "isu-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Shared look for the ISU egui apps: the src/styles.css theme (colours, inputs, buttons, sizes) and the layout widgets (grid rows, panels, headings, toggles, tabs, thumbnails)."
+
+[dependencies]
+egui.workspace = true

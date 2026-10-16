@@ -2540,6 +2540,7 @@ dependencies = [
  "isu-core",
  "isu-net",
  "isu-ocr",
+ "isu-ui",
  "serde_json",
  "tokio",
 ]
@@ -2561,6 +2562,7 @@ dependencies = [
  "isu-net",
  "isu-ocr",
  "isu-server",
+ "isu-ui",
  "png",
  "rfd",
  "serde_json",
@@ -2588,6 +2590,7 @@ dependencies = [
  "fastrand",
  "futures-util",
  "isu-core",
+ "isu-ui",
  "libloading",
  "serde_json",
  "tokio",
@@ -2649,6 +2652,13 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+]
+
+[[package]]
+name = "isu-ui"
+version = "0.1.0"
+dependencies = [
+ "egui",
 ]
 
 [[package]]

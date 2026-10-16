@@ -314,7 +314,7 @@ struct App {
 
 impl App {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        isu_ui::apply_theme(&cc.egui_ctx);
         let cfg = load_config();
         log_line(&format!("config {} ", { let mut c = cfg.clone(); if c["key"] != "" { c["key"] = json!("(set)"); } c }));
         let sh: Arc<Shared> = Arc::new_cyclic(|w: &std::sync::Weak<Shared>| {
@@ -401,54 +401,76 @@ impl App {
 
     fn settings_window(&mut self, ctx: &egui::Context) {
         let mut open = self.settings;
-        egui::Window::new("ISU Display Client - Settings").open(&mut open).default_size([520.0, 640.0]).collapsible(false).show(ctx, |ui| {
-            ui.label(RichText::new("ISU DISPLAY CLIENT").small());
-            ui.heading("Station setup");
-            ui.label(RichText::new(format!("{} · v{VERSION}", hostname())).small());
-            let mut f = std::mem::take(&mut self.form);
-            fn text(ui: &mut egui::Ui, f: &mut Value, label: &str, key: &str) {
-                ui.label(label);
-                let mut s = if f[key].is_null() { String::new() } else { isu_core::game_config::js_string(Some(&f[key])) };
-                if ui.text_edit_singleline(&mut s).changed() { f[key] = json!(s); }
-                ui.end_row();
-            }
-            egui::Grid::new("set").num_columns(2).spacing([10.0, 6.0]).show(ui, |ui| {
-                ui.label("Station");
-                let mut st = f["station"].as_i64().unwrap_or(1);
-                egui::ComboBox::from_id_salt("st").selected_text(format!("{st:02}")).show_ui(ui, |ui| { for n in 1..=10 { ui.selectable_value(&mut st, n, format!("{n:02}")); } });
-                f["station"] = json!(st);
-                ui.end_row();
-                text(ui, &mut f, "Controller PC (IP or name)", "controller");
-                text(ui, &mut f, "Port", "port");
-                text(ui, &mut f, "Display key", "key");
-                text(ui, &mut f, "OBS PC for NDI (optional)", "ndiHost");
-                text(ui, &mut f, "Player monitor (game mirror)", "playerDisplay");
-                text(ui, &mut f, "Audience monitor (this window)", "stageDisplay");
-                ui.label("Headset output");
-                let cur = f["noiseDevice"].as_str().unwrap_or("").to_string();
-                let mut pick = cur.clone();
-                egui::ComboBox::from_id_salt("dev").selected_text(if cur.is_empty() { "Default output".to_string() } else if self.devices.contains(&cur) { cur.clone() } else { format!("{cur} (not plugged in)") }).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut pick, String::new(), "Default output");
-                    for d in &self.devices { ui.selectable_value(&mut pick, d.clone(), d); }
+        egui::Window::new("ISU Display Client - Settings").open(&mut open).default_size([560.0, 640.0]).collapsible(false).frame(egui::Frame::NONE.fill(isu_ui::c::PANEL).stroke(egui::Stroke::new(1.0, isu_ui::c::LINE)).corner_radius(4.0).inner_margin(20.0)).show(ctx, |ui| {
+            ui.spacing_mut().item_spacing.y = 10.0;
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 3.0;
+                    ui.label(RichText::new("ISU DISPLAY CLIENT").size(9.5).strong().extra_letter_spacing(1.3).color(isu_ui::c::ORANGE));
+                    ui.label(RichText::new("Station setup").strong().size(20.0).color(isu_ui::c::TEXT));
                 });
-                if pick != cur { f["noiseDevice"] = json!(pick.clone()); f["noiseDeviceLabel"] = json!(pick); }
-                ui.end_row();
-                text(ui, &mut f, "Max volume on this PC (%)", "noiseMaxVolume");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| ui.label(RichText::new(format!("{} · v{VERSION}", hostname())).size(10.5).color(isu_ui::c::DIM)));
             });
+            let mut f = std::mem::take(&mut self.form);
+            fn text(ui: &mut egui::Ui, f: &mut Value, label: &str, key: &str, hint: &str, pw: bool) {
+                isu_ui::field_label(ui, label);
+                let mut s = if f[key].is_null() { String::new() } else { isu_core::game_config::js_string(Some(&f[key])) };
+                if ui.add(egui::TextEdit::singleline(&mut s).password(pw).hint_text(hint).desired_width(ui.available_width()).margin(egui::vec2(10.0, 9.0))).changed() { f[key] = json!(s); }
+            }
+            let section = |ui: &mut egui::Ui, t: &str| {
+                ui.add_space(4.0);
+                ui.label(RichText::new(t).size(10.0).strong().extra_letter_spacing(1.2).color(isu_ui::c::LABEL));
+            };
+            section(ui, "CONNECTION");
+            isu_ui::cols(ui, &[90.0, -1.0, 90.0], 10.0, |j, ui| match j {
+                0 => {
+                    let st = f["station"].as_i64().unwrap_or(1);
+                    let opts: Vec<(i64, String)> = (1..=10).map(|n| (n, format!("{n:02}"))).collect();
+                    if let Some(n) = isu_ui::select(ui, "st", "Station", &st, &opts) { f["station"] = json!(n); }
+                }
+                1 => text(ui, &mut f, "Controller PC (IP or name)", "controller", "192.168.1.20", false),
+                _ => text(ui, &mut f, "Port", "port", "", false),
+            });
+            isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| if j == 0 {
+                text(ui, &mut f, "Display key", "key", "Same as the controller (blank if none)", true);
+            } else {
+                text(ui, &mut f, "OBS PC for NDI (optional)", "ndiHost", "Only if NDI can't find the feed by itself", false);
+            });
+            section(ui, "MONITORS");
+            isu_ui::cols(ui, &[-1.0, -1.0], 10.0, |j, ui| if j == 0 {
+                text(ui, &mut f, "Player monitor (game mirror)", "playerDisplay", "1", false);
+            } else {
+                text(ui, &mut f, "Audience monitor (this window)", "stageDisplay", "2", false);
+            });
+            section(ui, "PINK NOISE (HEADSET)");
+            let devices = self.devices.clone();
+            isu_ui::cols(ui, &[-1.6, -1.0], 10.0, |j, ui| if j == 0 {
+                let cur = f["noiseDevice"].as_str().unwrap_or("").to_string();
+                let mut opts: Vec<(String, String)> = vec![(String::new(), "Default output".into())];
+                if !cur.is_empty() && !devices.contains(&cur) { opts.push((cur.clone(), format!("{cur} (not plugged in)"))); }
+                opts.extend(devices.iter().map(|d| (d.clone(), d.clone())));
+                if let Some(pick) = isu_ui::select(ui, "dev", "Headset output", &cur, &opts) { f["noiseDevice"] = json!(pick.clone()); f["noiseDeviceLabel"] = json!(pick); }
+            } else {
+                text(ui, &mut f, "Max volume on this PC (%)", "noiseMaxVolume", "60", false);
+            });
+            section(ui, "STATION");
             let mut lock = f["cursorLock"] == true;
-            if ui.checkbox(&mut lock, "Keep the mouse on the player monitor (Ctrl+Alt+L)").changed() { f["cursorLock"] = json!(lock); }
+            if isu_ui::toggle(ui, &mut lock, "Keep the mouse on the player monitor", "Ctrl+Alt+L toggles it on the station") { f["cursorLock"] = json!(lock); }
             let mut sww = f["startWithWindows"] != false;
-            if ui.checkbox(&mut sww, "Start with Windows (on by default)").changed() { f["startWithWindows"] = json!(sww); }
+            if isu_ui::toggle(ui, &mut sww, "Start with Windows", "On by default") { f["startWithWindows"] = json!(sww); }
+            ui.separator();
             let mut save = false;
             ui.horizontal(|ui| {
-                if ui.button("TEST 3 SECONDS").clicked() {
+                if ui.add(isu_ui::secondary_button("TEST 3 SECONDS")).clicked() {
                     let sh = Arc::clone(&self.sh);
                     let was = sh.live.lock().unwrap().noise;
                     sh.noise.set(true, Some(100.0));
                     std::thread::spawn(move || { std::thread::sleep(Duration::from_secs(3)); sh.noise.set(was.0, Some(was.1)); });
                 }
-                if self.saved_at.is_some_and(|t| t.elapsed() < Duration::from_millis(2500)) { ui.label("Saved · reconnecting"); }
-                if ui.button("SAVE").clicked() { save = true; }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.add(isu_ui::primary_button("SAVE").min_size(egui::vec2(110.0, 37.0))).clicked() { save = true; }
+                    if self.saved_at.is_some_and(|t| t.elapsed() < Duration::from_millis(2500)) { ui.label(RichText::new("Saved · reconnecting").size(11.0).color(Color32::from_rgb(0x70, 0xcd, 0x6a))); }
+                });
             });
             if save {
                 let before = self.sh.live.lock().unwrap().cfg.clone();
